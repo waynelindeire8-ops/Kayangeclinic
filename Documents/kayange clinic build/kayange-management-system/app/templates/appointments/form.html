@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-plus-circle me-2"></i>New Appointment</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <form id="appointment-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient *</label>
+                        <select class="form-select" id="patient_id" required>
+                            <option value="">Search and select patient...</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Doctor</label>
+                            <select class="form-select" id="doctor_id">
+                                <option value="">Select doctor...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date *</label>
+                            <input type="date" class="form-control" id="appointment_date" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Time *</label>
+                            <input type="time" class="form-control" id="appointment_time" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea class="form-control" id="reason" rows="2" placeholder="Reason for visit..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" id="type">
+                            <option value="phone">Phone Booking</option>
+                            <option value="online">Online Booking</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Create Appointment</button>
+                    <a href="/appointments" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('appointment_date').value = today;
+    document.getElementById('appointment_time').value = '09:00';
+
+    const [patientsRes, doctorsRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/staff/api/doctors')
+    ]);
+    const patients = await patientsRes.json();
+    const doctors = await doctorsRes.json();
+
+    const patientSelect = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone})`;
+        patientSelect.appendChild(opt);
+    });
+
+    const doctorSelect = document.getElementById('doctor_id');
+    doctors.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `Dr. ${d.first_name} ${d.last_name} (${d.role.replace('_', ' ')})`;
+        doctorSelect.appendChild(opt);
+    });
+
+    $(patientSelect).select2({ placeholder: 'Search patient...', allowClear: true, width: '100%' });
+});
+
+document.getElementById('appointment-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+        patient_id: document.getElementById('patient_id').value,
+        doctor_id: document.getElementById('doctor_id').value || null,
+        appointment_date: document.getElementById('appointment_date').value,
+        appointment_time: document.getElementById('appointment_time').value,
+        reason: document.getElementById('reason').value,
+        type: document.getElementById('type').value
+    };
+
+    const res = await fetchWithAuth('/appointments/api', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (res.ok) {
+        window.location.href = '/appointments';
+    } else {
+        alert(result.error || 'Error creating appointment');
+    }
+});
+</script>
+{% endblock %}

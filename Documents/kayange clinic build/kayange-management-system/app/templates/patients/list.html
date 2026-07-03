@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-people"></i> Patient Management</h4>
+    <a href="/patients/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Patient</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search Patient">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-outline-secondary w-100"><i class="bi bi-funnel me-1"></i>Filter</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table" id="patients-table">
+                <thead>
+                    <tr>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Patient ID</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Name</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Gender</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>DOB</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Phone</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Scheme</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
+    let colorIdx = 0;
+
+    let table = $('#patients-table').DataTable({
+        ajax: { url: '/patients/api', dataSrc: '' },
+        columns: [
+            { data: 'patient_id', render: d => '<span class="fw-semibold" style="color:#0f172a">#' + d + '</span>' },
+            { data: null, render: function(d) {
+                const initials = (d.first_name || 'P').charAt(0) + (d.last_name || '').charAt(0);
+                const color = avatarColors[colorIdx++ % avatarColors.length];
+                return '<div class="patient-cell"><div class="patient-avatar" style="background:' + color + '">' + initials + '</div><div><div class="fw-semibold" style="color:#0f172a"><a href="/patients/' + d.id + '" class="text-decoration-none" style="color:inherit">' + d.first_name + ' ' + d.last_name + '</a></div><small class="text-muted">' + d.email + '</small></div></div>';
+            }},
+            { data: 'gender', render: d => d || '-' },
+            { data: 'dob', render: d => d || '-' },
+            { data: 'phone', render: d => d || '-' },
+            { data: null, render: d => d.scheme_provider ? '<span class="badge bg-success">' + d.scheme_provider + '</span>' : '<span class="badge bg-secondary">Self-Pay</span>' },
+            { data: null, render: d => '<div class="d-flex gap-1"><a href="/patients/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a><a href="/patients/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a></div>' }
+        ],
+        order: [[0, 'desc']],
+        pageLength: 15,
+        language: { search: '', searchPlaceholder: 'Search...' }
+    });
+
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        table.search(this.value).draw();
+    });
+});
+</script>
+{% endblock %}

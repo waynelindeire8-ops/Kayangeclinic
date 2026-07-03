@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-person-plus me-2"></i>{{ 'Edit Staff' if staff_id else 'Add Staff' }}</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <form id="staff-form">
+                    <div class="mb-3">
+                        <label class="form-label">Username *</label>
+                        <input type="text" class="form-control" id="username" required>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" id="first_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" id="last_name" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role *</label>
+                        <select class="form-select" id="role" required>
+                            <option value="">Select role...</option>
+                            <option value="doctor">Doctor (Main)</option>
+                            <option value="locum_doctor">Locum Doctor</option>
+                            <option value="nurse">Nurse (Main)</option>
+                            <option value="locum_nurse">Locum Nurse</option>
+                            <option value="lab_staff">Lab Staff</option>
+                            <option value="front_desk">Front Desk</option>
+                            <option value="file_manager">File Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone">
+                        </div>
+                    </div>
+                    {% if not staff_id %}
+                    <div class="mb-3">
+                        <label class="form-label">Password *</label>
+                        <input type="password" class="form-control" id="password" required>
+                        <small class="text-muted">Default: changeme123</small>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">New Password (leave blank to keep current)</label>
+                        <input type="password" class="form-control" id="password">
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" checked>
+                        <label class="form-check-label">Active</label>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-check-lg me-1"></i>{{ 'Update' if staff_id else 'Create' }} Staff
+                    </button>
+                    <a href="/staff" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const staffId = {{ staff_id or 'null' }};
+
+if (staffId) {
+    fetchWithAuth(`/staff/api/${staffId}`).then(r => r.json()).then(data => {
+        document.getElementById('username').value = data.username;
+        document.getElementById('first_name').value = data.first_name;
+        document.getElementById('last_name').value = data.last_name;
+        document.getElementById('role').value = data.role;
+        document.getElementById('email').value = data.email || '';
+        document.getElementById('phone').value = data.phone || '';
+        document.getElementById('is_active').checked = data.is_active === 1;
+        document.getElementById('username').readOnly = true;
+    });
+}
+
+document.getElementById('staff-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+        username: document.getElementById('username').value,
+        first_name: document.getElementById('first_name').value,
+        last_name: document.getElementById('last_name').value,
+        role: document.getElementById('role').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+    };
+    if (staffId) {
+        data.is_active = document.getElementById('is_active').checked ? 1 : 0;
+    }
+    const password = document.getElementById('password').value;
+    if (password) data.password = password;
+    if (!staffId) data.password = password || 'changeme123';
+
+    const url = staffId ? `/staff/api/${staffId}` : '/staff/api';
+    const method = staffId ? 'PUT' : 'POST';
+
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+    if (res.ok) {
+        window.location.href = '/staff';
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving staff');
+    }
+});
+</script>
+{% endblock %}
