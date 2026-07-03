@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kayange Clinic Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div id="wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon"><i class="bi bi-hospital"></i></div>
+                <h6>Kayange Clinic</h6>
+            </div>
+
+            <div class="sidebar-section">Clinic Management</div>
+            <ul class="sidebar-nav" id="sidebar-nav">
+                <li class="nav-item" data-roles="all">
+                    <a class="nav-link" href="/dashboard"><i class="bi bi-grid-1x2"></i>Dashboard</a>
+                </li>
+                <li class="nav-item" data-roles="all">
+                    <a class="nav-link" href="/patients"><i class="bi bi-people"></i>Patient</a>
+                </li>
+                <li class="nav-item" data-roles="admin,front_desk,doctor,locum_doctor">
+                    <a class="nav-link" href="/appointments"><i class="bi bi-calendar-check"></i>Appointment</a>
+                </li>
+                <li class="nav-item" data-roles="admin,doctor,front_desk">
+                    <a class="nav-link" href="/reports"><i class="bi bi-bar-chart-line"></i>Report</a>
+                </li>
+            </ul>
+
+            <div class="sidebar-section">Resource Clinic</div>
+            <ul class="sidebar-nav">
+                <li class="nav-item" data-roles="doctor,locum_doctor,nurse,locum_nurse,admin">
+                    <a class="nav-link" href="/consultations"><i class="bi bi-clipboard2-pulse"></i>Consultation</a>
+                </li>
+                <li class="nav-item" data-roles="admin,front_desk">
+                    <a class="nav-link" href="/billing"><i class="bi bi-wallet2"></i>Payment</a>
+                </li>
+                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                    <a class="nav-link" href="/pharmacy"><i class="bi bi-capsule"></i>Product & Stock</a>
+                </li>
+            </ul>
+
+            <div class="sidebar-section">Setting & Appearance</div>
+            <ul class="sidebar-nav">
+                <li class="nav-item" data-roles="admin">
+                    <a class="nav-link" href="/staff"><i class="bi bi-gear"></i>Setting</a>
+                </li>
+                <li class="nav-item" data-roles="all">
+                    <a class="nav-link" href="#" onclick="logout()" style="color:#ef4444"><i class="bi bi-box-arrow-left"></i>Logout</a>
+                </li>
+            </ul>
+
+            <div class="sidebar-user" id="sidebar-user-area">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="user-avatar" id="user-avatar">SA</div>
+                    <div class="user-info">
+                        <div class="user-name" id="sidebar-user-name">System Admin</div>
+                        <div class="user-role" id="sidebar-user-role">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <h5 class="page-title" id="page-title">Dashboard</h5>
+                <div class="topbar-search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" placeholder="Search..." id="global-search">
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn-icon" title="Grid View"><i class="bi bi-grid-3x3-gap"></i></button>
+                    <button class="btn-icon" title="Notifications">
+                        <i class="bi bi-bell"></i>
+                        <span class="badge-dot"></span>
+                    </button>
+                    <div class="topbar-user-btn" id="topbar-user-btn">
+                        <div class="avatar" id="topbar-avatar">SA</div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!token) { window.location.href = '/auth/login'; return; }
+
+            const initials = (user.first_name || 'U').charAt(0) + (user.last_name || '').charAt(0);
+            document.getElementById('sidebar-user-name').textContent = user.first_name + ' ' + user.last_name;
+            document.getElementById('sidebar-user-role').textContent = user.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            document.getElementById('user-avatar').textContent = initials;
+            document.getElementById('topbar-avatar').textContent = initials;
+
+            document.querySelectorAll('#sidebar-nav .nav-item').forEach(item => {
+                const roles = item.dataset.roles;
+                if (roles !== 'all' && !roles.split(',').includes(user.role)) {
+                    item.style.display = 'none';
+                }
+            });
+
+            const path = window.location.pathname;
+            document.querySelectorAll('#sidebar-nav .nav-link').forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && href !== '#' && path.startsWith(href) && href !== '/dashboard') {
+                    link.classList.add('active');
+                } else if (href === '/dashboard' && path === '/dashboard') {
+                    link.classList.add('active');
+                }
+            });
+
+            const titles = {
+                '/dashboard': 'Dashboard',
+                '/patients': 'Patient',
+                '/appointments': 'Appointment',
+                '/consultations': 'Consultation',
+                '/billing': 'Payment',
+                '/pharmacy': 'Product & Stock',
+                '/staff': 'Setting',
+                '/reports': 'Report'
+            };
+            for (const [key, val] of Object.entries(titles)) {
+                if (path.startsWith(key)) { document.getElementById('page-title').textContent = val; break; }
+            }
+        });
+
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('show'); }
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/auth/login';
+        }
+
+        document.getElementById('global-search')?.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter' && this.value.trim()) {
+                window.location.href = '/patients?search=' + encodeURIComponent(this.value.trim());
+            }
+        });
+    </script>
+</body>
+</html>

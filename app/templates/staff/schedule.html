@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-calendar-week me-2"></i>Staff Schedule</h4>
+    <small class="text-muted">Shifts: 8:30 AM - 5:00 PM (Monday - Friday)</small>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered" id="schedule-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>Staff Member</th>
+                        <th>Role</th>
+                        <th>Mon</th>
+                        <th>Tue</th>
+                        <th>Wed</th>
+                        <th>Thu</th>
+                        <th>Fri</th>
+                    </tr>
+                </thead>
+                <tbody id="schedule-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/staff/api');
+    const staff = await res.json();
+    const tbody = document.getElementById('schedule-body');
+    staff.forEach(s => {
+        if (!s.is_active) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${s.first_name} ${s.last_name}</strong></td>
+            <td>${s.role.replace(/_/g, ' ')}</td>
+            <td class="text-center"><span class="badge bg-success">8:30-5:00</span></td>
+            <td class="text-center"><span class="badge bg-success">8:30-5:00</span></td>
+            <td class="text-center"><span class="badge bg-success">8:30-5:00</span></td>
+            <td class="text-center"><span class="badge bg-success">8:30-5:00</span></td>
+            <td class="text-center"><span class="badge bg-success">8:30-5:00</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+});
+</script>
+{% endblock %}

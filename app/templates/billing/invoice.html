@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4 d-flex justify-content-between">
+    <a href="/billing" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+
+<div class="card border-0 shadow-sm" id="invoice-print">
+    <div class="card-body p-4">
+        <div class="text-center mb-4">
+            <h3 class="mb-0">Kayange Clinic</h3>
+            <small class="text-muted">INVOICE</small>
+        </div>
+        <hr>
+        <div class="row mb-4">
+            <div class="col-6">
+                <strong>Patient:</strong> <span id="inv-patient"></span><br>
+                <strong>Phone:</strong> <span id="inv-phone"></span>
+            </div>
+            <div class="col-6 text-end">
+                <strong>Invoice:</strong> <span id="inv-number"></span><br>
+                <strong>Date:</strong> <span id="inv-date"></span>
+            </div>
+        </div>
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr><th>#</th><th>Item</th><th>Type</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+            </thead>
+            <tbody id="inv-items"></tbody>
+            <tfoot>
+                <tr><td colspan="5" class="text-end"><strong>Total</strong></td><td id="inv-total"></td></tr>
+                <tr><td colspan="5" class="text-end"><strong>Paid</strong></td><td id="inv-paid"></td></tr>
+                <tr><td colspan="5" class="text-end"><strong>Balance</strong></td><td id="inv-balance"></td></tr>
+            </tfoot>
+        </table>
+        <div class="mt-3">
+            <strong>Payment Method:</strong> <span id="inv-method"></span><br>
+            <strong>Status:</strong> <span id="inv-status"></span>
+        </div>
+        <hr>
+        <div class="text-center text-muted small">
+            <p class="mb-0">Thank you for choosing Kayange Clinic</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const billingId = {{ billing_id }};
+fetchWithAuth(`/billing/api/${billingId}`).then(r => r.json()).then(data => {
+    document.getElementById('inv-patient').textContent = `${data.p_first} ${data.p_last}`;
+    document.getElementById('inv-phone').textContent = data.p_phone || '-';
+    document.getElementById('inv-number').textContent = data.invoice_number;
+    document.getElementById('inv-date').textContent = new Date(data.created_at).toLocaleDateString();
+    document.getElementById('inv-total').textContent = 'KSh ' + (data.total_amount || 0).toLocaleString();
+    document.getElementById('inv-paid').textContent = 'KSh ' + (data.amount_paid || 0).toLocaleString();
+    document.getElementById('inv-balance').textContent = 'KSh ' + (data.balance || 0).toLocaleString();
+    document.getElementById('inv-method').textContent = data.payment_method || '-';
+    document.getElementById('inv-status').textContent = data.payment_status;
+
+    const tbody = document.getElementById('inv-items');
+    if (data.items && data.items.length) {
+        data.items.forEach((item, i) => {
+            tbody.innerHTML += `<tr>
+                <td>${i+1}</td>
+                <td>${item.item_name}</td>
+                <td>${item.item_type}</td>
+                <td>${item.quantity}</td>
+                <td>KSh ${item.unit_price.toLocaleString()}</td>
+                <td>KSh ${item.total_price.toLocaleString()}</td>
+            </tr>`;
+        });
+    }
+});
+</script>
+
+<style>
+@media print {
+    #sidebar, .navbar, .btn, .d-flex.justify-content-between { display: none !important; }
+    #main-content { margin-left: 0 !important; padding: 0 !important; }
+    #invoice-print { box-shadow: none !important; border: none !important; }
+}
+</style>
+{% endblock %}

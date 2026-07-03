@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-capsule"></i> Product & Stock</h4>
+    <div>
+        <a href="/pharmacy/dispensing" class="btn btn-outline-primary me-2"><i class="bi bi-cart-plus me-1"></i>Dispensing</a>
+        <button class="btn btn-primary" onclick="showAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search drugs...">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-outline-danger" onclick="filterLowStock()"><i class="bi bi-exclamation-triangle me-1"></i>Low Stock</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table" id="inventory-table">
+                <thead>
+                    <tr>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Drug Name</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Generic</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Category</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Stock</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Price</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Expiry</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Reorder</th>
+                        <th><i class="bi bi-arrow-down-up small me-1"></i>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="invModalTitle">Add Drug</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <form id="inventory-form">
+                    <div class="mb-3"><label class="form-label">Drug Name *</label><input type="text" class="form-control" id="drug_name" required></div>
+                    <div class="mb-3"><label class="form-label">Generic Name</label><input type="text" class="form-control" id="generic_name"></div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Category</label><select class="form-select" id="category"><option value="">Select...</option><option value="Antibiotics">Antibiotics</option><option value="Analgesics">Analgesics</option><option value="Diabetes">Diabetes</option><option value="Respiratory">Respiratory</option><option value="GI">Gastrointestinal</option><option value="Antihistamines">Antihistamines</option><option value="Topical">Topical</option><option value="Supplements">Supplements</option><option value="Other">Other</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Supplier</label><input type="text" class="form-control" id="supplier"></div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4"><label class="form-label">Stock Qty</label><input type="number" class="form-control" id="stock_quantity" value="0" min="0"></div>
+                        <div class="col-md-4"><label class="form-label">Unit Price (KSh)</label><input type="number" class="form-control" id="unit_price" step="0.01" value="0"></div>
+                        <div class="col-md-4"><label class="form-label">Expiry Date</label><input type="date" class="form-control" id="expiry_date"></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Reorder Level</label><input type="number" class="form-control" id="reorder_level" value="10" min="0"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadTable();
+    document.getElementById('searchInput').addEventListener('keyup', function() { loadTable(this.value); });
+});
+
+function loadTable(search) {
+    const url = search ? '/pharmacy/api/inventory?search=' + search : '/pharmacy/api/inventory';
+    $('#inventory-table').DataTable({
+        destroy: true,
+        ajax: { url, dataSrc: '' },
+        columns: [
+            { data: 'drug_name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
+            { data: 'generic_name', render: d => d || '-' },
+            { data: 'category', render: d => d || '-' },
+            { data: null, render: d => d.stock_quantity <= d.reorder_level ? '<span class="badge bg-danger">' + d.stock_quantity + '</span>' : '<span class="badge bg-success">' + d.stock_quantity + '</span>' },
+            { data: null, render: d => 'KSh ' + (d.unit_price || 0).toLocaleString() },
+            { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); return exp < new Date() ? '<span class="badge bg-danger">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
+            { data: 'reorder_level' },
+            { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 15
+    });
+}
+
+function filterLowStock() { loadTable(); }
+
+function showAddItem() {
+    editingId = null;
+    document.getElementById('invModalTitle').textContent = 'Add Drug';
+    document.getElementById('inventory-form').reset();
+    new bootstrap.Modal(document.getElementById('inventoryModal')).show();
+}
+
+async function editItem(id) {
+    editingId = id;
+    document.getElementById('invModalTitle').textContent = 'Edit Drug';
+    const res = await fetchWithAuth('/pharmacy/api/inventory/' + id);
+    const d = await res.json();
+    document.getElementById('drug_name').value = d.drug_name;
+    document.getElementById('generic_name').value = d.generic_name || '';
+    document.getElementById('category').value = d.category || '';
+    document.getElementById('stock_quantity').value = d.stock_quantity;
+    document.getElementById('unit_price').value = d.unit_price;
+    document.getElementById('expiry_date').value = d.expiry_date || '';
+    document.getElementById('supplier').value = d.supplier || '';
+    document.getElementById('reorder_level').value = d.reorder_level;
+    new bootstrap.Modal(document.getElementById('inventoryModal')).show();
+}
+
+async function saveItem() {
+    const data = {
+        drug_name: document.getElementById('drug_name').value,
+        generic_name: document.getElementById('generic_name').value,
+        category: document.getElementById('category').value,
+        stock_quantity: parseInt(document.getElementById('stock_quantity').value) || 0,
+        unit_price: parseFloat(document.getElementById('unit_price').value) || 0,
+        expiry_date: document.getElementById('expiry_date').value || null,
+        supplier: document.getElementById('supplier').value,
+        reorder_level: parseInt(document.getElementById('reorder_level').value) || 10
+    };
+    if (!data.drug_name) { alert('Drug name required'); return; }
+    const url = editingId ? '/pharmacy/api/inventory/' + editingId : '/pharmacy/api/inventory';
+    const method = editingId ? 'PUT' : 'POST';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('inventoryModal')).hide(); loadTable(); }
+    else alert('Error saving');
+}
+
+async function deleteItem(id) {
+    if (!confirm('Delete this item?')) return;
+    await fetchWithAuth('/pharmacy/api/inventory/' + id, { method: 'DELETE' });
+    loadTable();
+}
+</script>
+{% endblock %}

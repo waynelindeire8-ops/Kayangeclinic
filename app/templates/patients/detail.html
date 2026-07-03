@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <a href="/patients" class="btn btn-sm btn-outline-secondary mb-2"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h4 class="mb-1" id="patient-name"></h4>
+            <span class="badge bg-secondary me-2" id="patient-id-display"></span>
+            <span class="text-muted" id="patient-dob-age"></span>
+        </div>
+        <div>
+            <a href="#" id="edit-patient-btn" class="btn btn-outline-warning btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="patientTabs">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#info">Info</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#history">Visit History</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#medical">Medical</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#billing-tab">Billing</button></li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="info">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6>Contact Details</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Phone</td><td id="p-phone"></td></tr>
+                            <tr><td class="text-muted">Email</td><td id="p-email"></td></tr>
+                            <tr><td class="text-muted">Address</td><td id="p-address"></td></tr>
+                        </table>
+                        <h6 class="mt-3">Emergency Contact</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Name</td><td id="p-emergency-name"></td></tr>
+                            <tr><td class="text-muted">Phone</td><td id="p-emergency-phone"></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6>Medical & Insurance</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Blood Group</td><td id="p-blood"></td></tr>
+                            <tr><td class="text-muted">Scheme Provider</td><td id="p-scheme-provider"></td></tr>
+                            <tr><td class="text-muted">Scheme Type</td><td id="p-scheme-type"></td></tr>
+                        </table>
+                        <h6 class="mt-3">Allergies</h6>
+                        <div id="p-allergies"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="history">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Date</th><th>Type</th><th>Doctor</th><th>Details</th></tr>
+                        </thead>
+                        <tbody id="history-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="medical">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white"><h6 class="mb-0">Medical Conditions</h6></div>
+                    <div class="card-body" id="p-medical-conditions"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white"><h6 class="mb-0">Medications</h6></div>
+                    <div class="card-body" id="p-medications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="billing-tab">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Invoice</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr>
+                        </thead>
+                        <tbody id="billing-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const patientId = {{ patient_id }};
+
+fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
+    document.getElementById('patient-name').textContent = `${data.first_name} ${data.last_name}`;
+    document.getElementById('patient-id-display').textContent = data.patient_id;
+    document.getElementById('patient-dob-age').textContent = data.dob ? `${data.dob} (${new Date().getFullYear() - new Date(data.dob).getFullYear()} yrs)` : '';
+    document.getElementById('edit-patient-btn').href = `/patients/${patientId}/edit`;
+
+    document.getElementById('p-phone').textContent = data.phone || '-';
+    document.getElementById('p-email').textContent = data.email || '-';
+    document.getElementById('p-address').textContent = data.address || '-';
+    document.getElementById('p-emergency-name').textContent = data.emergency_contact_name || '-';
+    document.getElementById('p-emergency-phone').textContent = data.emergency_contact_phone || '-';
+    document.getElementById('p-blood').textContent = data.blood_group || '-';
+    document.getElementById('p-scheme-provider').textContent = data.scheme_provider || '-';
+    document.getElementById('p-scheme-type').textContent = data.scheme_type || '-';
+
+    const allergiesDiv = document.getElementById('p-allergies');
+    if (data.allergies && data.allergies.length) {
+        data.allergies.forEach(a => {
+            const span = document.createElement('span');
+            span.className = 'badge bg-warning me-1';
+            span.textContent = a.allergy;
+            allergiesDiv.appendChild(span);
+        });
+    } else {
+        allergiesDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+
+    const conditionsDiv = document.getElementById('p-medical-conditions');
+    if (data.medical_history && data.medical_history.length) {
+        data.medical_history.forEach(c => {
+            conditionsDiv.innerHTML += `<div class="mb-2"><strong>${c.condition_name}</strong><br><small class="text-muted">${c.diagnosis_date || ''} ${c.notes ? '- ' + c.notes : ''}</small></div>`;
+        });
+    } else {
+        conditionsDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+
+    const medsDiv = document.getElementById('p-medications');
+    if (data.medications && data.medications.length) {
+        data.medications.forEach(m => {
+            medsDiv.innerHTML += `<div class="mb-2"><strong>${m.medication_name}</strong> ${m.dosage ? '- ' + m.dosage : ''}<br><small class="text-muted">${m.frequency || ''} ${m.start_date ? 'from ' + m.start_date : ''}</small></div>`;
+        });
+    } else {
+        medsDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+});
+
+fetchWithAuth(`/patients/api/${patientId}/history`).then(r => r.json()).then(data => {
+    const historyBody = document.getElementById('history-table-body');
+    const items = [];
+    (data.consultations || []).forEach(c => items.push({date: c.created_at, type: 'Consultation: ' + c.consultation_type, doctor: (c.doctor_first || '') + ' ' + (c.doctor_last || ''), details: c.diagnosis || ''}));
+    (data.lab_tests || []).forEach(l => items.push({date: l.created_at, type: 'Lab: ' + l.test_name, doctor: '', details: l.status}));
+    (data.procedures || []).forEach(p => items.push({date: p.created_at, type: 'Procedure: ' + p.procedure_type, doctor: '', details: p.notes || ''}));
+
+    if (items.length) {
+        items.sort((a,b) => new Date(b.date) - new Date(a.date));
+        items.forEach(i => {
+            historyBody.innerHTML += `<tr><td>${new Date(i.date).toLocaleDateString()}</td><td>${i.type}</td><td>${i.doctor}</td><td>${i.details}</td></tr>`;
+        });
+    } else {
+        historyBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No visit history</td></tr>';
+    }
+
+    const billingBody = document.getElementById('billing-table-body');
+    if (data.billing && data.billing.length) {
+        data.billing.forEach(b => {
+            billingBody.innerHTML += `<tr>
+                <td>${b.invoice_number}</td>
+                <td>${new Date(b.created_at).toLocaleDateString()}</td>
+                <td>KSh ${(b.total_amount || 0).toLocaleString()}</td>
+                <td>KSh ${(b.amount_paid || 0).toLocaleString()}</td>
+                <td>KSh ${(b.balance || 0).toLocaleString()}</td>
+                <td><span class="badge bg-${b.payment_status === 'paid' ? 'success' : b.payment_status === 'partial' ? 'warning' : 'danger'}">${b.payment_status}</span></td>
+            </tr>`;
+        });
+    } else {
+        billingBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No billing records</td></tr>';
+    }
+});
+</script>
+{% endblock %}

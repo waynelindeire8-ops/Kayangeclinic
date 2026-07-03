@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="bi bi-cart-plus me-2"></i>Pharmacy Dispensing</h4>
+    <button class="btn btn-primary" onclick="showDispenseModal()"><i class="bi bi-plus-lg me-1"></i>New Dispense</button>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="dispensing-table">
+                <thead class="table-light">
+                    <tr><th>Date</th><th>Patient</th><th>Drug</th><th>Qty</th><th>Dispensed By</th><th>Notes</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dispenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Dispense Medication</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Patient *</label>
+                    <select class="form-select" id="disp-patient">
+                        <option value="">Select patient...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Drug *</label>
+                    <select class="form-select" id="disp-drug">
+                        <option value="">Select drug...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Quantity *</label>
+                    <input type="number" class="form-control" id="disp-qty" min="1" value="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Prescription Notes</label>
+                    <textarea class="form-control" id="disp-notes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveDispense()">Dispense</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    $('#dispensing-table').DataTable({
+        ajax: { url: '/pharmacy/api/dispensing', dataSrc: '' },
+        columns: [
+            { data: 'dispensed_date', render: d => new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString() },
+            { data: null, render: d => `${d.p_first} ${d.p_last}` },
+            { data: 'drug_name' },
+            { data: 'quantity' },
+            { data: null, render: d => `${d.disp_first || ''} ${d.disp_last || ''}` },
+            { data: 'prescription_notes', render: d => d || '-' }
+        ],
+        order: [[0, 'desc']],
+        pageLength: 20
+    });
+
+    Promise.all([
+        fetchWithAuth('/patients/api').then(r => r.json()),
+        fetchWithAuth('/pharmacy/api/inventory').then(r => r.json())
+    ]).then(([patients, drugs]) => {
+        const pSel = document.getElementById('disp-patient');
+        patients.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id; opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name}`;
+            pSel.appendChild(opt);
+        });
+        const dSel = document.getElementById('disp-drug');
+        drugs.forEach(d => {
+            if (d.stock_quantity > 0) {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = `${d.drug_name} (Stock: ${d.stock_quantity}) - KSh ${d.unit_price}`;
+                opt.dataset.stock = d.stock_quantity;
+                dSel.appendChild(opt);
+            }
+        });
+    });
+});
+
+function showDispenseModal() {
+    new bootstrap.Modal(document.getElementById('dispenseModal')).show();
+}
+
+async function saveDispense() {
+    const patient_id = document.getElementById('disp-patient').value;
+    const inventory_id = document.getElementById('disp-drug').value;
+    const qty = parseInt(document.getElementById('disp-qty').value);
+    const notes = document.getElementById('disp-notes').value;
+
+    if (!patient_id || !inventory_id || !qty) { alert('Fill all required fields'); return; }
+
+    const selectedDrug = document.querySelector(`#disp-drug option[value="${inventory_id}"]`);
+    if (selectedDrug && parseInt(selectedDrug.dataset.stock) < qty) {
+        alert('Insufficient stock!');
+        return;
+    }
+
+    const res = await fetchWithAuth('/pharmacy/api/dispensing', {
+        method: 'POST',
+        body: JSON.stringify({ patient_id: parseInt(patient_id), inventory_id: parseInt(inventory_id), quantity: qty, prescription_notes: notes })
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('dispenseModal')).hide();
+        $('#dispensing-table').DataTable().ajax.reload();
+        alert('Dispensed successfully!');
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error dispensing');
+    }
+}
+</script>
+{% endblock %}

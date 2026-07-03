@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Kayange Clinic</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon"><i class="bi bi-hospital"></i></div>
+                <h3>Kayange Clinic</h3>
+                <p>Management System</p>
+            </div>
+            <div class="login-body">
+                <div class="alert alert-danger" id="login-error"></div>
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" placeholder="Enter username" required autofocus>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" class="form-control" id="password" placeholder="Enter password" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-login">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                    </button>
+                </form>
+                <div class="divider my-4"></div>
+                <div class="text-center small" style="color:#94a3b8">
+                    <p class="mb-2 fw-semibold" style="color:#64748b">Demo Credentials</p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Admin: <code>admin</code> / <code>admin123</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Doctor: <code>dr.main</code> / <code>doctor123</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Front: <code>front.desk1</code> / <code>front123</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Nurse: <code>nurse.main</code> / <code>nurse123</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Lab: <code>lab.tech1</code> / <code>lab123</code></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('login-error');
+            errorEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/auth/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        password: document.getElementById('password').value
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errorEl.textContent = data.error || 'Login failed';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                window.location.href = '/dashboard';
+            } catch (err) {
+                errorEl.textContent = 'Connection error. Please try again.';
+                errorEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

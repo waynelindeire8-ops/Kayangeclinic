@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-graph-up me-2"></i>Reports & Analytics</h4>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="reportTabs">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-revenue">Revenue</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-patients">Patients</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-appointments">Appointments</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-inventory">Inventory</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-audit">Audit Logs</button></li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-revenue">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0">Revenue Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <h5 id="rev-total">KSh 0</h5>
+                                <small class="text-muted">Total Billed</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="text-success" id="rev-paid">KSh 0</h5>
+                                <small class="text-muted">Total Paid</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="text-danger" id="rev-balance">KSh 0</h5>
+                                <small class="text-muted">Outstanding</small>
+                            </div>
+                        </div>
+                        <canvas id="revenueBarChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0">Payment Methods</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="paymentPieChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <input type="date" class="form-control" id="rev-start">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="date" class="form-control" id="rev-end">
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary" onclick="loadRevenue()">Filter</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm" id="revenue-table">
+                        <thead><tr><th>Date</th><th>Invoices</th><th>Billed</th><th>Paid</th><th>Balance</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-patients">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 id="pat-total">0</h3>
+                        <small class="text-muted">Total Patients</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 id="pat-male">0</h3>
+                        <small class="text-muted">Male</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 id="pat-female">0</h3>
+                        <small class="text-muted">Female</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-body">
+                <canvas id="patientGenderChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-appointments">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white"><h6 class="mb-0">By Status</h6></div>
+                    <div class="card-body"><canvas id="aptStatusChart" height="200"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white"><h6 class="mb-0">By Type</h6></div>
+                    <div class="card-body"><canvas id="aptTypeChart" height="200"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-inventory">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 id="inv-total-items">0</h3>
+                        <small class="text-muted">Total Items</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 id="inv-total-value">KSh 0</h3>
+                        <small class="text-muted">Total Value</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 class="text-danger" id="inv-low-stock">0</h3>
+                        <small class="text-muted">Low Stock Items</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h3 class="text-warning" id="inv-expired">0</h3>
+                        <small class="text-muted">Expired Items</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-audit">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="audit-table">
+                        <thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Resource</th><th>Details</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <nav><ul class="pagination" id="audit-pagination"></ul></nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadRevenue();
+    loadPatientStats();
+    loadAppointmentStats();
+    loadInventoryStats();
+    loadAuditLogs(1);
+
+    const today = new Date();
+    document.getElementById('rev-end').value = today.toISOString().split('T')[0];
+    const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 30);
+    document.getElementById('rev-start').value = weekAgo.toISOString().split('T')[0];
+});
+
+async function loadRevenue() {
+    const start = document.getElementById('rev-start').value;
+    const end = document.getElementById('rev-end').value;
+    const res = await fetchWithAuth(`/reports/api/revenue?start=${start}&end=${end}`);
+    const data = await res.json();
+
+    let totalBilled = 0, totalPaid = 0, totalBalance = 0;
+    const tbody = document.querySelector('#revenue-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(d => {
+        totalBilled += d.total_billed;
+        totalPaid += d.total_paid;
+        totalBalance += d.total_balance;
+        tbody.innerHTML += `<tr><td>${d.d}</td><td>${d.invoice_count}</td><td>KSh ${d.total_billed.toLocaleString()}</td><td>KSh ${d.total_paid.toLocaleString()}</td><td>KSh ${d.total_balance.toLocaleString()}</td></tr>`;
+    });
+
+    document.getElementById('rev-total').textContent = 'KSh ' + totalBilled.toLocaleString();
+    document.getElementById('rev-paid').textContent = 'KSh ' + totalPaid.toLocaleString();
+    document.getElementById('rev-balance').textContent = 'KSh ' + totalBalance.toLocaleString();
+
+    const ctx = document.getElementById('revenueBarChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.d),
+            datasets: [
+                { label: 'Billed', data: data.map(d => d.total_billed), backgroundColor: '#0d6efd' },
+                { label: 'Paid', data: data.map(d => d.total_paid), backgroundColor: '#198754' }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+}
+
+async function loadPatientStats() {
+    const res = await fetchWithAuth('/reports/api/patients');
+    const data = await res.json();
+    document.getElementById('pat-total').textContent = data.total;
+    document.getElementById('pat-male').textContent = data.male;
+    document.getElementById('pat-female').textContent = data.female;
+
+    new Chart(document.getElementById('patientGenderChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Male', 'Female'],
+            datasets: [{ data: [data.male, data.female], backgroundColor: ['#0d6efd', '#d63384'] }]
+        },
+        options: { responsive: true }
+    });
+}
+
+async function loadAppointmentStats() {
+    const res = await fetchWithAuth('/reports/api/appointments');
+    const data = await res.json();
+
+    new Chart(document.getElementById('aptStatusChart'), {
+        type: 'pie',
+        data: {
+            labels: data.by_status.map(s => s.status),
+            datasets: [{ data: data.by_status.map(s => s.c), backgroundColor: ['#ffc107','#0dcaf0','#0d6efd','#198754','#6c757d','#dc3545'] }]
+        },
+        options: { responsive: true }
+    });
+
+    new Chart(document.getElementById('aptTypeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: data.by_type.map(t => t.type),
+            datasets: [{ data: data.by_type.map(t => t.c), backgroundColor: ['#0d6efd', '#198754'] }]
+        },
+        options: { responsive: true }
+    });
+}
+
+async function loadInventoryStats() {
+    const res = await fetchWithAuth('/reports/api/inventory');
+    const data = await res.json();
+    document.getElementById('inv-total-items').textContent = data.total_items;
+    document.getElementById('inv-total-value').textContent = 'KSh ' + data.total_value.toLocaleString();
+    document.getElementById('inv-low-stock').textContent = data.low_stock;
+    document.getElementById('inv-expired').textContent = data.expired;
+}
+
+let auditPage = 1;
+async function loadAuditLogs(page) {
+    auditPage = page;
+    const res = await fetchWithAuth(`/reports/api/audit-logs?page=${page}`);
+    const data = await res.json();
+    const tbody = document.querySelector('#audit-table tbody');
+    tbody.innerHTML = '';
+    data.logs.forEach(l => {
+        tbody.innerHTML += `<tr><td>${new Date(l.created_at).toLocaleString()}</td><td>${l.username || 'System'}</td><td>${l.action}</td><td>${l.resource_type} #${l.resource_id || ''}</td><td>${l.details || ''}</td></tr>`;
+    });
+    const pagination = document.getElementById('audit-pagination');
+    pagination.innerHTML = '';
+    for (let i = 1; i <= data.pages; i++) {
+        pagination.innerHTML += `<li class="page-item ${i === page ? 'active' : ''}"><button class="page-link" onclick="loadAuditLogs(${i})">${i}</button></li>`;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-pencil-square me-2"></i>New Consultation</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <form id="consultation-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient *</label>
+                        <select class="form-select" id="patient_id" required>
+                            <option value="">Select patient...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Appointment</label>
+                        <select class="form-select" id="appointment_id">
+                            <option value="">Walk-in (no appointment)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Consultation Type</label>
+                        <select class="form-select" id="consultation_type">
+                            <option value="general">General Practitioner</option>
+                            <option value="internal_medicine">Internal Medicine</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Diagnosis / Findings</label>
+                        <textarea class="form-control" id="diagnosis" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes / Treatment Plan</label>
+                        <textarea class="form-control" id="notes" rows="4"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Save Consultation</button>
+                    <a href="/consultations" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-white"><h6 class="mb-0">Ancillary Services</h6></div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-info w-100" onclick="showAncillary('lab')">
+                            <i class="bi bi-flask me-1"></i>Order Lab Test
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-warning w-100" onclick="showAncillary('procedure')">
+                            <i class="bi bi-activity me-1"></i>Procedure
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-success w-100" onclick="showAncillary('certificate')">
+                            <i class="bi bi-file-earmark-text me-1"></i>Medical Certificate
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-secondary w-100" onclick="showAncillary('referral')">
+                            <i class="bi bi-send me-1"></i>Referral
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="showAncillary('diet')">
+                            <i class="bi bi-basket me-1"></i>Diet Support
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ancillaryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ancillaryModalTitle">Service</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="ancillaryModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveAncillaryBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [patientsRes, appointmentsRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/appointments/api?status=scheduled')
+    ]);
+    const patients = await patientsRes.json();
+    const appointments = await appointmentsRes.json();
+
+    const patientSelect = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id; opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name}`;
+        patientSelect.appendChild(opt);
+    });
+
+    const aptSelect = document.getElementById('appointment_id');
+    appointments.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id; opt.textContent = `${a.appointment_date} ${a.appointment_time} - ${a.p_first} ${a.p_last}`;
+        aptSelect.appendChild(opt);
+    });
+
+    let currentAncillaryType = null;
+
+    window.showAncillary = function(type) {
+        currentAncillaryType = type;
+        const modal = new bootstrap.Modal(document.getElementById('ancillaryModal'));
+        const titleMap = {
+            lab: 'Order Lab Test',
+            procedure: 'Add Procedure',
+            certificate: 'Medical Certificate',
+            referral: 'Referral',
+            diet: 'Diet Support'
+        };
+        document.getElementById('ancillaryModalTitle').textContent = titleMap[type] || type;
+
+        const bodyMap = {
+            lab: `
+                <div class="mb-3">
+                    <label class="form-label">Test Name *</label>
+                    <input type="text" class="form-control" id="anc_test_name" list="labTests">
+                    <datalist id="labTests">
+                        <option value="Full Blood Count"><option value="Urinalysis"><option value="Blood Sugar"><option value="Lipid Profile">
+                        <option value="Liver Function Test"><option value="Renal Function Test"><option value="Ultrasound Scan">
+                        <option value="Cardiac Echo"><option value="ECG"><option value="Malaria Test"><option value="Typhoid Test">
+                        <option value="Pregnancy Test"><option value="HIV Test"><option value="COVID-19 Test">
+                    </datalist>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" id="anc_test_category">
+                        <option value="general">General</option><option value="ultrasound">Ultrasound</option>
+                        <option value="cardiac">Cardiac</option><option value="microbiology">Microbiology</option>
+                    </select>
+                </div>
+            `,
+            procedure: `
+                <div class="mb-3">
+                    <label class="form-label">Procedure Type</label>
+                    <select class="form-select" id="anc_procedure_type">
+                        <option value="short_stay">Short-Stay Admission</option>
+                        <option value="nebulisation">Nebulisation</option>
+                        <option value="burn_wound">Burn/Trauma Wound Management</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="anc_procedure_notes" rows="3"></textarea>
+                </div>
+            `,
+            certificate: `
+                <div class="mb-3">
+                    <label class="form-label">Certificate Type</label>
+                    <select class="form-select" id="anc_cert_type">
+                        <option value="sick_note">Sick Note</option>
+                        <option value="tep">Temporary Employment Permit (TEP)</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="police">Police Medical</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valid Until</label>
+                    <input type="date" class="form-control" id="anc_cert_valid">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="anc_cert_notes" rows="2"></textarea>
+                </div>
+            `,
+            referral: `
+                <div class="mb-3">
+                    <label class="form-label">To Facility *</label>
+                    <input type="text" class="form-control" id="anc_ref_facility" placeholder="e.g. Kenyatta National Hospital">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason</label>
+                    <textarea class="form-control" id="anc_ref_reason" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="anc_ref_notes" rows="2"></textarea>
+                </div>
+            `,
+            diet: `
+                <div class="mb-3">
+                    <label class="form-label">Dietitian Name</label>
+                    <input type="text" class="form-control" id="anc_diet_name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Plan Details</label>
+                    <textarea class="form-control" id="anc_diet_plan" rows="3"></textarea>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="anc_diet_start">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="anc_diet_end">
+                    </div>
+                </div>
+            `
+        };
+        document.getElementById('ancillaryModalBody').innerHTML = bodyMap[type] || '';
+        document.getElementById('saveAncillaryBtn').onclick = saveAncillary;
+        modal.show();
+    };
+
+    async function saveAncillary() {
+        const patient_id = document.getElementById('patient_id').value;
+        if (!patient_id) { alert('Please select a patient first'); return; }
+
+        let data = { type: currentAncillaryType, patient_id: parseInt(patient_id) };
+
+        if (currentAncillaryType === 'lab') {
+            data.test_name = document.getElementById('anc_test_name').value;
+            data.test_category = document.getElementById('anc_test_category').value;
+            if (!data.test_name) { alert('Enter test name'); return; }
+        } else if (currentAncillaryType === 'procedure') {
+            data.procedure_type = document.getElementById('anc_procedure_type').value;
+            data.notes = document.getElementById('anc_procedure_notes').value;
+        } else if (currentAncillaryType === 'certificate') {
+            data.certificate_type = document.getElementById('anc_cert_type').value;
+            data.valid_until = document.getElementById('anc_cert_valid').value;
+            data.notes = document.getElementById('anc_cert_notes').value;
+        } else if (currentAncillaryType === 'referral') {
+            data.to_facility = document.getElementById('anc_ref_facility').value;
+            data.reason = document.getElementById('anc_ref_reason').value;
+            data.notes = document.getElementById('anc_ref_notes').value;
+            if (!data.to_facility) { alert('Enter facility name'); return; }
+        } else if (currentAncillaryType === 'diet') {
+            data.dietitian_name = document.getElementById('anc_diet_name').value;
+            data.plan_details = document.getElementById('anc_diet_plan').value;
+            data.start_date = document.getElementById('anc_diet_start').value;
+            data.end_date = document.getElementById('anc_diet_end').value;
+        }
+
+        const res = await fetchWithAuth('/consultations/api/ancillaries', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            alert('Saved successfully!');
+            bootstrap.Modal.getInstance(document.getElementById('ancillaryModal')).hide();
+        } else {
+            const err = await res.json();
+            alert(err.error || 'Error saving');
+        }
+    }
+
+    document.getElementById('consultation-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = {
+            patient_id: document.getElementById('patient_id').value,
+            appointment_id: document.getElementById('appointment_id').value || null,
+            consultation_type: document.getElementById('consultation_type').value,
+            diagnosis: document.getElementById('diagnosis').value,
+            notes: document.getElementById('notes').value
+        };
+        const res = await fetchWithAuth('/consultations/api', {
+            method: 'POST', body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            window.location.href = '/consultations';
+        } else {
+            alert('Error saving consultation');
+        }
+    });
+});
+</script>
+{% endblock %}

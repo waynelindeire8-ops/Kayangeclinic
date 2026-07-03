@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-person-plus me-2"></i>{{ 'Edit Patient' if patient_id else 'New Patient' }}</h4>
+</div>
+
+<form id="patient-form">
+    <div class="row g-3">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white"><h6 class="mb-0">Personal Information</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" id="first_name" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" id="last_name" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Gender</label>
+                            <select class="form-select" id="gender">
+                                <option value="">Select</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">DOB *</label>
+                            <input type="date" class="form-control" id="dob" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone *</label>
+                            <input type="tel" class="form-control" id="phone" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Address</label>
+                            <textarea class="form-control" id="address" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white"><h6 class="mb-0">Emergency Contact</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Name</label>
+                            <input type="text" class="form-control" id="emergency_contact_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Phone</label>
+                            <input type="tel" class="form-control" id="emergency_contact_phone">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white"><h6 class="mb-0">Medical & Insurance</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Blood Group</label>
+                            <select class="form-select" id="blood_group">
+                                <option value="">Select</option>
+                                <option value="A+">A+</option><option value="A-">A-</option>
+                                <option value="B+">B+</option><option value="B-">B-</option>
+                                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                <option value="O+">O+</option><option value="O-">O-</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scheme Provider</label>
+                            <input type="text" class="form-control" id="scheme_provider">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scheme Type</label>
+                            <input type="text" class="form-control" id="scheme_type">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between">
+                    <h6 class="mb-0">Allergies</h6>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAllergy()">+ Add</button>
+                </div>
+                <div class="card-body">
+                    <div id="allergies-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between">
+                    <h6 class="mb-0">Medical History</h6>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addCondition()">+ Add</button>
+                </div>
+                <div class="card-body">
+                    <div id="medical-history-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between">
+                    <h6 class="mb-0">Current Medications</h6>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMedication()">+ Add</button>
+                </div>
+                <div class="card-body">
+                    <div id="medications-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-check-lg me-1"></i>{{ 'Update' if patient_id else 'Save' }} Patient
+        </button>
+        <a href="/patients" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<script>
+const patientId = {{ patient_id or 'null' }};
+
+function addAllergy(value) {
+    const container = document.getElementById('allergies-container');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control" name="allergy" value="${value || ''}" placeholder="e.g. Penicillin">
+        <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>
+    `;
+    container.appendChild(div);
+    if (value) div.querySelector('input').value = value;
+}
+
+function addCondition(condition) {
+    const container = document.getElementById('medical-history-container');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 condition-row';
+    div.innerHTML = `
+        <div class="col-md-4">
+            <input type="text" class="form-control" name="condition_name" value="${condition?.condition_name || ''}" placeholder="Condition">
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" name="diagnosis_date" value="${condition?.diagnosis_date || ''}">
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" name="notes" value="${condition?.notes || ''}" placeholder="Notes">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.condition-row').remove()"><i class="bi bi-x"></i></button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function addMedication(med) {
+    const container = document.getElementById('medications-container');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 medication-row';
+    div.innerHTML = `
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="medication_name" value="${med?.medication_name || ''}" placeholder="Medication">
+        </div>
+        <div class="col-md-2">
+            <input type="text" class="form-control" name="dosage" value="${med?.dosage || ''}" placeholder="Dosage">
+        </div>
+        <div class="col-md-2">
+            <input type="text" class="form-control" name="frequency" value="${med?.frequency || ''}" placeholder="Frequency">
+        </div>
+        <div class="col-md-2">
+            <input type="date" class="form-control" name="start_date" value="${med?.start_date || ''}">
+        </div>
+        <div class="col-md-2">
+            <input type="date" class="form-control" name="end_date" value="${med?.end_date || ''}">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.medication-row').remove()"><i class="bi bi-x"></i></button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+document.getElementById('patient-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+        first_name: document.getElementById('first_name').value,
+        last_name: document.getElementById('last_name').value,
+        dob: document.getElementById('dob').value,
+        gender: document.getElementById('gender').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        address: document.getElementById('address').value,
+        emergency_contact_name: document.getElementById('emergency_contact_name').value,
+        emergency_contact_phone: document.getElementById('emergency_contact_phone').value,
+        blood_group: document.getElementById('blood_group').value,
+        scheme_provider: document.getElementById('scheme_provider').value,
+        scheme_type: document.getElementById('scheme_type').value,
+        allergies: Array.from(document.querySelectorAll('input[name="allergy"]')).map(i => i.value).filter(Boolean),
+        medical_history: Array.from(document.querySelectorAll('.condition-row')).map(r => ({
+            condition_name: r.querySelector('input[name="condition_name"]').value,
+            diagnosis_date: r.querySelector('input[name="diagnosis_date"]').value,
+            notes: r.querySelector('input[name="notes"]').value
+        })).filter(c => c.condition_name),
+        medications: Array.from(document.querySelectorAll('.medication-row')).map(r => ({
+            medication_name: r.querySelector('input[name="medication_name"]').value,
+            dosage: r.querySelector('input[name="dosage"]').value,
+            frequency: r.querySelector('input[name="frequency"]').value,
+            start_date: r.querySelector('input[name="start_date"]').value,
+            end_date: r.querySelector('input[name="end_date"]').value
+        })).filter(m => m.medication_name)
+    };
+
+    const url = patientId ? `/patients/api/${patientId}` : '/patients/api';
+    const method = patientId ? 'PUT' : 'POST';
+
+    try {
+        const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+        const result = await res.json();
+        if (res.ok) {
+            window.location.href = '/patients';
+        } else {
+            alert(result.error || 'Error saving patient');
+        }
+    } catch(e) {
+        alert('Error saving patient');
+    }
+});
+
+if (patientId) {
+    fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
+        document.getElementById('first_name').value = data.first_name || '';
+        document.getElementById('last_name').value = data.last_name || '';
+        document.getElementById('dob').value = data.dob || '';
+        document.getElementById('gender').value = data.gender || '';
+        document.getElementById('phone').value = data.phone || '';
+        document.getElementById('email').value = data.email || '';
+        document.getElementById('address').value = data.address || '';
+        document.getElementById('emergency_contact_name').value = data.emergency_contact_name || '';
+        document.getElementById('emergency_contact_phone').value = data.emergency_contact_phone || '';
+        document.getElementById('blood_group').value = data.blood_group || '';
+        document.getElementById('scheme_provider').value = data.scheme_provider || '';
+        document.getElementById('scheme_type').value = data.scheme_type || '';
+
+        (data.allergies || []).forEach(a => addAllergy(a.allergy));
+        (data.medical_history || []).forEach(c => addCondition(c));
+        (data.medications || []).forEach(m => addMedication(m));
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>New Invoice</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <form id="invoice-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient *</label>
+                        <select class="form-select" id="patient_id" required>
+                            <option value="">Select patient...</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Package (optional)</label>
+                            <select class="form-select" id="package_id">
+                                <option value="">No package</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Payment Method</label>
+                            <select class="form-select" id="payment_method">
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="mobile_money">Mobile Money (M-Pesa)</option>
+                                <option value="insurance">Insurance</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Insurance Claim ID</label>
+                        <input type="text" class="form-control" id="insurance_claim_id" placeholder="If using MASM eClaim">
+                    </div>
+
+                    <h6 class="mt-4">Invoice Items</h6>
+                    <div id="items-container" class="mb-3"></div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mb-3" onclick="addItem()">+ Add Item</button>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Total</label>
+                            <h4 id="total-display">KSh 0.00</h4>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Amount Paid</label>
+                            <input type="number" class="form-control" id="amount_paid" step="0.01" min="0" value="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Create Invoice</button>
+                    <a href="/billing" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [patientsRes, packagesRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/billing/api/packages')
+    ]);
+    const patients = await patientsRes.json();
+    const packages = await packagesRes.json();
+
+    const patientSelect = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name}`;
+        patientSelect.appendChild(opt);
+    });
+    $(patientSelect).select2({ placeholder: 'Select patient...', width: '100%' });
+
+    const pkgSelect = document.getElementById('package_id');
+    packages.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.package_name} - KSh ${p.total_amount}`;
+        opt.dataset.amount = p.total_amount;
+        pkgSelect.appendChild(opt);
+    });
+
+    pkgSelect.addEventListener('change', function() {
+        if (this.value) {
+            const opt = this.options[this.selectedIndex];
+            addItem(opt.textContent.split(' - ')[0], 'package', 1, parseFloat(opt.dataset.amount));
+        }
+    });
+
+    addItem();
+});
+
+let itemCount = 0;
+function addItem(name, type, qty, price) {
+    const container = document.getElementById('items-container');
+    itemCount++;
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 item-row';
+    div.innerHTML = `
+        <div class="col-md-4">
+            <input type="text" class="form-control item-name" value="${name || ''}" placeholder="Item name">
+        </div>
+        <div class="col-md-2">
+            <select class="form-select item-type">
+                <option value="consultation" ${type==='consultation'?'selected':''}>Consultation</option>
+                <option value="lab" ${type==='lab'?'selected':''}>Lab/Diagnostic</option>
+                <option value="procedure" ${type==='procedure'?'selected':''}>Procedure</option>
+                <option value="pharmacy" ${type==='pharmacy'?'selected':''}>Pharmacy</option>
+                <option value="certificate" ${type==='certificate'?'selected':''}>Certificate</option>
+                <option value="package" ${type==='package'?'selected':''}>Package</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control item-qty" value="${qty || 1}" min="1" onchange="calcTotal()">
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control item-price" value="${price || 0}" step="0.01" min="0" onchange="calcTotal()" placeholder="Unit price">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.item-row').remove();calcTotal()"><i class="bi bi-x"></i></button>
+        </div>
+    `;
+    container.appendChild(div);
+    calcTotal();
+}
+
+function calcTotal() {
+    let total = 0;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        total += qty * price;
+    });
+    document.getElementById('total-display').textContent = 'KSh ' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+document.getElementById('invoice-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const items = [];
+    document.querySelectorAll('.item-row').forEach(row => {
+        const name = row.querySelector('.item-name').value;
+        const type = row.querySelector('.item-type').value;
+        const qty = parseInt(row.querySelector('.item-qty').value) || 1;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        if (name && price > 0) {
+            items.push({ item_name: name, item_type: type, quantity: qty, unit_price: price, total_price: qty * price });
+        }
+    });
+
+    if (!items.length) { alert('Add at least one item'); return; }
+
+    const data = {
+        patient_id: document.getElementById('patient_id').value,
+        package_id: document.getElementById('package_id').value || null,
+        payment_method: document.getElementById('payment_method').value,
+        insurance_claim_id: document.getElementById('insurance_claim_id').value || null,
+        amount_paid: parseFloat(document.getElementById('amount_paid').value) || 0,
+        items: items
+    };
+
+    const res = await fetchWithAuth('/billing/api', { method: 'POST', body: JSON.stringify(data) });
+    if (res.ok) {
+        window.location.href = '/billing';
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error creating invoice');
+    }
+});
+</script>
+{% endblock %}
