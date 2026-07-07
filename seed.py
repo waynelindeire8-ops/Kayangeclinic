@@ -2,23 +2,24 @@ import sqlite3
 import os
 from werkzeug.security import generate_password_hash
 from datetime import date, timedelta
-from random import randint
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'kayange.db')
 
-from app.database import init_db
+from app.database import init_db, get_db
 
 
 def seed():
+    for f in os.listdir(BASE_DIR):
+        if f.startswith('kayange.db'):
+            os.remove(os.path.join(BASE_DIR, f))
     init_db()
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    db = conn.cursor()
+    db = get_db()
+    db.execute("PRAGMA foreign_keys = ON")
 
     db.execute('DELETE FROM audit_logs')
+    db.execute('DELETE FROM departments')
     db.execute('DELETE FROM diet_support')
     db.execute('DELETE FROM referrals')
     db.execute('DELETE FROM pharmacy_dispensing')
@@ -57,6 +58,20 @@ def seed():
     for u in users:
         db.execute(
             'INSERT INTO users (username, password_hash, role, first_name, last_name, email, phone) VALUES (?,?,?,?,?,?,?)', u)
+
+    departments = [
+        ('General Medicine', 'General medical consultations and checkups'),
+        ('Internal Medicine', 'Management of chronic diseases and complex internal conditions'),
+        ('Pediatrics', 'Medical care for infants, children, and adolescents'),
+        ('Maternity', 'Antenatal, delivery, and postnatal care'),
+        ('Accident & Emergency', 'Emergency medical care for acute conditions and injuries'),
+        ('Radiology', 'X-ray, ultrasound, and other imaging services'),
+        ('Laboratory', 'Clinical lab tests and diagnostics'),
+        ('Pharmacy', 'Dispensing of medications and pharmaceutical services'),
+        ('Outpatient Services', 'Walk-in consultations and minor procedures'),
+    ]
+    for dept in departments:
+        db.execute('INSERT INTO departments (name, description) VALUES (?,?)', dept)
 
     patients_data = [
         ('KMC-1001', 'Alice', 'Wanjiku', '1990-05-15', 'Female', '0712345678', 'alice@email.com', '123 Nairobi', 'Bob Wanjiku', '0798765432', 'A+', 'NHIF', 'Super Cover'),
@@ -163,8 +178,8 @@ def seed():
     for ps in package_services:
         db.execute('INSERT INTO package_services (package_id, service_name, service_type) VALUES (?,?,?)', ps)
 
-    conn.commit()
-    conn.close()
+    db.commit()
+    db.close()
     print('Database seeded successfully!')
     print('\nDefault logins:')
     print('  Admin:      admin / admin123')

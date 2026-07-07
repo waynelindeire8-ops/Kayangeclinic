@@ -6,25 +6,25 @@ from app.auth import login_required, log_audit
 patients_bp = Blueprint('patients', __name__, url_prefix='/patients')
 
 
-@patients_bp.route('/')
+@patients_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
     return render_template('patients/list.html')
 
 
-@patients_bp.route('/new')
+@patients_bp.route('/new', strict_slashes=False)
 @login_required
 def new_page():
     return render_template('patients/form.html')
 
 
-@patients_bp.route('/<int:id>')
+@patients_bp.route('/<int:id>', strict_slashes=False)
 @login_required
 def detail_page(id):
     return render_template('patients/detail.html', patient_id=id)
 
 
-@patients_bp.route('/<int:id>/edit')
+@patients_bp.route('/<int:id>/edit', strict_slashes=False)
 @login_required
 def edit_page(id):
     return render_template('patients/form.html', patient_id=id)

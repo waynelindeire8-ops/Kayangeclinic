@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <h4 class="mb-0"><i class="bi bi-building me-2"></i>{{ 'Edit Department' if department_id else 'Add Department' }}</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form id="department-form">
+                    <div class="mb-3">
+                        <label class="form-label">Department Name *</label>
+                        <input type="text" class="form-control" id="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="description" rows="3"></textarea>
+                    </div>
+                    {% if department_id %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" checked>
+                        <label class="form-check-label">Active</label>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-check-lg me-1"></i>{{ 'Update' if department_id else 'Create' }} Department
+                    </button>
+                    <a href="/departments" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const deptId = {{ department_id or 'null' }};
+
+if (deptId) {
+    fetchWithAuth(`/departments/api/${deptId}`).then(r => r.json()).then(data => {
+        document.getElementById('name').value = data.name;
+        document.getElementById('description').value = data.description || '';
+        document.getElementById('is_active').checked = data.is_active === 1;
+    });
+}
+
+document.getElementById('department-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('name').value,
+        description: document.getElementById('description').value,
+    };
+    if (deptId) {
+        data.is_active = document.getElementById('is_active').checked ? 1 : 0;
+    }
+
+    const url = deptId ? `/departments/api/${deptId}` : '/departments/api';
+    const method = deptId ? 'PUT' : 'POST';
+
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+    if (res.ok) {
+        window.location.href = '/departments';
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving department');
+    }
+});
+</script>
+{% endblock %}

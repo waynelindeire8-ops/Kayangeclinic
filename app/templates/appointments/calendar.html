@@ -1,20 +1,158 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-calendar3 me-2"></i>Appointment Calendar</h4>
-    <a href="/appointments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New</a>
+<div class="page-header">
+    <h4><i class="bi bi-calendar3"></i> Appointment Calendar</h4>
+    <div>
+        <a href="/appointments" class="btn btn-outline-primary me-2"><i class="bi bi-table me-1"></i>List View</a>
+        <a href="/appointments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Appointment</a>
+    </div>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card">
     <div class="card-body">
         <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calendar-check me-2"></i>Appointment Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="text-muted small">Patient</label>
+                    <div class="fw-semibold" id="detail-patient"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">Doctor</label>
+                    <div class="fw-semibold" id="detail-doctor"></div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="text-muted small">Date</label>
+                        <div class="fw-semibold" id="detail-date"></div>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small">Time</label>
+                        <div class="fw-semibold" id="detail-time"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">Reason</label>
+                    <div id="detail-reason"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">Status</label>
+                    <div id="detail-status"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">Phone</label>
+                    <div id="detail-phone"></div>
+                </div>
+            </div>
+            <div class="modal-footer" id="detail-actions">
+                <div class="btn-group btn-group-sm me-auto">
+                    <button class="btn btn-outline-warning" onclick="changeStatus('scheduled')">Scheduled</button>
+                    <button class="btn btn-outline-info" onclick="changeStatus('confirmed')">Confirm</button>
+                    <button class="btn btn-outline-primary" onclick="changeStatus('in_progress')">Start</button>
+                    <button class="btn btn-outline-success" onclick="changeStatus('completed')">Complete</button>
+                    <button class="btn btn-outline-secondary" onclick="changeStatus('cancelled')">Cancel</button>
+                    <button class="btn btn-outline-danger" onclick="changeStatus('no_show')">No Show</button>
+                </div>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Appointment Quick Modal -->
+<div class="modal fade" id="quickModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>New Appointment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quick-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient *</label>
+                        <select class="form-select" id="q-patient_id" required>
+                            <option value="">Select patient...</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Doctor</label>
+                            <select class="form-select" id="q-doctor_id">
+                                <option value="">Select doctor...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date *</label>
+                            <input type="date" class="form-control" id="q-date" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Time *</label>
+                            <input type="time" class="form-control" id="q-time" value="09:00" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea class="form-control" id="q-reason" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" id="q-type">
+                            <option value="phone">Phone Booking</option>
+                            <option value="online">Online Booking</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="quickCreate()"><i class="bi bi-check-lg me-1"></i>Create</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+let selectedAptId = null;
+let quickDate = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load patients and doctors for quick modal
+    const [patientsRes, doctorsRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/staff/api/doctors')
+    ]);
+    const patients = await patientsRes.json();
+    const doctors = await doctorsRes.json();
+
+    const pSel = document.getElementById('q-patient_id');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone})`;
+        pSel.appendChild(o);
+    });
+    const dSel = document.getElementById('q-doctor_id');
+    doctors.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = `Dr. ${d.first_name} ${d.last_name}`;
+        dSel.appendChild(o);
+    });
+    $(pSel).select2({ placeholder: 'Search patient...', allowClear: true, width: '100%', dropdownParent: $('#quickModal') });
+
     const calendarEl = document.getElementById('calendar');
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridWeek',
@@ -26,30 +164,130 @@ document.addEventListener('DOMContentLoaded', function() {
         slotMinTime: '08:00',
         slotMaxTime: '18:00',
         height: 'auto',
+        nowIndicator: true,
+        editable: true,
+        selectable: true,
+        select: function(info) {
+            quickDate = info.startStr.slice(0, 10);
+            document.getElementById('q-date').value = quickDate;
+            document.getElementById('q-time').value = info.startStr.slice(11, 16);
+            new bootstrap.Modal(document.getElementById('quickModal')).show();
+        },
+        eventDrop: function(info) {
+            const id = info.event.id;
+            const date = info.event.startStr.slice(0, 10);
+            const time = info.event.startStr.slice(11, 16);
+            fetchWithAuth('/appointments/api/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    patient_id: info.event.extendedProps.patient_id,
+                    doctor_id: info.event.extendedProps.doctor_id || null,
+                    appointment_date: date,
+                    appointment_time: time,
+                    reason: info.event.extendedProps.reason || '',
+                    status: info.event.extendedProps.status,
+                    type: info.event.extendedProps.type || 'phone'
+                })
+            });
+        },
+        eventResize: function(info) {
+            // Same as eventDrop for now - update end time
+            const id = info.event.id;
+            const date = info.event.startStr.slice(0, 10);
+            const time = info.event.startStr.slice(11, 16);
+            fetchWithAuth('/appointments/api/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    patient_id: info.event.extendedProps.patient_id,
+                    doctor_id: info.event.extendedProps.doctor_id || null,
+                    appointment_date: date,
+                    appointment_time: time,
+                    reason: info.event.extendedProps.reason || '',
+                    status: info.event.extendedProps.status,
+                    type: info.event.extendedProps.type || 'phone'
+                })
+            });
+        },
         events: async function(fetchInfo, successCallback) {
             const res = await fetchWithAuth('/appointments/api');
             const data = await res.json();
+            const colors = { scheduled: '#f59e0b', confirmed: '#0ea5e9', in_progress: '#6366f1', completed: '#16a34a', cancelled: '#94a3b8', no_show: '#ef4444' };
             successCallback(data.map(apt => ({
                 id: apt.id,
-                title: `${apt.p_first} ${apt.p_last}${apt.reason ? ' - ' + apt.reason : ''}`,
+                title: apt.p_first + ' ' + apt.p_last,
                 start: apt.appointment_date + 'T' + apt.appointment_time,
-                backgroundColor: apt.status === 'scheduled' ? '#ffc107' : apt.status === 'confirmed' ? '#0dcaf0' : apt.status === 'completed' ? '#198754' : '#6c757d',
+                backgroundColor: colors[apt.status] || '#94a3b8',
                 borderColor: 'transparent',
-                textColor: '#000',
+                textColor: '#fff',
                 extendedProps: {
-                    patient: `${apt.p_first} ${apt.p_last}`,
-                    doctor: apt.d_first ? `Dr. ${apt.d_first} ${apt.d_last}` : 'Unassigned',
+                    patient_id: apt.patient_id,
+                    doctor_id: apt.doctor_id,
+                    patient: apt.p_first + ' ' + apt.p_last,
+                    doctor: apt.d_first ? 'Dr. ' + apt.d_first + ' ' + apt.d_last : 'Unassigned',
+                    reason: apt.reason || '',
                     status: apt.status,
-                    phone: apt.p_phone
+                    phone: apt.p_phone || 'N/A',
+                    date: apt.appointment_date,
+                    time: apt.appointment_time,
+                    type: apt.type || 'phone'
                 }
             })));
         },
         eventClick: function(info) {
-            const e = info.event;
-            alert(`Patient: ${e.extendedProps.patient}\nDoctor: ${e.extendedProps.doctor}\nStatus: ${e.extendedProps.status}\nPhone: ${e.extendedProps.phone || 'N/A'}`);
+            selectedAptId = parseInt(info.event.id);
+            const e = info.event.extendedProps;
+            document.getElementById('detail-patient').innerHTML = '<a href="/patients/' + e.patient_id + '" class="text-decoration-none" style="color:inherit">' + e.patient + '</a>';
+            document.getElementById('detail-doctor').textContent = e.doctor;
+            document.getElementById('detail-date').textContent = e.date;
+            document.getElementById('detail-time').textContent = e.time;
+            document.getElementById('detail-reason').textContent = e.reason || 'No reason provided';
+            document.getElementById('detail-phone').textContent = e.phone;
+            document.getElementById('detail-status').innerHTML = '<span class="badge bg-' + (e.status === 'scheduled' ? 'warning' : e.status === 'confirmed' ? 'info' : e.status === 'in_progress' ? 'primary' : e.status === 'completed' ? 'success' : e.status === 'cancelled' ? 'secondary' : 'danger') + '">' + e.status + '</span>';
+            // Highlight active status button
+            document.querySelectorAll('#detail-actions .btn').forEach(b => b.classList.remove('active'));
+            const statusMap = { scheduled: 0, confirmed: 1, in_progress: 2, completed: 3, cancelled: 4, no_show: 5 };
+            const btns = document.querySelectorAll('#detail-actions .btn-group button');
+            if (btns[statusMap[e.status]]) btns[statusMap[e.status]].classList.add('active');
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
         }
     });
     calendar.render();
 });
+
+async function changeStatus(status) {
+    if (!selectedAptId) return;
+    await fetchWithAuth('/appointments/api/' + selectedAptId + '/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+    });
+    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
+    location.reload();
+}
+
+async function quickCreate() {
+    const data = {
+        patient_id: document.getElementById('q-patient_id').value,
+        doctor_id: document.getElementById('q-doctor_id').value || null,
+        appointment_date: document.getElementById('q-date').value,
+        appointment_time: document.getElementById('q-time').value,
+        reason: document.getElementById('q-reason').value,
+        type: document.getElementById('q-type').value
+    };
+    if (!data.patient_id || !data.appointment_date || !data.appointment_time) {
+        alert('Patient, date, and time are required');
+        return;
+    }
+    const res = await fetchWithAuth('/appointments/api', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('quickModal')).hide();
+        location.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error creating appointment');
+    }
+}
 </script>
 {% endblock %}

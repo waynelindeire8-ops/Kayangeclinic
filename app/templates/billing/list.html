@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
-    <h4><i class="bi bi-wallet2"></i> Payment & Billing</h4>
+    <h4><i class="bi bi-wallet2"></i> Billing</h4>
     <div>
         <button class="btn btn-outline-primary me-2" onclick="$('#paymentModal').modal('show')"><i class="bi bi-cash me-1"></i>Record Payment</button>
         <a href="/billing/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Invoice</a>
@@ -12,7 +12,7 @@
     <div class="card-body">
         <div class="row mb-3">
             <div class="col-md-3">
-                <select class="form-select" id="status-filter">
+                <select class="form-select form-select-sm" id="status-filter">
                     <option value="">All Status</option>
                     <option value="pending">Pending</option>
                     <option value="partial">Partial</option>
@@ -24,15 +24,15 @@
             <table class="table" id="billing-table">
                 <thead>
                     <tr>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Invoice</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Date</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Patient</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Total</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Paid</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Balance</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Method</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Status</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Action</th>
+                        <th>Invoice</th>
+                        <th>Date</th>
+                        <th>Patient</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Method</th>
+                        <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -51,7 +51,7 @@
                     <select class="form-select" id="payment-invoice"><option value="">Select invoice...</option></select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Amount (KSh)</label>
+                    <label class="form-label">Amount (MK)</label>
                     <input type="number" class="form-control" id="payment-amount" step="0.01" min="0">
                 </div>
                 <div class="mb-3">
@@ -84,12 +84,12 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 'invoice_number', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
             { data: 'created_at', render: d => new Date(d).toLocaleDateString() },
             { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + d.p_first + ' ' + d.p_last + '</a>' },
-            { data: null, render: d => '<span class="fw-semibold">KSh ' + (d.total_amount || 0).toLocaleString() + '</span>' },
-            { data: null, render: d => 'KSh ' + (d.amount_paid || 0).toLocaleString() },
-            { data: null, render: d => '<span class="' + (d.balance > 0 ? 'text-danger fw-semibold' : '') + '">KSh ' + (d.balance || 0).toLocaleString() + '</span>' },
+            { data: null, render: d => '<span class="fw-semibold">MK ' + (d.total_amount || 0).toLocaleString() + '</span>' },
+            { data: null, render: d => 'MK ' + (d.amount_paid || 0).toLocaleString() },
+            { data: null, render: d => '<span class="' + (d.balance > 0 ? 'text-danger fw-semibold' : '') + '">MK ' + (d.balance || 0).toLocaleString() + '</span>' },
             { data: 'payment_method', render: d => (d || '-').replace('_', ' ') },
             { data: null, render: d => '<span class="badge bg-' + (d.payment_status === 'paid' ? 'success' : d.payment_status === 'partial' ? 'warning' : 'danger') + '">' + d.payment_status + '</span>' },
-            { data: null, render: d => '<a href="/billing/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a>' }
+            { data: null, render: d => '<a href="/billing/' + d.id + '" class="btn-action view"><i class="bi bi-eye"></i></a>' }
         ],
         order: [[1, 'desc']],
         pageLength: 20
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchWithAuth('/billing/api').then(r => r.json()).then(data => {
         const sel = document.getElementById('payment-invoice');
         data.filter(b => b.payment_status !== 'paid').forEach(b => {
-            sel.innerHTML += '<option value="' + b.id + '">' + b.invoice_number + ' - ' + b.p_first + ' ' + b.p_last + ' (Bal: KSh ' + b.balance + ')</option>';
+            sel.innerHTML += '<option value="' + b.id + '">' + b.invoice_number + ' - ' + b.p_first + ' ' + b.p_last + ' (Bal: MK ' + b.balance + ')</option>';
         });
     });
 });

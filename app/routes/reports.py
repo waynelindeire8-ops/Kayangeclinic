@@ -6,7 +6,8 @@ from app.auth import login_required
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 
-@reports_bp.route('/')
+@reports_bp.route('')
+@reports_bp.route('/', strict_slashes=False)
 @login_required
 def index_page():
     return render_template('reports/index.html')

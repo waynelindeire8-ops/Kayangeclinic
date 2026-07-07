@@ -6,7 +6,7 @@
 
 <div class="row">
     <div class="col-md-8">
-        <div class="card border-0 shadow-sm">
+        <div class="card">
             <div class="card-body">
                 <form id="invoice-form">
                     <div class="mb-3">
@@ -44,7 +44,7 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Total</label>
-                            <h4 id="total-display">KSh 0.00</h4>
+                            <h4 id="total-display">MK 0.00</h4>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Amount Paid</label>
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     packages.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
-        opt.textContent = `${p.package_name} - KSh ${p.total_amount}`;
+        opt.textContent = `${p.package_name} - MK ${p.total_amount}`;
         opt.dataset.amount = p.total_amount;
         pkgSelect.appendChild(opt);
     });
@@ -137,7 +137,7 @@ function calcTotal() {
         const price = parseFloat(row.querySelector('.item-price').value) || 0;
         total += qty * price;
     });
-    document.getElementById('total-display').textContent = 'KSh ' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('total-display').textContent = 'MK ' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 document.getElementById('invoice-form').addEventListener('submit', async function(e) {

@@ -6,7 +6,7 @@
 
 <div class="row">
     <div class="col-md-8">
-        <div class="card border-0 shadow-sm">
+        <div class="card">
             <div class="card-body">
                 <form id="consultation-form">
                     <div class="mb-3">
@@ -42,35 +42,25 @@
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-white"><h6 class="mb-0">Ancillary Services</h6></div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Ancillary Services</h6></div>
             <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <button type="button" class="btn btn-outline-info w-100" onclick="showAncillary('lab')">
-                            <i class="bi bi-flask me-1"></i>Order Lab Test
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <button type="button" class="btn btn-outline-warning w-100" onclick="showAncillary('procedure')">
-                            <i class="bi bi-activity me-1"></i>Procedure
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <button type="button" class="btn btn-outline-success w-100" onclick="showAncillary('certificate')">
-                            <i class="bi bi-file-earmark-text me-1"></i>Medical Certificate
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <button type="button" class="btn btn-outline-secondary w-100" onclick="showAncillary('referral')">
-                            <i class="bi bi-send me-1"></i>Referral
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <button type="button" class="btn btn-outline-primary w-100" onclick="showAncillary('diet')">
-                            <i class="bi bi-basket me-1"></i>Diet Support
-                        </button>
-                    </div>
+                <div class="ancillary-grid">
+                    <button type="button" class="ancillary-btn" onclick="showAncillary('lab')">
+                        <i class="bi bi-flask text-info"></i>Lab Test
+                    </button>
+                    <button type="button" class="ancillary-btn" onclick="showAncillary('procedure')">
+                        <i class="bi bi-activity text-warning"></i>Procedure
+                    </button>
+                    <button type="button" class="ancillary-btn" onclick="showAncillary('certificate')">
+                        <i class="bi bi-file-earmark-text text-success"></i>Certificate
+                    </button>
+                    <button type="button" class="ancillary-btn" onclick="showAncillary('referral')">
+                        <i class="bi bi-send text-secondary"></i>Referral
+                    </button>
+                    <button type="button" class="ancillary-btn" onclick="showAncillary('diet')">
+                        <i class="bi bi-basket text-primary"></i>Diet Support
+                    </button>
                 </div>
             </div>
         </div>
@@ -86,7 +76,7 @@
             </div>
             <div class="modal-body" id="ancillaryModalBody"></div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-primary" id="saveAncillaryBtn">Save</button>
             </div>
         </div>
@@ -122,11 +112,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         currentAncillaryType = type;
         const modal = new bootstrap.Modal(document.getElementById('ancillaryModal'));
         const titleMap = {
-            lab: 'Order Lab Test',
-            procedure: 'Add Procedure',
-            certificate: 'Medical Certificate',
-            referral: 'Referral',
-            diet: 'Diet Support'
+            lab: 'Order Lab Test', procedure: 'Add Procedure', certificate: 'Medical Certificate',
+            referral: 'Referral', diet: 'Diet Support'
         };
         document.getElementById('ancillaryModalTitle').textContent = titleMap[type] || type;
 

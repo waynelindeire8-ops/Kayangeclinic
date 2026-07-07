@@ -1,6 +1,6 @@
 import json
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, make_response, current_app
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt, verify_jwt_in_request
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 from app.database import get_db
@@ -25,8 +25,11 @@ def get_current_user():
 
 def login_required(f):
     @wraps(f)
-    @jwt_required()
     def wrapper(*args, **kwargs):
+        try:
+            verify_jwt_in_request()
+        except Exception:
+            return redirect('/auth/login')
         return f(*args, **kwargs)
     return wrapper
 
@@ -55,7 +58,7 @@ def log_audit(user_id, username, action, resource_type, resource_id=None, detail
     db.close()
 
 
-@auth_bp.route('/login', methods=['GET'])
+@auth_bp.route('/login', methods=['GET'], strict_slashes=False)
 def login_page():
     return render_template('login.html')
 
@@ -87,7 +90,7 @@ def api_login():
         }
     )
 
-    return jsonify({
+    resp = make_response(jsonify({
         'token': access_token,
         'user': {
             'id': user['id'],
@@ -96,7 +99,16 @@ def api_login():
             'first_name': user['first_name'],
             'last_name': user['last_name']
         }
-    })
+    }))
+    resp.set_cookie(
+        'access_token',
+        access_token,
+        httponly=True,
+        samesite='Lax',
+        secure=False,
+        max_age=36000
+    )
+    return resp
 
 
 @auth_bp.route('/api/me', methods=['GET'])

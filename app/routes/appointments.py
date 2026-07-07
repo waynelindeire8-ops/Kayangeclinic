@@ -6,19 +6,19 @@ from app.auth import login_required, log_audit
 appointments_bp = Blueprint('appointments', __name__, url_prefix='/appointments')
 
 
-@appointments_bp.route('/')
+@appointments_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
     return render_template('appointments/list.html')
 
 
-@appointments_bp.route('/new')
+@appointments_bp.route('/new', strict_slashes=False)
 @login_required
 def new_page():
     return render_template('appointments/form.html')
 
 
-@appointments_bp.route('/calendar')
+@appointments_bp.route('/calendar', strict_slashes=False)
 @login_required
 def calendar_page():
     return render_template('appointments/calendar.html')

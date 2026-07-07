@@ -6,19 +6,19 @@ from app.auth import login_required, role_required, log_audit
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 
 
-@billing_bp.route('/')
+@billing_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
     return render_template('billing/list.html')
 
 
-@billing_bp.route('/new')
+@billing_bp.route('/new', strict_slashes=False)
 @login_required
 def new_page():
     return render_template('billing/form.html')
 
 
-@billing_bp.route('/<int:id>')
+@billing_bp.route('/<int:id>', strict_slashes=False)
 @login_required
 def invoice_page(id):
     return render_template('billing/invoice.html', billing_id=id)

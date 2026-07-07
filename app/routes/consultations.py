@@ -6,13 +6,13 @@ from app.auth import login_required, log_audit
 consultations_bp = Blueprint('consultations', __name__, url_prefix='/consultations')
 
 
-@consultations_bp.route('/')
+@consultations_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
     return render_template('consultations/list.html')
 
 
-@consultations_bp.route('/new')
+@consultations_bp.route('/new', strict_slashes=False)
 @login_required
 def new_page():
     return render_template('consultations/form.html')

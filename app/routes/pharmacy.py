@@ -6,13 +6,13 @@ from app.auth import login_required, log_audit
 pharmacy_bp = Blueprint('pharmacy', __name__, url_prefix='/pharmacy')
 
 
-@pharmacy_bp.route('/')
+@pharmacy_bp.route('/', strict_slashes=False)
 @login_required
 def inventory_page():
     return render_template('pharmacy/inventory.html')
 
 
-@pharmacy_bp.route('/dispensing')
+@pharmacy_bp.route('/dispensing', strict_slashes=False)
 @login_required
 def dispensing_page():
     return render_template('pharmacy/dispensing.html')

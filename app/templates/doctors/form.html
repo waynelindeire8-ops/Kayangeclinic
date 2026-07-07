@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="mb-4">
-    <h4 class="mb-0"><i class="bi bi-person-plus me-2"></i>{{ 'Edit Staff' if staff_id else 'Add Staff' }}</h4>
+    <h4 class="mb-0"><i class="bi bi-stethoscope me-2"></i>{{ 'Edit Doctor' if doctor_id else 'Add Doctor' }}</h4>
 </div>
 
 <div class="row">
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <form id="staff-form">
+                <form id="doctor-form">
                     <div class="mb-3">
                         <label class="form-label">Username *</label>
                         <input type="text" class="form-control" id="username" required>
@@ -26,15 +26,8 @@
                     <div class="mb-3">
                         <label class="form-label">Role *</label>
                         <select class="form-select" id="role" required>
-                            <option value="">Select role...</option>
                             <option value="doctor">Doctor (Main)</option>
                             <option value="locum_doctor">Locum Doctor</option>
-                            <option value="nurse">Nurse (Main)</option>
-                            <option value="locum_nurse">Locum Nurse</option>
-                            <option value="lab_staff">Lab Staff</option>
-                            <option value="front_desk">Front Desk</option>
-                            <option value="file_manager">File Manager</option>
-                            <option value="admin">Admin</option>
                         </select>
                     </div>
                     <div class="row g-3 mb-3">
@@ -47,7 +40,7 @@
                             <input type="tel" class="form-control" id="phone">
                         </div>
                     </div>
-                    {% if not staff_id %}
+                    {% if not doctor_id %}
                     <div class="mb-3">
                         <label class="form-label">Password *</label>
                         <input type="password" class="form-control" id="password" required>
@@ -64,9 +57,9 @@
                     </div>
                     {% endif %}
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-check-lg me-1"></i>{{ 'Update' if staff_id else 'Create' }} Staff
+                        <i class="bi bi-check-lg me-1"></i>{{ 'Update' if doctor_id else 'Create' }} Doctor
                     </button>
-                    <a href="/staff" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="/doctors" class="btn btn-outline-secondary">Cancel</a>
                 </form>
             </div>
         </div>
@@ -74,10 +67,10 @@
 </div>
 
 <script>
-const staffId = {{ staff_id or 'null' }};
+const doctorId = {{ doctor_id or 'null' }};
 
-if (staffId) {
-    fetchWithAuth(`/staff/api/${staffId}`).then(r => r.json()).then(data => {
+if (doctorId) {
+    fetchWithAuth(`/doctors/api/${doctorId}`).then(r => r.json()).then(data => {
         document.getElementById('username').value = data.username;
         document.getElementById('first_name').value = data.first_name;
         document.getElementById('last_name').value = data.last_name;
@@ -89,7 +82,7 @@ if (staffId) {
     });
 }
 
-document.getElementById('staff-form').addEventListener('submit', async function(e) {
+document.getElementById('doctor-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const data = {
         username: document.getElementById('username').value,
@@ -99,22 +92,22 @@ document.getElementById('staff-form').addEventListener('submit', async function(
         email: document.getElementById('email').value,
         phone: document.getElementById('phone').value,
     };
-    if (staffId) {
+    if (doctorId) {
         data.is_active = document.getElementById('is_active').checked ? 1 : 0;
     }
     const password = document.getElementById('password').value;
     if (password) data.password = password;
-    if (!staffId) data.password = password || 'changeme123';
+    if (!doctorId) data.password = password || 'changeme123';
 
-    const url = staffId ? `/staff/api/${staffId}` : '/staff/api';
-    const method = staffId ? 'PUT' : 'POST';
+    const url = doctorId ? `/doctors/api/${doctorId}` : '/doctors/api';
+    const method = doctorId ? 'PUT' : 'POST';
 
     const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
     if (res.ok) {
-        window.location.href = '/staff';
+        window.location.href = '/doctors';
     } else {
         const err = await res.json();
-        alert(err.error || 'Error saving staff');
+        alert(err.error || 'Error saving doctor');
     }
 });
 </script>

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-building"></i> Departments</h4>
+    <a href="/departments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Department</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table" id="departments-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    $('#departments-table').DataTable({
+        ajax: { url: '/departments/api', dataSrc: '' },
+        columns: [
+            { data: 'name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
+            { data: 'description', render: d => d || '-' },
+            { data: null, render: d => d.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' },
+            { data: 'created_at', render: d => d ? new Date(d).toLocaleDateString() : '-' },
+            { data: null, render: d => '<div class="d-flex gap-1"><a href="/departments/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a><button class="btn-action delete" title="Delete" onclick="deleteDept(' + d.id + ')"><i class="bi bi-trash"></i></button></div>' }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 20
+    });
+});
+
+async function deleteDept(id) {
+    if (!confirm('Delete this department?')) return;
+    const res = await fetchWithAuth('/departments/api/' + id, { method: 'DELETE' });
+    if (res.ok) {
+        $('#departments-table').DataTable().ajax.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error deleting department');
+    }
+}
+</script>
+{% endblock %}

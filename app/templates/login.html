@@ -16,10 +16,10 @@
             <div class="login-header">
                 <div class="logo-icon"><i class="bi bi-hospital"></i></div>
                 <h3>Kayange Clinic</h3>
-                <p>Management System</p>
+                <p>Sign in to your account</p>
             </div>
             <div class="login-body">
-                <div class="alert alert-danger" id="login-error"></div>
+                <div class="alert alert-danger d-none" id="login-error" role="alert"></div>
                 <form id="login-form">
                     <div class="mb-3">
                         <label class="form-label">Username</label>
@@ -42,13 +42,14 @@
                 <div class="divider my-4"></div>
                 <div class="text-center small" style="color:#94a3b8">
                     <p class="mb-2 fw-semibold" style="color:#64748b">Demo Credentials</p>
-                    <div class="d-flex flex-wrap justify-content-center gap-2">
-                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Admin: <code>admin</code> / <code>admin123</code></span>
-                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Doctor: <code>dr.main</code> / <code>doctor123</code></span>
-                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Front: <code>front.desk1</code> / <code>front123</code></span>
-                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Nurse: <code>nurse.main</code> / <code>nurse123</code></span>
-                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Lab: <code>lab.tech1</code> / <code>lab123</code></span>
+                    <div class="d-flex flex-wrap justify-content-center gap-1">
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Admin: <code>admin</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Doctor: <code>dr.main</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Front Desk: <code>front.desk1</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Nurse: <code>nurse.main</code></span>
+                        <span class="badge" style="background:#f0fdf4;color:#16a34a">Lab: <code>lab.tech1</code></span>
                     </div>
+                    <div class="mt-1"><small>Password: <code>admin123</code> / <code>doctor123</code> / <code>front123</code> / <code>nurse123</code> / <code>lab123</code></small></div>
                 </div>
             </div>
         </div>
@@ -58,7 +59,7 @@
         document.getElementById('login-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const errorEl = document.getElementById('login-error');
-            errorEl.style.display = 'none';
+            errorEl.classList.add('d-none');
 
             try {
                 const res = await fetch('/auth/api/login', {
@@ -72,7 +73,7 @@
                 const data = await res.json();
                 if (!res.ok) {
                     errorEl.textContent = data.error || 'Login failed';
-                    errorEl.style.display = 'block';
+                    errorEl.classList.remove('d-none');
                     return;
                 }
                 localStorage.setItem('token', data.token);
@@ -80,7 +81,7 @@
                 window.location.href = '/dashboard';
             } catch (err) {
                 errorEl.textContent = 'Connection error. Please try again.';
-                errorEl.style.display = 'block';
+                errorEl.classList.remove('d-none');
             }
         });
     </script>

@@ -16,22 +16,20 @@
     <div class="tab-pane fade show active" id="tab-revenue">
         <div class="row g-3">
             <div class="col-md-6">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white">
-                        <h6 class="mb-0">Revenue Summary</h6>
-                    </div>
+                <div class="card">
+                    <div class="card-header"><h6>Revenue Summary</h6></div>
                     <div class="card-body">
                         <div class="row text-center mb-3">
                             <div class="col-4">
-                                <h5 id="rev-total">KSh 0</h5>
+                                <h5 id="rev-total">MK 0</h5>
                                 <small class="text-muted">Total Billed</small>
                             </div>
                             <div class="col-4">
-                                <h5 class="text-success" id="rev-paid">KSh 0</h5>
+                                <h5 class="text-success" id="rev-paid">MK 0</h5>
                                 <small class="text-muted">Total Paid</small>
                             </div>
                             <div class="col-4">
-                                <h5 class="text-danger" id="rev-balance">KSh 0</h5>
+                                <h5 class="text-danger" id="rev-balance">MK 0</h5>
                                 <small class="text-muted">Outstanding</small>
                             </div>
                         </div>
@@ -40,27 +38,25 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white">
-                        <h6 class="mb-0">Payment Methods</h6>
-                    </div>
+                <div class="card">
+                    <div class="card-header"><h6>Payment Methods</h6></div>
                     <div class="card-body">
                         <canvas id="paymentPieChart" height="250"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="card border-0 shadow-sm mt-3">
+        <div class="card mt-3">
             <div class="card-body">
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
-                        <input type="date" class="form-control" id="rev-start">
+                        <input type="date" class="form-control form-control-sm" id="rev-start">
                     </div>
                     <div class="col-md-4">
-                        <input type="date" class="form-control" id="rev-end">
+                        <input type="date" class="form-control form-control-sm" id="rev-end">
                     </div>
                     <div class="col-md-4">
-                        <button class="btn btn-primary" onclick="loadRevenue()">Filter</button>
+                        <button class="btn btn-sm btn-primary" onclick="loadRevenue()">Filter</button>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -76,7 +72,7 @@
     <div class="tab-pane fade" id="tab-patients">
         <div class="row g-3">
             <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 id="pat-total">0</h3>
                         <small class="text-muted">Total Patients</small>
@@ -84,7 +80,7 @@
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 id="pat-male">0</h3>
                         <small class="text-muted">Male</small>
@@ -92,7 +88,7 @@
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 id="pat-female">0</h3>
                         <small class="text-muted">Female</small>
@@ -100,7 +96,7 @@
                 </div>
             </div>
         </div>
-        <div class="card border-0 shadow-sm mt-3">
+        <div class="card mt-3">
             <div class="card-body">
                 <canvas id="patientGenderChart" height="200"></canvas>
             </div>
@@ -110,14 +106,14 @@
     <div class="tab-pane fade" id="tab-appointments">
         <div class="row g-3">
             <div class="col-md-6">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white"><h6 class="mb-0">By Status</h6></div>
+                <div class="card">
+                    <div class="card-header"><h6>By Status</h6></div>
                     <div class="card-body"><canvas id="aptStatusChart" height="200"></canvas></div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white"><h6 class="mb-0">By Type</h6></div>
+                <div class="card">
+                    <div class="card-header"><h6>By Type</h6></div>
                     <div class="card-body"><canvas id="aptTypeChart" height="200"></canvas></div>
                 </div>
             </div>
@@ -127,7 +123,7 @@
     <div class="tab-pane fade" id="tab-inventory">
         <div class="row g-3">
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 id="inv-total-items">0</h3>
                         <small class="text-muted">Total Items</small>
@@ -135,15 +131,15 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
-                        <h3 id="inv-total-value">KSh 0</h3>
+                        <h3 id="inv-total-value">MK 0</h3>
                         <small class="text-muted">Total Value</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 class="text-danger" id="inv-low-stock">0</h3>
                         <small class="text-muted">Low Stock Items</small>
@@ -151,7 +147,7 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="card">
                     <div class="card-body text-center">
                         <h3 class="text-warning" id="inv-expired">0</h3>
                         <small class="text-muted">Expired Items</small>
@@ -162,7 +158,7 @@
     </div>
 
     <div class="tab-pane fade" id="tab-audit">
-        <div class="card border-0 shadow-sm">
+        <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-sm" id="audit-table">
@@ -170,7 +166,7 @@
                         <tbody></tbody>
                     </table>
                 </div>
-                <nav><ul class="pagination" id="audit-pagination"></ul></nav>
+                <nav><ul class="pagination pagination-sm" id="audit-pagination"></ul></nav>
             </div>
         </div>
     </div>
@@ -186,8 +182,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const today = new Date();
     document.getElementById('rev-end').value = today.toISOString().split('T')[0];
-    const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 30);
-    document.getElementById('rev-start').value = weekAgo.toISOString().split('T')[0];
+    const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
+    document.getElementById('rev-start').value = monthAgo.toISOString().split('T')[0];
 });
 
 async function loadRevenue() {
@@ -203,12 +199,12 @@ async function loadRevenue() {
         totalBilled += d.total_billed;
         totalPaid += d.total_paid;
         totalBalance += d.total_balance;
-        tbody.innerHTML += `<tr><td>${d.d}</td><td>${d.invoice_count}</td><td>KSh ${d.total_billed.toLocaleString()}</td><td>KSh ${d.total_paid.toLocaleString()}</td><td>KSh ${d.total_balance.toLocaleString()}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${d.d}</td><td>${d.invoice_count}</td><td>MK ${d.total_billed.toLocaleString()}</td><td>MK ${d.total_paid.toLocaleString()}</td><td>MK ${d.total_balance.toLocaleString()}</td></tr>`;
     });
 
-    document.getElementById('rev-total').textContent = 'KSh ' + totalBilled.toLocaleString();
-    document.getElementById('rev-paid').textContent = 'KSh ' + totalPaid.toLocaleString();
-    document.getElementById('rev-balance').textContent = 'KSh ' + totalBalance.toLocaleString();
+    document.getElementById('rev-total').textContent = 'MK ' + totalBilled.toLocaleString();
+    document.getElementById('rev-paid').textContent = 'MK ' + totalPaid.toLocaleString();
+    document.getElementById('rev-balance').textContent = 'MK ' + totalBalance.toLocaleString();
 
     const ctx = document.getElementById('revenueBarChart').getContext('2d');
     new Chart(ctx, {
@@ -216,11 +212,11 @@ async function loadRevenue() {
         data: {
             labels: data.map(d => d.d),
             datasets: [
-                { label: 'Billed', data: data.map(d => d.total_billed), backgroundColor: '#0d6efd' },
-                { label: 'Paid', data: data.map(d => d.total_paid), backgroundColor: '#198754' }
+                { label: 'Billed', data: data.map(d => d.total_billed), backgroundColor: '#16a34a', borderRadius: 4 },
+                { label: 'Paid', data: data.map(d => d.total_paid), backgroundColor: '#22c55e', borderRadius: 4 }
             ]
         },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
     });
 }
 
@@ -235,9 +231,9 @@ async function loadPatientStats() {
         type: 'doughnut',
         data: {
             labels: ['Male', 'Female'],
-            datasets: [{ data: [data.male, data.female], backgroundColor: ['#0d6efd', '#d63384'] }]
+            datasets: [{ data: [data.male, data.female], backgroundColor: ['#16a34a', '#22c55e'] }]
         },
-        options: { responsive: true }
+        options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
     });
 }
 
@@ -249,18 +245,18 @@ async function loadAppointmentStats() {
         type: 'pie',
         data: {
             labels: data.by_status.map(s => s.status),
-            datasets: [{ data: data.by_status.map(s => s.c), backgroundColor: ['#ffc107','#0dcaf0','#0d6efd','#198754','#6c757d','#dc3545'] }]
+            datasets: [{ data: data.by_status.map(s => s.c), backgroundColor: ['#f59e0b','#0ea5e9','#16a34a','#22c55e','#94a3b8','#dc2626'] }]
         },
-        options: { responsive: true }
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
     });
 
     new Chart(document.getElementById('aptTypeChart'), {
         type: 'doughnut',
         data: {
             labels: data.by_type.map(t => t.type),
-            datasets: [{ data: data.by_type.map(t => t.c), backgroundColor: ['#0d6efd', '#198754'] }]
+            datasets: [{ data: data.by_type.map(t => t.c), backgroundColor: ['#16a34a', '#22c55e'] }]
         },
-        options: { responsive: true }
+        options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
     });
 }
 
@@ -268,7 +264,7 @@ async function loadInventoryStats() {
     const res = await fetchWithAuth('/reports/api/inventory');
     const data = await res.json();
     document.getElementById('inv-total-items').textContent = data.total_items;
-    document.getElementById('inv-total-value').textContent = 'KSh ' + data.total_value.toLocaleString();
+    document.getElementById('inv-total-value').textContent = 'MK ' + data.total_value.toLocaleString();
     document.getElementById('inv-low-stock').textContent = data.low_stock;
     document.getElementById('inv-expired').textContent = data.expired;
 }

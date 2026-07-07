@@ -26,6 +26,12 @@ def create_app():
     from app.routes.consultations import consultations_bp
     app.register_blueprint(consultations_bp)
 
+    from app.routes.doctors import doctors_bp
+    app.register_blueprint(doctors_bp)
+
+    from app.routes.departments import departments_bp
+    app.register_blueprint(departments_bp)
+
     from app.routes.staff import staff_bp
     app.register_blueprint(staff_bp)
 

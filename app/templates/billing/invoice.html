@@ -2,10 +2,10 @@
 {% block content %}
 <div class="mb-4 d-flex justify-content-between">
     <a href="/billing" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
-    <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    <button class="btn btn-sm btn-outline-primary no-print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
 </div>
 
-<div class="card border-0 shadow-sm" id="invoice-print">
+<div class="card" id="invoice-print">
     <div class="card-body p-4">
         <div class="text-center mb-4">
             <h3 class="mb-0">Kayange Clinic</h3>
@@ -51,9 +51,9 @@ fetchWithAuth(`/billing/api/${billingId}`).then(r => r.json()).then(data => {
     document.getElementById('inv-phone').textContent = data.p_phone || '-';
     document.getElementById('inv-number').textContent = data.invoice_number;
     document.getElementById('inv-date').textContent = new Date(data.created_at).toLocaleDateString();
-    document.getElementById('inv-total').textContent = 'KSh ' + (data.total_amount || 0).toLocaleString();
-    document.getElementById('inv-paid').textContent = 'KSh ' + (data.amount_paid || 0).toLocaleString();
-    document.getElementById('inv-balance').textContent = 'KSh ' + (data.balance || 0).toLocaleString();
+    document.getElementById('inv-total').textContent = 'MK ' + (data.total_amount || 0).toLocaleString();
+    document.getElementById('inv-paid').textContent = 'MK ' + (data.amount_paid || 0).toLocaleString();
+    document.getElementById('inv-balance').textContent = 'MK ' + (data.balance || 0).toLocaleString();
     document.getElementById('inv-method').textContent = data.payment_method || '-';
     document.getElementById('inv-status').textContent = data.payment_status;
 
@@ -65,8 +65,8 @@ fetchWithAuth(`/billing/api/${billingId}`).then(r => r.json()).then(data => {
                 <td>${item.item_name}</td>
                 <td>${item.item_type}</td>
                 <td>${item.quantity}</td>
-                <td>KSh ${item.unit_price.toLocaleString()}</td>
-                <td>KSh ${item.total_price.toLocaleString()}</td>
+                <td>MK ${item.unit_price.toLocaleString()}</td>
+                <td>MK ${item.total_price.toLocaleString()}</td>
             </tr>`;
         });
     }

@@ -7,25 +7,25 @@ from app.auth import login_required, role_required, log_audit
 staff_bp = Blueprint('staff', __name__, url_prefix='/staff')
 
 
-@staff_bp.route('/')
+@staff_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
     return render_template('staff/list.html')
 
 
-@staff_bp.route('/new')
+@staff_bp.route('/new', strict_slashes=False)
 @login_required
 def new_page():
     return render_template('staff/form.html')
 
 
-@staff_bp.route('/<int:id>/edit')
+@staff_bp.route('/<int:id>/edit', strict_slashes=False)
 @login_required
 def edit_page(id):
     return render_template('staff/form.html', staff_id=id)
 
 
-@staff_bp.route('/schedule')
+@staff_bp.route('/schedule', strict_slashes=False)
 @login_required
 def schedule_page():
     return render_template('staff/schedule.html')

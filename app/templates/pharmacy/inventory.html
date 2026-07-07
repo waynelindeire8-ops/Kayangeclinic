@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
-    <h4><i class="bi bi-capsule"></i> Product & Stock</h4>
+    <h4><i class="bi bi-capsule"></i> Pharmacy</h4>
     <div>
         <a href="/pharmacy/dispensing" class="btn btn-outline-primary me-2"><i class="bi bi-cart-plus me-1"></i>Dispensing</a>
         <button class="btn btn-primary" onclick="showAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
@@ -12,27 +12,24 @@
     <div class="card-body">
         <div class="row mb-3">
             <div class="col-md-4">
-                <div class="input-group">
+                <div class="input-group input-group-sm">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="text" class="form-control" id="searchInput" placeholder="Search drugs...">
                 </div>
-            </div>
-            <div class="col-md-3">
-                <button class="btn btn-outline-danger" onclick="filterLowStock()"><i class="bi bi-exclamation-triangle me-1"></i>Low Stock</button>
             </div>
         </div>
         <div class="table-responsive">
             <table class="table" id="inventory-table">
                 <thead>
                     <tr>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Drug Name</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Generic</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Category</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Stock</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Price</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Expiry</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Reorder</th>
-                        <th><i class="bi bi-arrow-down-up small me-1"></i>Action</th>
+                        <th>Drug Name</th>
+                        <th>Generic</th>
+                        <th>Category</th>
+                        <th>Stock</th>
+                        <th>Price</th>
+                        <th>Expiry</th>
+                        <th>Reorder</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -55,7 +52,7 @@
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><label class="form-label">Stock Qty</label><input type="number" class="form-control" id="stock_quantity" value="0" min="0"></div>
-                        <div class="col-md-4"><label class="form-label">Unit Price (KSh)</label><input type="number" class="form-control" id="unit_price" step="0.01" value="0"></div>
+                        <div class="col-md-4"><label class="form-label">Unit Price (MK)</label><input type="number" class="form-control" id="unit_price" step="0.01" value="0"></div>
                         <div class="col-md-4"><label class="form-label">Expiry Date</label><input type="date" class="form-control" id="expiry_date"></div>
                     </div>
                     <div class="mb-3"><label class="form-label">Reorder Level</label><input type="number" class="form-control" id="reorder_level" value="10" min="0"></div>
@@ -79,15 +76,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function loadTable(search) {
     const url = search ? '/pharmacy/api/inventory?search=' + search : '/pharmacy/api/inventory';
+    if ($.fn.DataTable.isDataTable('#inventory-table')) { $('#inventory-table').DataTable().destroy(); }
     $('#inventory-table').DataTable({
-        destroy: true,
         ajax: { url, dataSrc: '' },
         columns: [
             { data: 'drug_name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
             { data: 'generic_name', render: d => d || '-' },
             { data: 'category', render: d => d || '-' },
             { data: null, render: d => d.stock_quantity <= d.reorder_level ? '<span class="badge bg-danger">' + d.stock_quantity + '</span>' : '<span class="badge bg-success">' + d.stock_quantity + '</span>' },
-            { data: null, render: d => 'KSh ' + (d.unit_price || 0).toLocaleString() },
+            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
             { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); return exp < new Date() ? '<span class="badge bg-danger">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
             { data: 'reorder_level' },
             { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
@@ -96,8 +93,6 @@ function loadTable(search) {
         pageLength: 15
     });
 }
-
-function filterLowStock() { loadTable(); }
 
 function showAddItem() {
     editingId = null;
