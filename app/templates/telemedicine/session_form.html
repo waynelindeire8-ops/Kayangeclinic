@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-video"></i> New Telemedicine Session</h4>
+    <a href="/telemedicine/sessions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="session-form">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Patient <span class="text-danger">*</span></label>
+                            <select class="form-select" id="patient_id" required><option value="">Select patient...</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Doctor <span class="text-danger">*</span></label>
+                            <select class="form-select" id="doctor_id" required><option value="">Select doctor...</option></select></div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Session Type</label>
+                            <select class="form-select" id="session_type">
+                                <option value="video">Video Call</option><option value="audio">Audio Only</option><option value="chat">Chat</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Link to Appointment (Optional)</label>
+                            <select class="form-select" id="appointment_id"><option value="">None</option></select></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Reason for Consultation</label>
+                        <textarea class="form-control" id="reason" rows="3" placeholder="Describe the reason for this telemedicine session..."></textarea></div>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>Create Session</button>
+                    <a href="/telemedicine/sessions" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="session-success" class="alert alert-success mt-3" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6>Session Info</h6></div>
+            <div class="card-body">
+                <p class="text-muted" style="font-size:0.875rem">
+                    <i class="bi bi-info-circle me-1"></i> Create a telemedicine session to conduct a virtual consultation with a patient.
+                </p>
+                <ul class="text-muted" style="font-size:0.875rem; padding-left: 1.2rem;">
+                    <li>Video calls support screen sharing</li>
+                    <li>Prescriptions can be issued post-session</li>
+                    <li>Payments can be collected after the call</li>
+                    <li>Session recordings are available for review</li>
+                </ul>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Quick Actions</h6></div>
+            <div class="card-body">
+                <a href="/telemedicine/waiting-room" class="btn btn-outline-warning w-100 mb-2"><i class="bi bi-hourglass-split me-1"></i>View Waiting Room</a>
+                <a href="/telemedicine/sessions" class="btn btn-outline-primary w-100"><i class="bi bi-list-ul me-1"></i>All Sessions</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [pRes, dRes, aRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/telemedicine/api/doctors'),
+        fetchWithAuth('/appointments/api?status=scheduled')
+    ]);
+    const patients = await pRes.json();
+    const doctors = await dRes.json();
+    const appointments = await aRes.json();
+
+    const pSel = document.getElementById('patient_id');
+    patients.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name; pSel.appendChild(o); });
+
+    const dSel = document.getElementById('doctor_id');
+    doctors.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = 'Dr. ' + d.first_name + ' ' + d.last_name; dSel.appendChild(o); });
+
+    const aSel = document.getElementById('appointment_id');
+    appointments.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.patient_name + ' - ' + a.appointment_date + ' ' + a.appointment_time; aSel.appendChild(o); });
+});
+
+document.getElementById('session-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const body = {
+        patient_id: parseInt(document.getElementById('patient_id').value),
+        doctor_id: parseInt(document.getElementById('doctor_id').value),
+        session_type: document.getElementById('session_type').value,
+        reason: document.getElementById('reason').value.trim()
+    };
+    const apptId = document.getElementById('appointment_id').value;
+    if (apptId) body.appointment_id = parseInt(apptId);
+
+    if (!body.patient_id || !body.doctor_id) { showToast('Patient and doctor required', 'danger'); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+
+    const res = await fetchWithAuth('/telemedicine/api/sessions', { method: 'POST', body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create Session';
+
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('session-form').style.display = 'none';
+        document.getElementById('session-success').style.display = 'block';
+        document.getElementById('session-success').innerHTML = '<i class="bi bi-check-circle me-1"></i> Session <strong>' + data.session_id + '</strong> created!<br>' +
+            '<a href="/telemedicine/sessions/' + data.id + '" class="alert-link me-2">View Session</a>' +
+            '<a href="/telemedicine/sessions/' + data.id + '/room" class="alert-link">Join Video Room</a>';
+    } else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-reels"></i> Radiology Orders</h4>
+    <a href="/radiology/orders/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Order</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2"><label class="form-label">Status</label>
+                <select class="form-select" id="filter-status"><option value="">All</option>
+                    <option value="ordered">Ordered</option><option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+            <div class="col-md-2"><label class="form-label">Modality</label>
+                <select class="form-select" id="filter-modality"><option value="">All</option>
+                    <option value="xray">X-Ray</option><option value="ultrasound">Ultrasound</option>
+                    <option value="ct">CT Scan</option><option value="mri">MRI</option>
+                    <option value="ecg">ECG</option><option value="echo">Echo</option></select></div>
+            <div class="col-md-3"><label class="form-label">Patient</label><select class="form-select" id="filter-patient"><option value="">All</option></select></div>
+            <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="filter-from"></div>
+            <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="filter-to"></div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" onclick="loadOrders()"><i class="bi bi-search"></i></button></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0" id="orders-table">
+                <thead><tr><th>Order #</th><th>Patient</th><th>Modality</th><th>Body Part</th><th>Priority</th><th>Doctor</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="orders-empty" class="text-center text-muted py-5" style="display:none"><i class="bi bi-camera-reels" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No orders found</div>
+    </div>
+</div>
+
+<script>
+const MOD = {xray:'X-Ray',ultrasound:'Ultrasound',ct:'CT Scan',mri:'MRI',ecg:'ECG',echo:'Echo',mammogram:'Mammogram',fluoroscopy:'Fluoroscopy',other:'Other'};
+document.addEventListener('DOMContentLoaded', async function() {
+    const pRes = await fetchWithAuth('/patients/api');
+    const patients = await pRes.json();
+    const pSel = document.getElementById('filter-patient');
+    patients.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name; pSel.appendChild(o); });
+    loadOrders();
+});
+async function loadOrders() {
+    let url = '/radiology/api/orders?';
+    const s = document.getElementById('filter-status').value;
+    const m = document.getElementById('filter-modality').value;
+    const p = document.getElementById('filter-patient').value;
+    const f = document.getElementById('filter-from').value;
+    const t = document.getElementById('filter-to').value;
+    if (s) url += 'status=' + s + '&';
+    if (m) url += 'modality=' + m + '&';
+    if (p) url += 'patient_id=' + p + '&';
+    if (f) url += 'date_from=' + f + '&';
+    if (t) url += 'date_to=' + t + '&';
+    const res = await fetchWithAuth(url);
+    const orders = await res.json();
+    const tbody = document.querySelector('#orders-table tbody');
+    const empty = document.getElementById('orders-empty');
+    tbody.innerHTML = '';
+    if (orders.length) {
+        document.getElementById('orders-table').style.display = '';
+        empty.style.display = 'none';
+        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+        const pc = {routine:'secondary',urgent:'warning',stat:'danger'};
+        orders.forEach(o => {
+            tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(o.order_number || '') + '</span></td>' +
+                '<td>' + esc(o.p_first || '') + ' ' + esc(o.p_last || '') + '<br><small class="text-muted">' + esc(o.p_patient_id || '') + '</small></td>' +
+                '<td>' + (MOD[o.modality] || o.modality) + '</td>' +
+                '<td>' + esc(o.body_part || '-') + '</td>' +
+                '<td><span class="badge bg-' + (pc[o.priority] || 'secondary') + '">' + o.priority + '</span></td>' +
+                '<td>Dr. ' + esc(o.d_first || '') + ' ' + esc(o.d_last || '') + '</td>' +
+                '<td><span class="badge bg-' + (sc[o.status] || 'secondary') + '">' + o.status.replace('_', ' ') + '</span></td>' +
+                '<td>' + (o.ordered_date || '') + '</td>' +
+                '<td><a href="/radiology/orders/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a></td></tr>';
+        });
+    } else { document.getElementById('orders-table').style.display = 'none'; empty.style.display = 'block'; }
+}
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

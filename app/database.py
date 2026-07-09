@@ -10,6 +10,35 @@ def get_db():
     return conn
 
 
+def _migrate_appointments_type(conn):
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='appointments'"
+    ).fetchone()
+    if schema and 'walk_in' not in schema['sql']:
+        conn.executescript('''
+            CREATE TABLE appointments_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL,
+                doctor_id INTEGER,
+                appointment_date DATE NOT NULL,
+                appointment_time TIME NOT NULL,
+                reason TEXT,
+                status TEXT DEFAULT 'scheduled' CHECK(status IN ('scheduled','confirmed','in_progress','completed','cancelled','no_show')),
+                type TEXT DEFAULT 'phone' CHECK(type IN ('phone','online','walk_in')),
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                FOREIGN KEY(doctor_id) REFERENCES users(id),
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+            INSERT INTO appointments_new SELECT * FROM appointments;
+            DROP TABLE appointments;
+            ALTER TABLE appointments_new RENAME TO appointments;
+        ''')
+        conn.commit()
+
+
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -88,7 +117,7 @@ def init_db():
             appointment_time TIME NOT NULL,
             reason TEXT,
             status TEXT DEFAULT 'scheduled' CHECK(status IN ('scheduled','confirmed','in_progress','completed','cancelled','no_show')),
-            type TEXT DEFAULT 'phone' CHECK(type IN ('phone','online')),
+            type TEXT DEFAULT 'phone' CHECK(type IN ('phone','online','walk_in')),
             created_by INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -272,7 +301,571 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS vital_signs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            consultation_id INTEGER NOT NULL,
+            patient_id INTEGER NOT NULL,
+            bp_systolic INTEGER,
+            bp_diastolic INTEGER,
+            heart_rate INTEGER,
+            temperature REAL,
+            respiratory_rate INTEGER,
+            oxygen_saturation INTEGER,
+            weight REAL,
+            height REAL,
+            bmi REAL,
+            notes TEXT,
+            recorded_by INTEGER,
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id) ON DELETE CASCADE,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(recorded_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS medical_examinations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            consultation_id INTEGER NOT NULL,
+            system_name TEXT NOT NULL,
+            findings TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS diagnoses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            consultation_id INTEGER NOT NULL,
+            diagnosis_name TEXT NOT NULL,
+            diagnosis_type TEXT NOT NULL CHECK(diagnosis_type IN ('primary','secondary','complication')),
+            icd_code TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS prescriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            consultation_id INTEGER NOT NULL,
+            patient_id INTEGER NOT NULL,
+            inventory_id INTEGER,
+            drug_name TEXT NOT NULL,
+            dosage TEXT,
+            frequency TEXT,
+            duration TEXT,
+            route TEXT,
+            instructions TEXT,
+            quantity INTEGER,
+            status TEXT DEFAULT 'active' CHECK(status IN ('active','discontinued','completed')),
+            prescribed_by INTEGER,
+            prescribed_date DATE DEFAULT CURRENT_DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id) ON DELETE CASCADE,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(inventory_id) REFERENCES pharmacy_inventory(id),
+            FOREIGN KEY(prescribed_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            read_at TIMESTAMP,
+            sender_deleted INTEGER DEFAULT 0,
+            receiver_deleted INTEGER DEFAULT 0,
+            FOREIGN KEY(sender_id) REFERENCES users(id),
+            FOREIGN KEY(receiver_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS lab_test_catalog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            test_name TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            sample_type TEXT DEFAULT 'blood',
+            description TEXT,
+            default_price REAL DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS lab_test_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lab_test_id INTEGER NOT NULL,
+            parameter_name TEXT NOT NULL,
+            value TEXT,
+            reference_range TEXT,
+            unit TEXT,
+            flag TEXT CHECK(flag IN ('normal','high','low','critical_high','critical_low','pending')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(lab_test_id) REFERENCES lab_tests(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS prescription_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            doctor_id INTEGER NOT NULL,
+            notes TEXT,
+            status TEXT DEFAULT 'active' CHECK(status IN ('active','completed','cancelled')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(doctor_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS prescription_refills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            refill_date DATE NOT NULL,
+            quantity INTEGER,
+            refilled_by INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(order_id) REFERENCES prescription_orders(id),
+            FOREIGN KEY(refilled_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS insurance_providers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT UNIQUE,
+            contact_person TEXT,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS patient_insurance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            provider_id INTEGER NOT NULL,
+            policy_number TEXT NOT NULL,
+            member_name TEXT,
+            group_number TEXT,
+            effective_date DATE,
+            expiry_date DATE,
+            is_primary INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+            FOREIGN KEY(provider_id) REFERENCES insurance_providers(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS insurance_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_number TEXT UNIQUE,
+            patient_id INTEGER NOT NULL,
+            provider_id INTEGER NOT NULL,
+            policy_id INTEGER,
+            billing_id INTEGER,
+            consultation_id INTEGER,
+            claim_date DATE NOT NULL,
+            service_date DATE,
+            total_amount REAL NOT NULL,
+            approved_amount REAL DEFAULT 0,
+            paid_amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft' CHECK(status IN ('draft','submitted','in_review','additional_info','approved','partially_approved','denied','appealed','paid','cancelled')),
+            submitted_date DATE,
+            reviewed_date DATE,
+            paid_date DATE,
+            denial_reason TEXT,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(provider_id) REFERENCES insurance_providers(id),
+            FOREIGN KEY(policy_id) REFERENCES patient_insurance(id),
+            FOREIGN KEY(billing_id) REFERENCES billing(id),
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id),
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS claim_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            procedure_code TEXT,
+            quantity INTEGER DEFAULT 1,
+            unit_price REAL NOT NULL,
+            total_price REAL NOT NULL,
+            FOREIGN KEY(claim_id) REFERENCES insurance_claims(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS claim_status_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_id INTEGER NOT NULL,
+            old_status TEXT,
+            new_status TEXT NOT NULL,
+            notes TEXT,
+            changed_by INTEGER,
+            changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(claim_id) REFERENCES insurance_claims(id) ON DELETE CASCADE,
+            FOREIGN KEY(changed_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT,
+            type TEXT DEFAULT 'info',
+            reference_url TEXT,
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS radiology_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_number TEXT UNIQUE,
+            patient_id INTEGER NOT NULL,
+            doctor_id INTEGER,
+            modality TEXT NOT NULL CHECK(modality IN ('xray','ultrasound','ct','mri','ecg','echo','mammogram','fluoroscopy','other')),
+            body_part TEXT,
+            clinical_history TEXT,
+            status TEXT DEFAULT 'ordered' CHECK(status IN ('ordered','in_progress','completed','cancelled')),
+            ordered_date DATE,
+            completed_date DATE,
+            priority TEXT DEFAULT 'routine' CHECK(priority IN ('routine','urgent','stat')),
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(doctor_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS radiology_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            findings TEXT,
+            impression TEXT,
+            recommendation TEXT,
+            result_image_path TEXT,
+            reported_by INTEGER,
+            reported_date DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(order_id) REFERENCES radiology_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY(reported_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS telemedicine_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE NOT NULL,
+            patient_id INTEGER NOT NULL,
+            doctor_id INTEGER NOT NULL,
+            appointment_id INTEGER,
+            consultation_id INTEGER,
+            status TEXT DEFAULT 'scheduled' CHECK(status IN ('scheduled','waiting','in_progress','completed','cancelled','no_show')),
+            session_type TEXT DEFAULT 'video' CHECK(session_type IN ('video','audio','chat')),
+            reason TEXT,
+            diagnosis TEXT,
+            notes TEXT,
+            started_at TIMESTAMP,
+            ended_at TIMESTAMP,
+            duration_minutes INTEGER,
+            token_patient TEXT,
+            token_doctor TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(doctor_id) REFERENCES users(id),
+            FOREIGN KEY(appointment_id) REFERENCES appointments(id),
+            FOREIGN KEY(consultation_id) REFERENCES consultations(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS telemedicine_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            sender_id INTEGER NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES telemedicine_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(sender_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS telemedicine_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'MWK',
+            payment_method TEXT CHECK(payment_method IN ('mobile_money','card','cash','insurance','bank_transfer')),
+            transaction_id TEXT,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending','completed','failed','refunded')),
+            paid_at TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES telemedicine_sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS telemedicine_recordings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            recording_url TEXT,
+            duration INTEGER,
+            file_size INTEGER,
+            recorded_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES telemedicine_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(recorded_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS insurance_authorization_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_id INTEGER NOT NULL,
+            item_type TEXT NOT NULL CHECK(item_type IN ('pharmacy','procedure','lab','radiology','consultation')),
+            item_name TEXT NOT NULL,
+            requires_auth INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(provider_id) REFERENCES insurance_providers(id) ON DELETE CASCADE
+        );
     ''')
 
     conn.commit()
+    _migrate_appointments_type(conn)
+    _migrate_lab_catalog_params(conn)
+    _migrate_prescriptions(conn)
+    _seed_system_config(conn)
+    _seed_insurance_providers(conn)
+    _seed_insurance_providers_missing(conn)
+    _migrate_lab_barcode(conn)
+    _seed_radiology_catalog(conn)
+    _migrate_telemedicine(conn)
+    _seed_auth_rules(conn)
     conn.close()
+
+
+def _migrate_lab_catalog_params(conn):
+    try:
+        conn.execute("ALTER TABLE lab_test_catalog ADD COLUMN default_params TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migrate_prescriptions(conn):
+    try:
+        conn.execute("ALTER TABLE prescriptions ADD COLUMN order_id INTEGER REFERENCES prescription_orders(id)")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE prescriptions ADD COLUMN refill_count INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='prescriptions'"
+    ).fetchone()
+    if schema and 'NOT NULL' in schema['sql'].split('consultation_id')[-1].split(',')[0]:
+        conn.executescript('''
+            CREATE TABLE prescriptions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                consultation_id INTEGER,
+                order_id INTEGER,
+                patient_id INTEGER NOT NULL,
+                inventory_id INTEGER,
+                drug_name TEXT NOT NULL,
+                dosage TEXT,
+                frequency TEXT,
+                duration TEXT,
+                route TEXT,
+                instructions TEXT,
+                quantity INTEGER,
+                refill_count INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active' CHECK(status IN ('active','discontinued','completed')),
+                prescribed_by INTEGER,
+                prescribed_date DATE DEFAULT CURRENT_DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(consultation_id) REFERENCES consultations(id) ON DELETE CASCADE,
+                FOREIGN KEY(order_id) REFERENCES prescription_orders(id),
+                FOREIGN KEY(patient_id) REFERENCES patients(id),
+                FOREIGN KEY(inventory_id) REFERENCES pharmacy_inventory(id),
+                FOREIGN KEY(prescribed_by) REFERENCES users(id)
+            );
+            INSERT INTO prescriptions_new SELECT id, consultation_id, NULL, patient_id, inventory_id, drug_name, dosage, frequency, duration, route, instructions, quantity, 0, status, prescribed_by, prescribed_date, created_at FROM prescriptions;
+            DROP TABLE prescriptions;
+            ALTER TABLE prescriptions_new RENAME TO prescriptions;
+        ''')
+        conn.commit()
+
+
+def _migrate_telemedicine(conn):
+    try:
+        conn.execute("ALTER TABLE telemedicine_sessions ADD COLUMN session_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE telemedicine_sessions ADD COLUMN token_patient TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE telemedicine_sessions ADD COLUMN token_doctor TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE prescriptions ADD COLUMN session_id INTEGER REFERENCES telemedicine_sessions(id)")
+    except sqlite3.OperationalError:
+        pass
+    _migrate_patient_scheme(conn)
+    conn.commit()
+
+
+def _migrate_patient_scheme(conn):
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN scheme_id INTEGER REFERENCES insurance_providers(id)")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN scheme_number TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
+def _seed_system_config(conn):
+    defaults = {
+        'clinic_name': 'Kayange Clinic',
+        'clinic_address': 'Blantyre, Malawi',
+        'clinic_phone': '+265 1 XXX XXXX',
+        'clinic_email': '',
+        'timezone': 'Africa/Blantyre',
+        'date_format': 'DD/MM/YYYY',
+        'currency': 'MWK',
+        'low_stock_threshold': '10',
+        'appointment_slot_minutes': '30',
+    }
+    existing = {r[0] for r in conn.execute('SELECT key FROM system_config').fetchall()}
+    for k, v in defaults.items():
+        if k not in existing:
+            conn.execute('INSERT INTO system_config (key, value) VALUES (?, ?)', (k, v))
+    conn.commit()
+
+
+def _seed_insurance_providers(conn):
+    existing = conn.execute('SELECT COUNT(*) as c FROM insurance_providers').fetchone()['c']
+    if existing > 0:
+        return
+    providers = [
+        ('NHIMA', 'NHIMA', 'National Health Insurance Management Authority', '+265 1 750 777', 'info@nhima.mw', 'Lilongwe, Malawi'),
+        ('First Capital Health Insurance', 'FCHI', 'First Capital Insurance', '+265 1 822 822', 'health@firstcapital.mw', 'Blantyre, Malawi'),
+        ('Axa Insurance Malawi', 'AXA', 'Axa Insurance', '+265 1 824 200', 'info@axa.mw', 'Blantyre, Malawi'),
+        ('Old Mutual Insurance', 'OMI', 'Old Mutual Malawi', '+265 1 820 522', 'insurance@oldmutual.mw', 'Blantyre, Malawi'),
+        ('Jubilee Insurance Malawi', 'JUB', 'Jubilee Insurance', '+265 1 828 500', 'info@jubilee.mw', 'Blantyre, Malawi'),
+        ('NICO Insurance', 'NICO', 'NICO Insurance', '+265 1 824 444', 'insurance@nico.mw', 'Blantyre, Malawi'),
+        ('RESMAID', 'RESMAID', 'RESMAID Insurance', '', '', ''),
+        ('MedHealth', 'MEDHEALTH', 'MedHealth Insurance', '', '', ''),
+        ('COMAID', 'COMAID', 'COMAID Insurance', '', '', ''),
+        ('ESCOM', 'ESCOM', 'ESCOM Staff Scheme', '', '', ''),
+        ('MRA', 'MRA', 'Malawi Revenue Authority Staff Scheme', '', '', ''),
+        ('NABMAS', 'NABMAS', 'NABMAS Insurance', '', '', ''),
+        ('MASM Exe', 'MASM_EXE', 'MASM Executive', '', '', ''),
+        ('MASM VIP', 'MASM_VIP', 'MASM Very Important Person', '', '', ''),
+        ('MASM VVIP', 'MASM_VVIP', 'MASM Very Very Important Person', '', '', ''),
+        ('Companies', 'COMPANIES', 'Corporate Companies', '', '', ''),
+        ('PVT', 'PVT', 'Private Patients', '', '', ''),
+    ]
+    for name, code, contact, phone, email, address in providers:
+        conn.execute(
+            'INSERT INTO insurance_providers (name, code, contact_person, phone, email, address) VALUES (?,?,?,?,?,?)',
+            (name, code, contact, phone, email, address))
+    conn.commit()
+
+
+def _seed_insurance_providers_missing(conn):
+    additional = [
+        ('RESMAID', 'RESMAID', 'RESMAID Insurance', '', '', ''),
+        ('MedHealth', 'MEDHEALTH', 'MedHealth Insurance', '', '', ''),
+        ('COMAID', 'COMAID', 'COMAID Insurance', '', '', ''),
+        ('ESCOM', 'ESCOM', 'ESCOM Staff Scheme', '', '', ''),
+        ('MRA', 'MRA', 'Malawi Revenue Authority Staff Scheme', '', '', ''),
+        ('NABMAS', 'NABMAS', 'NABMAS Insurance', '', '', ''),
+        ('MASM Exe', 'MASM_EXE', 'MASM Executive', '', '', ''),
+        ('MASM VIP', 'MASM_VIP', 'MASM Very Important Person', '', '', ''),
+        ('MASM VVIP', 'MASM_VVIP', 'MASM Very Very Important Person', '', '', ''),
+        ('Companies', 'COMPANIES', 'Corporate Companies', '', '', ''),
+        ('PVT', 'PVT', 'Private Patients', '', '', ''),
+    ]
+    existing_codes = {r['code'] for r in conn.execute('SELECT code FROM insurance_providers').fetchall()}
+    for name, code, contact, phone, email, address in additional:
+        if code not in existing_codes:
+            conn.execute(
+                'INSERT INTO insurance_providers (name, code, contact_person, phone, email, address) VALUES (?,?,?,?,?,?)',
+                (name, code, contact, phone, email, address))
+    conn.commit()
+
+
+def _migrate_lab_barcode(conn):
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN barcode TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN sample_collected_date DATE")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN sample_collected_by INTEGER REFERENCES users(id)")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
+def _seed_radiology_catalog(conn):
+    existing = conn.execute('SELECT COUNT(*) as c FROM lab_test_catalog WHERE category = "radiology"').fetchone()['c']
+    if existing > 0:
+        return
+    radiology_tests = [
+        ('Chest X-Ray (PA)', 'radiology', 'radiology', 'PA chest radiograph', None),
+        ('Chest X-Ray (Lateral)', 'radiology', 'radiology', 'Lateral chest radiograph', None),
+        ('Abdominal X-Ray', 'radiology', 'radiology', 'Plain abdominal radiograph', None),
+        ('Pelvic X-Ray', 'radiology', 'radiology', 'Pelvic radiograph', None),
+        ('Spine X-Ray (Cervical)', 'radiology', 'radiology', 'Cervical spine radiograph', None),
+        ('Spine X-Ray (Thoracic)', 'radiology', 'radiology', 'Thoracic spine radiograph', None),
+        ('Spine X-Ray (Lumbar)', 'radiology', 'radiology', 'Lumbar spine radiograph', None),
+        ('Limbs X-Ray', 'radiology', 'radiology', 'Extremity radiograph', None),
+        ('Skull X-Ray', 'radiology', 'radiology', 'Skull radiograph', None),
+        ('Abdominal Ultrasound', 'radiology', 'ultrasound', 'Abdominal/pelvic ultrasound', None),
+        ('Obstetric Ultrasound', 'radiology', 'ultrasound', 'Obstetric ultrasound scan', None),
+        ('Thyroid Ultrasound', 'radiology', 'ultrasound', 'Thyroid gland ultrasound', None),
+        ('Breast Ultrasound', 'radiology', 'ultrasound', 'Breast ultrasound', None),
+        ('Echocardiogram', 'radiology', 'cardiac', 'Transthoracic echocardiogram', None),
+        ('ECG (12-Lead)', 'radiology', 'cardiac', '12-lead electrocardiogram', None),
+    ]
+    for name, cat, subcat, desc, params in radiology_tests:
+        conn.execute(
+            'INSERT INTO lab_test_catalog (test_name, category, sample_type, description, default_params, is_active) VALUES (?,?,?,?,?,1)',
+            (name, cat, subcat, desc, params))
+    conn.commit()
+
+
+def _seed_auth_rules(conn):
+    medhealth = conn.execute(
+        'SELECT id FROM insurance_providers WHERE code = "MEDHEALTH"').fetchone()
+    if not medhealth:
+        return
+    existing = conn.execute(
+        'SELECT COUNT(*) as c FROM insurance_authorization_rules WHERE provider_id = ?', (medhealth['id'],)).fetchone()['c']
+    if existing > 0:
+        return
+    rules = [
+        (medhealth['id'], 'pharmacy', 'Drip', 1),
+        (medhealth['id'], 'pharmacy', 'IV Fluid', 1),
+        (medhealth['id'], 'pharmacy', 'Normal Saline', 1),
+        (medhealth['id'], 'pharmacy', 'Hartmanns', 1),
+        (medhealth['id'], 'pharmacy', 'Ringer Lactate', 1),
+        (medhealth['id'], 'pharmacy', 'Dextrose', 1),
+    ]
+    for provider_id, item_type, item_name, requires_auth in rules:
+        conn.execute(
+            'INSERT INTO insurance_authorization_rules (provider_id, item_type, item_name, requires_auth) VALUES (?, ?, ?, ?)',
+            (provider_id, item_type, item_name, requires_auth))
+    conn.commit()

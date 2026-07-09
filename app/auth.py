@@ -29,6 +29,8 @@ def login_required(f):
         try:
             verify_jwt_in_request()
         except Exception:
+            if '/api/' in request.path:
+                return jsonify({'error': 'Authentication required'}), 401
             return redirect('/auth/login')
         return f(*args, **kwargs)
     return wrapper

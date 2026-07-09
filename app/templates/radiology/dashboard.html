@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-reels"></i> Radiology Dashboard</h4>
+    <div class="d-flex gap-2">
+        <a href="/radiology/orders/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Order</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon yellow"><i class="bi bi-hourglass"></i></div>
+            <div class="stat-value" id="stat-pending">0</div><div class="stat-label">Pending</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-gear"></i></div>
+            <div class="stat-value" id="stat-inprog">0</div><div class="stat-label">In Progress</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon green"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-value" id="stat-completed">0</div><div class="stat-label">Completed Today</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-plus-circle"></i></div>
+            <div class="stat-value" id="stat-ordered">0</div><div class="stat-label">Ordered Today</div></div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Recent Orders</h6>
+                <a href="/radiology/orders" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0" id="recent-table">
+                        <thead><tr><th>Order #</th><th>Patient</th><th>Modality</th><th>Body Part</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="recent-empty" class="text-center text-muted py-4" style="display:none"><i class="bi bi-camera-reels" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No recent orders</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-header"><h6>By Modality</h6></div>
+            <div class="card-body p-0" id="modality-list"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const MOD = {xray:'X-Ray',ultrasound:'Ultrasound',ct:'CT Scan',mri:'MRI',ecg:'ECG',echo:'Echo',mammogram:'Mammogram',fluoroscopy:'Fluoroscopy',other:'Other'};
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/radiology/api/dashboard');
+    const data = await res.json();
+    document.getElementById('stat-pending').textContent = data.pending || 0;
+    document.getElementById('stat-inprog').textContent = (data.recent || []).filter(r => r.status === 'in_progress').length;
+    document.getElementById('stat-completed').textContent = data.completed_today || 0;
+    document.getElementById('stat-ordered').textContent = data.ordered_today || 0;
+
+    const tbody = document.querySelector('#recent-table tbody');
+    const recent = data.recent || [];
+    if (recent.length) {
+        document.getElementById('recent-empty').style.display = 'none';
+        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+        recent.forEach(o => {
+            tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(o.order_number || '') + '</span></td>' +
+                '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + esc(o.p_first || '') + ' ' + esc(o.p_last || '') + '</a></td>' +
+                '<td>' + (MOD[o.modality] || o.modality) + '</td>' +
+                '<td>' + esc(o.body_part || '-') + '</td>' +
+                '<td><span class="badge bg-' + (sc[o.status] || 'secondary') + '">' + o.status.replace('_', ' ') + '</span></td>' +
+                '<td><a href="/radiology/orders/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a></td></tr>';
+        });
+    } else { document.getElementById('recent-table').style.display = 'none'; document.getElementById('recent-empty').style.display = 'block'; }
+});
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

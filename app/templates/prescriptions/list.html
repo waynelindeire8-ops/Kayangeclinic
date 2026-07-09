@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-prescription2"></i> Prescriptions</h4>
+    <div class="d-flex gap-2">
+        <a href="/prescriptions/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Prescription</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="filter-status">
+                    <option value="">All</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Patient</label>
+                <select class="form-select" id="filter-patient">
+                    <option value="">All patients</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">From</label>
+                <input type="date" class="form-control" id="filter-from">
+            </div>
+            <div class="col-md-3 d-flex gap-2 align-items-end">
+                <button class="btn btn-primary" onclick="loadOrders()"><i class="bi bi-search me-1"></i>Filter</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="orders-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Patient</th>
+                        <th>Doctor</th>
+                        <th>Items</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th style="width:120px">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="orders-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-prescription-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No prescription orders found
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    document.getElementById('filter-to').value = new Date().toISOString().split('T')[0];
+    const pRes = await fetchWithAuth('/patients/api');
+    const patients = await pRes.json();
+    const pSel = document.getElementById('filter-patient');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        pSel.appendChild(o);
+    });
+    loadOrders();
+    document.getElementById('filter-status').addEventListener('change', loadOrders);
+});
+
+async function loadOrders() {
+    const status = document.getElementById('filter-status').value;
+    const patientId = document.getElementById('filter-patient').value;
+    const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    let url = '/prescriptions/api/orders?';
+    if (status) url += 'status=' + status + '&';
+    if (patientId) url += 'patient_id=' + patientId + '&';
+    if (from) url += 'date_from=' + from + '&';
+    if (to) url += 'date_to=' + to + '&';
+    const res = await fetchWithAuth(url);
+    const orders = await res.json();
+    const tbody = document.querySelector('#orders-table tbody');
+    const empty = document.getElementById('orders-empty');
+    tbody.innerHTML = '';
+    if (orders.length) {
+        document.getElementById('orders-table').style.display = '';
+        empty.style.display = 'none';
+        const colors = { active: 'success', completed: 'secondary', cancelled: 'danger' };
+        orders.forEach(o => {
+            tbody.innerHTML += '<tr>' +
+                '<td><span class="fw-semibold">' + o.id + '</span></td>' +
+                '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + escHtml(o.p_first || '') + ' ' + escHtml(o.p_last || '') + '</a><br><small class="text-muted">' + (o.p_patient_id || '') + '</small></td>' +
+                '<td>Dr. ' + escHtml(o.d_first || '') + ' ' + escHtml(o.d_last || '') + '</td>' +
+                '<td><span class="badge bg-secondary">' + (o.item_count || 0) + '</span></td>' +
+                '<td>' + (o.created_at ? new Date(o.created_at).toLocaleDateString() : '') + '</td>' +
+                '<td><span class="badge bg-' + (colors[o.status] || 'secondary') + '">' + o.status + '</span></td>' +
+                '<td><div class="d-flex gap-1"><a href="/prescriptions/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a><a href="/prescriptions/' + o.id + '/edit" class="btn-action edit"><i class="bi bi-pencil"></i></a><a href="/prescriptions/' + o.id + '/print" class="btn-action print" target="_blank"><i class="bi bi-printer"></i></a></div></td></tr>';
+        });
+    } else {
+        document.getElementById('orders-table').style.display = 'none';
+        empty.style.display = 'block';
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-prescription2"></i> Prescription #<span id="order-id-display">{{ order_id }}</span></h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" onclick="window.open('/prescriptions/{{ order_id }}/print','_blank')"><i class="bi bi-printer me-1"></i>Print</button>
+        <a href="/prescriptions/{{ order_id }}/edit" class="btn btn-primary"><i class="bi bi-pencil me-1"></i>Edit</a>
+        <a href="/prescriptions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><h6>Order Info</h6></div>
+            <div class="card-body" id="order-info">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Refill History</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="showRefillModal()"><i class="bi bi-plus-lg me-1"></i>Add Refill</button>
+            </div>
+            <div class="card-body p-0" id="refills-list">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Prescribed Drugs</h6>
+                <div>
+                    <select class="form-select form-select-sm d-inline-block w-auto" id="status-select">
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary ms-1" onclick="changeStatus()">Update</button>
+                </div>
+            </div>
+            <div class="card-body p-0" id="items-list">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="refillModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form id="refill-form">
+                <div class="modal-header"><h5 class="modal-title">Add Refill</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Quantity Dispensed</label>
+                        <input type="number" class="form-control" id="refill-qty" min="1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="refill-notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-3" id="btn-refill">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const orderId = {{ order_id }};
+
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+    const res = await fetchWithAuth('/prescriptions/api/orders/' + orderId);
+    const data = await res.json();
+    if (data.error) {
+        document.getElementById('order-info').innerHTML = '<div class="alert alert-danger mb-0">' + data.error + '</div>';
+        return;
+    }
+
+    document.getElementById('order-id-display').textContent = orderId;
+    document.getElementById('status-select').value = data.status;
+
+    const statusColors = { active: 'success', completed: 'secondary', cancelled: 'danger' };
+    document.getElementById('order-info').innerHTML =
+        '<table class="table-details">' +
+        '<tr><td>Patient</td><td><strong><a href="/patients/' + data.patient_id + '">' + escHtml(data.p_first) + ' ' + escHtml(data.p_last) + '</a></strong><br><small>' + (data.p_patient_id || '') + '</small></td></tr>' +
+        '<tr><td>Doctor</td><td>Dr. ' + escHtml(data.d_first) + ' ' + escHtml(data.d_last) + '</td></tr>' +
+        '<tr><td>Status</td><td><span class="badge bg-' + (statusColors[data.status] || 'secondary') + '">' + data.status + '</span></td></tr>' +
+        '<tr><td>Created</td><td>' + (data.created_at ? new Date(data.created_at).toLocaleString() : '') + '</td></tr>' +
+        '<tr><td>Updated</td><td>' + (data.updated_at ? new Date(data.updated_at).toLocaleString() : '') + '</td></tr>' +
+        (data.notes ? '<tr><td>Notes</td><td>' + escHtml(data.notes) + '</td></tr>' : '') +
+        '</table>';
+
+    const itemList = document.getElementById('items-list');
+    const items = data.items || [];
+    if (items.length) {
+        let html = '<div class="table-responsive"><table class="table mb-0"><thead><tr><th>Drug</th><th>Dosage</th><th>Frequency</th><th>Route</th><th>Duration</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+        const itemStatusColors = { active: 'success', discontinued: 'warning', completed: 'secondary' };
+        items.forEach(i => {
+            html += '<tr>' +
+                '<td><strong>' + escHtml(i.drug_name) + '</strong>' + (i.instructions ? '<br><small class="text-muted">' + escHtml(i.instructions) + '</small>' : '') + '</td>' +
+                '<td>' + escHtml(i.dosage || '-') + '</td>' +
+                '<td>' + escHtml(i.frequency || '-') + '</td>' +
+                '<td>' + escHtml(i.route || '-') + '</td>' +
+                '<td>' + escHtml(i.duration || '-') + '</td>' +
+                '<td>' + (i.quantity || '-') + '</td>' +
+                '<td><span class="badge bg-' + (itemStatusColors[i.status] || 'secondary') + '">' + i.status + '</span></td></tr>';
+        });
+        html += '</tbody></table></div>';
+        itemList.innerHTML = html;
+    } else {
+        itemList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-capsule" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No drugs in this prescription</div>';
+    }
+
+    const refillsDiv = document.getElementById('refills-list');
+    const refills = data.refills || [];
+    if (refills.length) {
+        let html = '';
+        refills.forEach(r => {
+            html += '<div class="p-3 border-bottom"><div class="d-flex justify-content-between"><strong>' + new Date(r.refill_date).toLocaleDateString() + '</strong><span class="badge bg-secondary">Qty: ' + (r.quantity || '-') + '</span></div>' +
+                (r.notes ? '<small class="text-muted">' + escHtml(r.notes) + '</small>' : '') +
+                '<br><small class="text-muted">by ' + escHtml(r.r_first || '') + ' ' + escHtml(r.r_last || '') + '</small></div>';
+        });
+        refillsDiv.innerHTML = html;
+    } else {
+        refillsDiv.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-arrow-repeat" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No refills recorded</div>';
+    }
+}
+
+function showRefillModal() {
+    new bootstrap.Modal(document.getElementById('refillModal')).show();
+}
+
+document.getElementById('refill-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-refill');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const res = await fetchWithAuth('/prescriptions/api/orders/' + orderId + '/refills', {
+        method: 'POST',
+        body: JSON.stringify({ quantity: parseInt(document.getElementById('refill-qty').value) || null, notes: document.getElementById('refill-notes').value.trim() })
+    });
+    btn.disabled = false; btn.innerHTML = 'Save';
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('refillModal')).hide();
+        document.getElementById('refill-qty').value = '';
+        document.getElementById('refill-notes').value = '';
+        loadData();
+        showToast('Refill recorded', 'success');
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed', 'danger');
+    }
+});
+
+async function changeStatus() {
+    const status = document.getElementById('status-select').value;
+    if (!confirm('Change prescription status to "' + status + '"?')) return;
+    const res = await fetchWithAuth('/prescriptions/api/orders/' + orderId + '/status', {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+    });
+    if (res.ok) { loadData(); showToast('Status updated', 'success'); }
+    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+
+<style>
+.table-details td { padding: 0.375rem 0.5rem; vertical-align: top; }
+.table-details tr td:first-child { font-weight: 500; color: #64748b; width: 1%; white-space: nowrap; padding-right: 1rem; }
+</style>
+{% endblock %}

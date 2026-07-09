@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-flask"></i> Lab Order #{{ order.id }}</h4>
+    <a href="/lab/orders" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Orders</a>
+</div>
+
+{% if order.status == 'completed' %}
+<div class="alert alert-success">This order is <strong>completed</strong>.</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><h6>Order Details</h6></div>
+            <div class="card-body">
+                <table class="table-details">
+                    <tr><td>Order #</td><td><strong>{{ order.id }}</strong></td></tr>
+                    <tr><td>Patient</td><td><strong><a href="/patients/{{ order.patient_id }}">{{ order.p_first }} {{ order.p_last }}</a></strong><br><small class="text-muted">{{ order.p_patient_id }}</small></td></tr>
+                    <tr><td>Test</td><td><strong>{{ order.test_name }}</strong></td></tr>
+                    <tr><td>Category</td><td><span class="badge bg-secondary">{{ order.test_category or 'general' }}</span></td></tr>
+                    <tr><td>Doctor</td><td>Dr. {{ order.d_first }} {{ order.d_last }}</td></tr>
+                    <tr><td>Ordered</td><td>{{ order.ordered_date }} {{ order.ordered_time or '' }}</td></tr>
+                    <tr><td>Status</td><td><span class="badge bg-{{ 'success' if order.status == 'completed' else 'primary' if order.status == 'in_progress' else 'info' if order.status == 'collected' else 'secondary' }}">{{ order.status.replace('_', ' ') }}</span></td></tr>
+                    <tr><td>Collected</td><td>{{ order.collected_date or '-' }} {{ order.collected_time or '' }}</td></tr>
+                    <tr><td>Result Date</td><td>{{ order.result_date or '-' }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Results</h6>
+                <div class="d-flex gap-2">
+                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'admin', 'doctor') %}
+                    <button class="btn btn-sm btn-primary" onclick="addResultRow()"><i class="bi bi-plus-lg me-1"></i>Add Row</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <form id="results-form">
+                    <table class="table" id="results-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width:160px">Parameter</th>
+                                <th style="min-width:120px">Value</th>
+                                <th>Unit</th>
+                                <th>Ref Range</th>
+                                <th>Flag</th>
+                                <th style="width:40px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-tbody"></tbody>
+                    </table>
+                    <div id="no-results" class="text-center text-muted py-4" style="display:none">
+                        <i class="bi bi-journal-x" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                        No results yet
+                    </div>
+                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'admin', 'doctor') %}
+                    <button type="submit" class="btn btn-primary px-4" id="btn-save-results"><i class="bi bi-save me-1"></i>Save Results</button>
+                    <button type="button" class="btn btn-success px-4 ms-2" id="btn-complete" onclick="completeOrder()"><i class="bi bi-check-lg me-1"></i>Complete &amp; Save</button>
+                    {% endif %}
+                </form>
+                {% if order.status in ('ordered',) %}
+                <hr>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-info text-white" onclick="changeStatus('collected')"><i class="bi bi-box me-1"></i>Mark Collected</button>
+                </div>
+                {% endif %}
+                {% if order.status in ('collected',) %}
+                <hr>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="changeStatus('in_progress')"><i class="bi bi-play me-1"></i>Start Processing</button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const orderId = {{ order.id }};
+let rowsChanged = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadResults();
+});
+
+async function loadResults() {
+    const res = await fetchWithAuth('/lab/api/orders/' + orderId);
+    const data = await res.json();
+    const tbody = document.getElementById('results-tbody');
+    const empty = document.getElementById('no-results');
+    tbody.innerHTML = '';
+
+    if (data.results && data.results.length) {
+        empty.style.display = 'none';
+        data.results.forEach(r => addRow(r));
+    } else if (data.catalog && data.catalog.default_params) {
+        empty.style.display = 'none';
+        try {
+            const params = JSON.parse(data.catalog.default_params);
+            params.forEach(p => {
+                addRow({ parameter_name: p.parameter_name, unit: p.unit, ref_range: p.ref_range });
+            });
+        } catch(e) {
+            empty.style.display = 'block';
+        }
+    } else {
+        empty.style.display = 'block';
+    }
+}
+
+function addRow(data) {
+    const tbody = document.getElementById('results-tbody');
+    const tr = document.createElement('tr');
+    const idx = tbody.children.length;
+    tr.innerHTML = `<td><input type="text" class="form-control form-control-sm" name="param_${idx}" value="${escHtml(data.parameter_name || '')}" required></td>
+<td><input type="text" class="form-control form-control-sm" name="val_${idx}" value="${escHtml(data.value || '')}" oninput="autoFlag(this)"></td>
+<td><input type="text" class="form-control form-control-sm" name="unit_${idx}" value="${escHtml(data.unit || '')}"></td>
+<td><input type="text" class="form-control form-control-sm" name="ref_${idx}" value="${escHtml(data.ref_range || '')}"></td>
+<td><select class="form-select form-select-sm" name="flag_${idx}"><option value="normal" ${data.flag === 'normal' ? 'selected' : ''}>Normal</option><option value="high" ${data.flag === 'high' ? 'selected' : ''}>High</option><option value="low" ${data.flag === 'low' ? 'selected' : ''}>Low</option><option value="critical_high" ${data.flag === 'critical_high' ? 'selected' : ''}>Critical High</option><option value="critical_low" ${data.flag === 'critical_low' ? 'selected' : ''}>Critical Low</option><option value="pending" ${data.flag === 'pending' || (!data.flag && !data.value) ? 'selected' : ''}>Pending</option></select></td>
+<td><button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('tr').remove(); rowsChanged=true"><i class="bi bi-x"></i></button></td>`;
+    tbody.appendChild(tr);
+    document.getElementById('no-results').style.display = 'none';
+    rowsChanged = true;
+}
+
+function addResultRow() { addRow({}); }
+
+function autoFlag(input) {
+    const tr = input.closest('tr');
+    const val = parseFloat(input.value);
+    if (isNaN(val)) return;
+    const ref = tr.querySelector('input[name^="ref_"]').value;
+    if (!ref) return;
+    const m = ref.match(/[\d.]+/g);
+    if (!m || m.length < 2) return;
+    const lo = parseFloat(m[0]), hi = parseFloat(m[1]);
+    const sel = tr.querySelector('select[name^="flag_"]');
+    if (val > hi) sel.value = 'high';
+    else if (val < lo) sel.value = 'low';
+    else sel.value = 'normal';
+}
+
+document.getElementById('results-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const tbody = document.getElementById('results-tbody');
+    const results = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const inputs = tr.querySelectorAll('input');
+        const sel = tr.querySelector('select');
+        results.push({
+            parameter_name: inputs[0].value,
+            value: inputs[1].value,
+            unit: inputs[2].value,
+            ref_range: inputs[3].value,
+            flag: sel ? sel.value : 'pending'
+        });
+    });
+    const btn = document.getElementById('btn-save-results');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const res = await fetchWithAuth('/lab/api/orders/' + orderId + '/results', {
+        method: 'POST',
+        body: JSON.stringify({ results, complete: false })
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Results';
+    if (res.ok) {
+        showToast('Results saved', 'success');
+        rowsChanged = false;
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to save results', 'danger');
+    }
+});
+
+async function completeOrder() {
+    if (!confirm('Mark this order as completed? This will finalize the results.')) return;
+    const tbody = document.getElementById('results-tbody');
+    const results = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const inputs = tr.querySelectorAll('input');
+        const sel = tr.querySelector('select');
+        results.push({
+            parameter_name: inputs[0].value,
+            value: inputs[1].value,
+            unit: inputs[2].value,
+            ref_range: inputs[3].value,
+            flag: sel ? sel.value : 'pending'
+        });
+    });
+    const btn = document.getElementById('btn-complete');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const res = await fetchWithAuth('/lab/api/orders/' + orderId + '/results', {
+        method: 'POST',
+        body: JSON.stringify({ results, complete: true })
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Complete &amp; Save';
+    if (res.ok) {
+        showToast('Order completed!', 'success');
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to complete order', 'danger');
+    }
+}
+
+async function changeStatus(status) {
+    const res = await fetchWithAuth('/lab/api/orders/' + orderId + '/status', {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+    });
+    if (res.ok) location.reload();
+    else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to update', 'danger');
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+
+<style>
+.table-details td { padding: 0.375rem 0.5rem; vertical-align: top; }
+.table-details tr td:first-child { font-weight: 500; color: #64748b; width: 1%; white-space: nowrap; padding-right: 1rem; }
+</style>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-book"></i> Lab Test Catalog</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#catalogModal"><i class="bi bi-plus-lg me-1"></i>Add Test</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="catalog-table">
+                <thead>
+                    <tr>
+                        <th>Test Name</th>
+                        <th>Category</th>
+                        <th>Parameters</th>
+                        <th>Status</th>
+                        <th style="width:90px">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="catalog-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-journal-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No tests in catalog
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="catalogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="catalog-form">
+                <div class="modal-header"><h5 class="modal-title" id="catalog-title">Add Test</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-id">
+                    <div class="mb-3">
+                        <label class="form-label">Test Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="test_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" id="category">
+                            <option value="general">General</option>
+                            <option value="ultrasound">Ultrasound</option>
+                            <option value="cardiac">Cardiac</option>
+                            <option value="microbiology">Microbiology</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="description" rows="2"></textarea>
+                    </div>
+                    <hr>
+                    <h6>Parameters</h6>
+                    <div id="params-container">
+                        <div class="row g-2 mb-2 param-row">
+                            <div class="col-4"><input type="text" class="form-control form-control-sm" name="param_name" placeholder="Parameter name"></div>
+                            <div class="col-2"><input type="text" class="form-control form-control-sm" name="param_unit" placeholder="Unit"></div>
+                            <div class="col-3"><input type="text" class="form-control form-control-sm" name="param_ref" placeholder="Ref range (e.g. 3.5-5.5)"></div>
+                            <div class="col-2">
+                                <select class="form-select form-select-sm" name="param_type">
+                                    <option value="numeric">Numeric</option>
+                                    <option value="text">Text</option>
+                                    <option value="select">Select</option>
+                                </select>
+                            </div>
+                            <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.param-row').remove()"><i class="bi bi-x"></i></button></div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addParamRow()"><i class="bi bi-plus-lg me-1"></i>Add Parameter</button>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="is_active" checked>
+                        <label class="form-check-label">Active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-save-catalog"><i class="bi bi-check-lg me-1"></i>Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadCatalog);
+
+async function loadCatalog() {
+    const res = await fetchWithAuth('/lab/api/catalog');
+    const items = await res.json();
+    const tbody = document.querySelector('#catalog-table tbody');
+    const empty = document.getElementById('catalog-empty');
+    tbody.innerHTML = '';
+    if (items.length) {
+        document.getElementById('catalog-table').style.display = '';
+        empty.style.display = 'none';
+        items.forEach(c => {
+            const params = c.parameters ? JSON.parse(c.parameters) : [];
+            tbody.innerHTML += '<tr>' +
+                '<td><strong>' + escHtml(c.test_name) + '</strong></td>' +
+                '<td><span class="badge bg-secondary">' + escHtml(c.category) + '</span></td>' +
+                '<td><small class="text-muted">' + params.map(p => escHtml(p.parameter_name)).join(', ') + '</small></td>' +
+                '<td><span class="badge bg-' + (c.is_active ? 'success' : 'secondary') + '">' + (c.is_active ? 'Active' : 'Inactive') + '</span></td>' +
+                '<td><button class="btn-action edit" onclick="editCatalog(' + c.id + ')"><i class="bi bi-pencil"></i></button></td></tr>';
+        });
+    } else {
+        document.getElementById('catalog-table').style.display = 'none';
+        empty.style.display = 'block';
+    }
+}
+
+function addParamRow(data) {
+    const container = document.getElementById('params-container');
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 param-row';
+    const val = (k) => data ? escHtml(data[k] || '') : '';
+    const sel = (k, v) => data && data[k] === v ? 'selected' : '';
+    row.innerHTML = `<div class="col-4"><input type="text" class="form-control form-control-sm" name="param_name" value="${val('parameter_name')}" placeholder="Parameter name"></div>
+<div class="col-2"><input type="text" class="form-control form-control-sm" name="param_unit" value="${val('unit')}" placeholder="Unit"></div>
+<div class="col-3"><input type="text" class="form-control form-control-sm" name="param_ref" value="${val('ref_range')}" placeholder="Ref range (e.g. 3.5-5.5)"></div>
+<div class="col-2"><select class="form-select form-select-sm" name="param_type"><option value="numeric" ${sel('type','numeric')}>Numeric</option><option value="text" ${sel('type','text')}>Text</option><option value="select" ${sel('type','select')}>Select</option></select></div>
+<div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.param-row').remove()"><i class="bi bi-x"></i></button></div>`;
+    container.appendChild(row);
+}
+
+async function editCatalog(id) {
+    const res = await fetchWithAuth('/lab/api/catalog/' + id);
+    const c = await res.json();
+    if (c.error) { alert(c.error); return; }
+    document.getElementById('catalog-title').textContent = 'Edit Test';
+    document.getElementById('edit-id').value = c.id;
+    document.getElementById('test_name').value = c.test_name;
+    document.getElementById('category').value = c.category;
+    document.getElementById('description').value = c.description || '';
+    document.getElementById('is_active').checked = c.is_active;
+
+    const container = document.getElementById('params-container');
+    container.innerHTML = '';
+    const params = c.parameters ? JSON.parse(c.parameters) : [];
+    if (params.length) params.forEach(p => addParamRow(p));
+    else addParamRow();
+
+    new bootstrap.Modal(document.getElementById('catalogModal')).show();
+}
+
+document.getElementById('catalog-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-id').value;
+    const params = [];
+    document.querySelectorAll('.param-row').forEach(row => {
+        const inputs = row.querySelectorAll('input[name^="param_"]');
+        const sel = row.querySelector('select[name^="param_"]');
+        if (!sel) return;
+        const pName = inputs[0].value.trim();
+        if (pName) {
+            params.push({ parameter_name: pName, unit: inputs[1].value, ref_range: inputs[2].value, type: sel.value });
+        }
+    });
+    const body = {
+        test_name: document.getElementById('test_name').value.trim(),
+        category: document.getElementById('category').value,
+        description: document.getElementById('description').value.trim(),
+        parameters: JSON.stringify(params),
+        is_active: document.getElementById('is_active').checked
+    };
+    const btn = document.getElementById('btn-save-catalog');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? '/lab/api/catalog/' + id : '/lab/api/catalog';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save';
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('catalogModal')).hide();
+        loadCatalog();
+        showToast(id ? 'Test updated' : 'Test created', 'success');
+        resetCatalogForm();
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to save', 'danger');
+    }
+});
+
+function resetCatalogForm() {
+    document.getElementById('catalog-title').textContent = 'Add Test';
+    document.getElementById('edit-id').value = '';
+    document.getElementById('catalog-form').reset();
+    document.getElementById('params-container').innerHTML = '';
+    addParamRow();
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

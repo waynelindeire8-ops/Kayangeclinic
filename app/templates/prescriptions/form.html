@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-prescription2"></i> {% if order_id %}Edit{% else %}New{% endif %} Prescription</h4>
+    <a href="/prescriptions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <form id="order-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient <span class="text-danger">*</span></label>
+                        <select class="form-select" id="patient_id" required>
+                            <option value="">Select patient...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" rows="2" placeholder="Clinical notes / instructions for the patient"></textarea>
+                    </div>
+
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Prescribed Drugs</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
+                    </div>
+                    <div id="items-container"></div>
+                    <div id="no-items" class="text-center text-muted py-3">
+                        <i class="bi bi-capsule" style="font-size:1.25rem;display:block;margin-bottom:0.25rem"></i>
+                        No drugs added yet. Click "Add Drug" above.
+                    </div>
+
+                    <hr>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>{% if order_id %}Update{% else %}Create{% endif %} Prescription</button>
+                    <a href="/prescriptions" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="order-success" class="alert alert-success mt-3" style="display:none">
+                    <i class="bi bi-check-circle me-1"></i> Prescription saved! <a href="/prescriptions/" class="alert-link">Back to list</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const orderId = {% if order_id %}{{ order_id }}{% else %}null{% endif %};
+let inventoryCache = [];
+let itemIdx = 0;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const [patientsRes, invRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/pharmacy/api/inventory')
+    ]);
+    const patients = await patientsRes.json();
+    inventoryCache = await invRes.json();
+
+    const pSel = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        pSel.appendChild(o);
+    });
+
+    if (orderId) {
+        const res = await fetchWithAuth('/prescriptions/api/orders/' + orderId);
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        document.getElementById('patient_id').value = data.patient_id;
+        document.getElementById('notes').value = data.notes || '';
+        document.getElementById('patient_id').disabled = true;
+        (data.items || []).forEach(item => addItem(item));
+    }
+});
+
+function addItem(data) {
+    document.getElementById('no-items').style.display = 'none';
+    const container = document.getElementById('items-container');
+    const idx = itemIdx++;
+    const div = document.createElement('div');
+    div.className = 'item-row card card-body mb-2 p-3';
+    div.id = 'item-' + idx;
+    const d = data || {};
+    const drugOpts = inventoryCache.map(i =>
+        '<option value="' + i.id + '" ' + (d.inventory_id == i.id ? 'selected' : '') + '>' + escHtml(i.drug_name) + ' (stock: ' + i.stock_quantity + ')</option>'
+    ).join('');
+    div.innerHTML = `<div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small">Drug</label>
+            <select class="form-select form-select-sm inv-select" onchange="onDrugSelect(this)">
+                <option value="">-- Select from inventory --</option>
+                ${drugOpts}
+                <option value="__other__">Free-text entry...</option>
+            </select>
+            <input type="text" class="form-control form-control-sm mt-1 drug-text" placeholder="Drug name (free-text)" style="display:${d.inventory_id ? 'none' : 'block'}" value="${escHtml(d.drug_name || '')}">
+            <input type="hidden" class="inv-id" value="${d.inventory_id || ''}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Dosage</label>
+            <input type="text" class="form-control form-control-sm" name="dosage" placeholder="e.g. 500mg" value="${escHtml(d.dosage || '')}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Frequency</label>
+            <select class="form-select form-select-sm" name="frequency">
+                <option value="">Select...</option>
+                ${['OD','BD','TDS','QID','Q4H','Q6H','Q8H','Q12H','Stat','PRN','Weekly','Monthly'].map(f =>
+                    '<option ' + (d.frequency === f ? 'selected' : '') + '>' + f + '</option>'
+                ).join('')}
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Route</label>
+            <select class="form-select form-select-sm" name="route">
+                <option value="">Select</option>
+                ${['Oral','IV','IM','SC','Topical','Inhalation','Sublingual','PR','SL','Other'].map(r =>
+                    '<option ' + (d.route === r ? 'selected' : '') + '>' + r + '</option>'
+                ).join('')}
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Duration</label>
+            <input type="text" class="form-control form-control-sm" name="duration" placeholder="e.g. 7 days" value="${escHtml(d.duration || '')}">
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Qty</label>
+            <input type="number" class="form-control form-control-sm" name="quantity" min="0" value="${d.quantity || ''}">
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Refills</label>
+            <input type="number" class="form-control form-control-sm" name="refill_count" min="0" value="${d.refill_count || 0}">
+        </div>
+        <div class="col-md-1 d-flex align-items-end gap-1">
+            <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.item-row').remove(); checkItems()" title="Remove"><i class="bi bi-trash"></i></button>
+        </div>
+    </div>`;
+    if (d.instructions) {
+        div.innerHTML += `<div class="row mt-2"><div class="col-12"><input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value="${escHtml(d.instructions)}"></div></div>`;
+    } else {
+        div.innerHTML += `<div class="row mt-2"><div class="col-12"><input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value=""></div></div>`;
+    }
+    container.appendChild(div);
+}
+
+function onDrugSelect(sel) {
+    const row = sel.closest('.item-row');
+    const textInput = row.querySelector('.drug-text');
+    const invHidden = row.querySelector('.inv-id');
+    if (sel.value === '__other__') {
+        textInput.style.display = 'block';
+        textInput.value = '';
+        invHidden.value = '';
+    } else if (sel.value) {
+        textInput.style.display = 'none';
+        textInput.value = '';
+        invHidden.value = sel.value;
+    } else {
+        textInput.style.display = 'block';
+        invHidden.value = '';
+    }
+}
+
+function checkItems() {
+    if (!document.querySelector('.item-row')) {
+        document.getElementById('no-items').style.display = 'block';
+    }
+}
+
+document.getElementById('order-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const items = [];
+    document.querySelectorAll('.item-row').forEach(row => {
+        const inputs = row.querySelectorAll('input[name], select[name]');
+        const invId = row.querySelector('.inv-id').value;
+        const drugText = row.querySelector('.drug-text').value.trim();
+        const invSel = row.querySelector('.inv-select');
+        const item = { inventory_id: invId || null, drug_name: drugText, dosage: '', frequency: '', route: '', duration: '', instructions: '', quantity: null, refill_count: 0 };
+        inputs.forEach(inp => { item[inp.name] = inp.value; });
+        if (!item.drug_name && invSel && invSel.value && invSel.value !== '__other__') {
+            const opt = invSel.options[invSel.selectedIndex];
+            item.drug_name = opt.text.split(' (')[0];
+        }
+        if (item.drug_name) items.push(item);
+    });
+    if (!items.length) { alert('Add at least one drug'); return; }
+
+    // Check insurance authorization for drips/IV fluids
+    const patientId = parseInt(document.getElementById('patient_id').value);
+    for (const item of items) {
+        if (item.drug_name) {
+            const authCheck = await checkAuthRequired(patientId, item.drug_name);
+            if (authCheck) {
+                if (!confirm('⚠ Prior Authorization Required\n\n' + authCheck.provider + ' requires authorization for "' + authCheck.item + '".\n\nContinue anyway?')) {
+                    return;
+                }
+                break;
+            }
+        }
+    }
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const body = {
+        patient_id: parseInt(document.getElementById('patient_id').value),
+        notes: document.getElementById('notes').value.trim(),
+        items
+    };
+    const method = orderId ? 'PUT' : 'POST';
+    const url = orderId ? '/prescriptions/api/orders/' + orderId : '/prescriptions/api/orders';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>' + (orderId ? 'Update' : 'Create') + ' Prescription';
+    if (res.ok) {
+        document.getElementById('order-form').style.display = 'none';
+        document.getElementById('order-success').style.display = 'block';
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to save');
+    }
+});
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+async function checkAuthRequired(patientId, drugName) {
+    try {
+        const res = await fetchWithAuth('/insurance/api/authorization-rules/check', {
+            method: 'POST', body: JSON.stringify({ patient_id: patientId, item: drugName, item_type: 'pharmacy' })
+        });
+        const data = await res.json();
+        if (data.requires_auth) return data;
+    } catch(e) {}
+    return null;
+}
+</script>
+{% endblock %}

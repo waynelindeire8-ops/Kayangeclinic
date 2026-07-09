@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-reels"></i> <span id="order-num"></span></h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" onclick="printBarcode()"><i class="bi bi-upc-scan me-1"></i>Barcode</button>
+        <a href="/radiology/orders" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><h6>Order Details</h6></div>
+            <div class="card-body" id="order-info"><div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span></div></div>
+        </div>
+        <div class="card mt-3" id="barcode-card" style="display:none">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Sample Barcode</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="printBarcode()"><i class="bi bi-printer"></i></button>
+            </div>
+            <div class="card-body text-center" id="barcode-display"></div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Imaging Result</h6>
+                <div>
+                    <select class="form-select form-select-sm d-inline-block w-auto" id="status-select">
+                        <option value="ordered">Ordered</option><option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+                    <button class="btn btn-sm btn-outline-secondary ms-1" onclick="changeStatus()">Update</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="results-area"></div>
+                <div id="result-form-area" style="display:none">
+                    <form id="result-form">
+                        <div class="mb-3"><label class="form-label">Findings</label>
+                            <textarea class="form-control" id="findings" rows="4" placeholder="Describe imaging findings..."></textarea></div>
+                        <div class="mb-3"><label class="form-label">Impression / Diagnosis</label>
+                            <textarea class="form-control" id="impression" rows="2" placeholder="Summary impression..."></textarea></div>
+                        <div class="mb-3"><label class="form-label">Recommendation</label>
+                            <textarea class="form-control" id="recommendation" rows="2" placeholder="Follow-up recommendations..."></textarea></div>
+                        <button type="submit" class="btn btn-primary px-4" id="btn-result"><i class="bi bi-check-lg me-1"></i>Save Result</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="barcodeModal" tabindex="-1"><div class="modal-dialog modal-sm"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Print Barcode</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body text-center" id="barcode-print"></div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="doPrintBarcode()"><i class="bi bi-printer me-1"></i>Print</button></div>
+</div></div></div>
+
+<script>
+const orderId = {{ order_id }};
+let orderData = null;
+
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+    const res = await fetchWithAuth('/radiology/api/orders/' + orderId);
+    orderData = await res.json();
+    if (orderData.error) { document.getElementById('order-info').innerHTML = '<div class="alert alert-danger">' + orderData.error + '</div>'; return; }
+
+    document.getElementById('order-num').textContent = orderData.order_number;
+    document.getElementById('status-select').value = orderData.status;
+
+    const MOD = {xray:'X-Ray',ultrasound:'Ultrasound',ct:'CT Scan',mri:'MRI',ecg:'ECG',echo:'Echocardiogram',mammogram:'Mammogram',fluoroscopy:'Fluoroscopy',other:'Other'};
+    const pc = {routine:'secondary',urgent:'warning',stat:'danger'};
+    const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+    document.getElementById('order-info').innerHTML =
+        '<table class="table-details">' +
+        '<tr><td>Order #</td><td><strong>' + esc(orderData.order_number) + '</strong></td></tr>' +
+        '<tr><td>Patient</td><td><strong><a href="/patients/' + orderData.patient_id + '">' + esc(orderData.p_first) + ' ' + esc(orderData.p_last) + '</a></strong><br><small>' + esc(orderData.p_patient_id || '') + '</small></td></tr>' +
+        '<tr><td>Modality</td><td><strong>' + (MOD[orderData.modality] || orderData.modality) + '</strong></td></tr>' +
+        '<tr><td>Body Part</td><td>' + esc(orderData.body_part || '-') + '</td></tr>' +
+        '<tr><td>Priority</td><td><span class="badge bg-' + (pc[orderData.priority] || 'secondary') + '">' + orderData.priority + '</span></td></tr>' +
+        '<tr><td>Status</td><td><span class="badge bg-' + (sc[orderData.status] || 'secondary') + '">' + orderData.status.replace('_', ' ') + '</span></td></tr>' +
+        '<tr><td>Doctor</td><td>Dr. ' + esc(orderData.d_first) + ' ' + esc(orderData.d_last) + '</td></tr>' +
+        '<tr><td>Date</td><td>' + (orderData.ordered_date || '') + '</td></tr>' +
+        (orderData.clinical_history ? '<tr><td>Clinical History</td><td>' + esc(orderData.clinical_history) + '</td></tr>' : '') +
+        (orderData.notes ? '<tr><td>Notes</td><td>' + esc(orderData.notes) + '</td></tr>' : '') +
+        '</table>';
+
+    // Show barcode
+    document.getElementById('barcode-card').style.display = 'block';
+    document.getElementById('barcode-display').innerHTML =
+        '<div style="font-family:monospace;font-size:1.8rem;letter-spacing:3px;font-weight:bold">' + esc(orderData.order_number) + '</div>' +
+        '<div class="mt-1"><small>' + esc(orderData.p_first) + ' ' + esc(orderData.p_last) + ' | ' + esc(orderData.body_part || '') + '</small></div>';
+
+    // Results
+    const ra = document.getElementById('results-area');
+    const results = orderData.results || [];
+    if (results.length) {
+        let html = '';
+        results.forEach(r => {
+            html += '<div class="border rounded p-3 mb-3">' +
+                '<div class="d-flex justify-content-between mb-2"><strong>Reported: ' + (r.reported_date || '') + '</strong><small class="text-muted">by Dr. ' + esc(r.r_first || '') + ' ' + esc(r.r_last || '') + '</small></div>' +
+                (r.findings ? '<div><strong>Findings:</strong><br>' + esc(r.findings) + '</div>' : '') +
+                (r.impression ? '<div class="mt-2"><strong>Impression:</strong><br>' + esc(r.impression) + '</div>' : '') +
+                (r.recommendation ? '<div class="mt-2"><strong>Recommendation:</strong><br>' + esc(r.recommendation) + '</div>' : '') +
+                '</div>';
+        });
+        ra.innerHTML = html;
+    } else {
+        ra.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-camera-reels" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No results yet</div>';
+    }
+
+    if (orderData.status !== 'completed' && orderData.status !== 'cancelled') {
+        document.getElementById('result-form-area').style.display = 'block';
+    }
+}
+
+document.getElementById('result-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const body = {
+        findings: document.getElementById('findings').value.trim(),
+        impression: document.getElementById('impression').value.trim(),
+        recommendation: document.getElementById('recommendation').value.trim()
+    };
+    const btn = document.getElementById('btn-result');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const res = await fetchWithAuth('/radiology/api/orders/' + orderId + '/results', {
+        method: 'POST', body: JSON.stringify(body)
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Result';
+    if (res.ok) { loadData(); showToast('Result saved', 'success'); }
+    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+
+async function changeStatus() {
+    const status = document.getElementById('status-select').value;
+    const res = await fetchWithAuth('/radiology/api/orders/' + orderId + '/status', {
+        method: 'PUT', body: JSON.stringify({ status })
+    });
+    if (res.ok) { loadData(); showToast('Status updated', 'success'); }
+}
+
+function printBarcode() {
+    document.getElementById('barcode-print').innerHTML =
+        '<div style="font-family:monospace;font-size:2rem;letter-spacing:4px;font-weight:bold;margin:20px 0">' + esc(orderData.order_number) + '</div>' +
+        '<div>' + esc(orderData.p_first) + ' ' + esc(orderData.p_last) + '</div>' +
+        '<div>' + esc(orderData.body_part || '') + ' | ' + esc(orderData.modality || '') + '</div>' +
+        '<div class="mt-2" style="font-size:0.8rem">' + new Date().toLocaleDateString() + '</div>';
+    new bootstrap.Modal(document.getElementById('barcodeModal')).show();
+}
+
+function doPrintBarcode() {
+    const content = document.getElementById('barcode-print').innerHTML;
+    const win = window.open('', '_blank');
+    win.document.write('<html><head><title>Barcode</title><style>body{font-family:monospace;text-align:center;padding:20px}div{margin:5px 0}</style></head><body>' + content + '</body></html>');
+    win.document.close();
+    win.print();
+    bootstrap.Modal.getInstance(document.getElementById('barcodeModal')).hide();
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+
+<style>.table-details td { padding: 0.375rem 0.5rem; vertical-align: top; }
+.table-details tr td:first-child { font-weight: 500; color: #64748b; width: 1%; white-space: nowrap; padding-right: 1rem; }</style>
+{% endblock %}

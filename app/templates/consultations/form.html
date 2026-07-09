@@ -1,72 +1,254 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="mb-4">
-    <h4 class="mb-0"><i class="bi bi-pencil-square me-2"></i>New Consultation</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-pencil-square me-2"></i><span id="form-title">New Consultation</span></h4>
 </div>
 
 <div class="row">
-    <div class="col-md-8">
-        <div class="card">
+    <div class="col-12">
+        <!-- Basic Info Card -->
+        <div class="card mb-3">
             <div class="card-body">
-                <form id="consultation-form">
-                    <div class="mb-3">
-                        <label class="form-label">Patient *</label>
-                        <select class="form-select" id="patient_id" required>
-                            <option value="">Select patient...</option>
-                        </select>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Patient <span class="text-danger">*</span></label>
+                        <select class="form-select" id="patient_id" required><option value="">Select patient...</option></select>
                     </div>
-                    <div class="mb-3">
+                    <div class="col-md-3">
                         <label class="form-label">Appointment</label>
-                        <select class="form-select" id="appointment_id">
-                            <option value="">Walk-in (no appointment)</option>
-                        </select>
+                        <select class="form-select" id="appointment_id"><option value="">Walk-in (no appointment)</option></select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Consultation Type</label>
+                    <div class="col-md-3">
+                        <label class="form-label">Type</label>
                         <select class="form-select" id="consultation_type">
                             <option value="general">General Practitioner</option>
                             <option value="internal_medicine">Internal Medicine</option>
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Diagnosis / Findings</label>
-                        <textarea class="form-control" id="diagnosis" rows="3"></textarea>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100" id="btn-save-main"><i class="bi bi-check-lg me-1"></i>Save</button>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Notes / Treatment Plan</label>
-                        <textarea class="form-control" id="notes" rows="4"></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Save Consultation</button>
-                    <a href="/consultations" class="btn btn-outline-secondary">Cancel</a>
-                </form>
+                </div>
             </div>
         </div>
 
-        <div class="card mt-3">
-            <div class="card-header"><h6>Ancillary Services</h6></div>
-            <div class="card-body">
-                <div class="ancillary-grid">
-                    <button type="button" class="ancillary-btn" onclick="showAncillary('lab')">
-                        <i class="bi bi-flask text-info"></i>Lab Test
-                    </button>
-                    <button type="button" class="ancillary-btn" onclick="showAncillary('procedure')">
-                        <i class="bi bi-activity text-warning"></i>Procedure
-                    </button>
-                    <button type="button" class="ancillary-btn" onclick="showAncillary('certificate')">
-                        <i class="bi bi-file-earmark-text text-success"></i>Certificate
-                    </button>
-                    <button type="button" class="ancillary-btn" onclick="showAncillary('referral')">
-                        <i class="bi bi-send text-secondary"></i>Referral
-                    </button>
-                    <button type="button" class="ancillary-btn" onclick="showAncillary('diet')">
-                        <i class="bi bi-basket text-primary"></i>Diet Support
-                    </button>
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-3" id="consultTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="vitals-tab" data-bs-toggle="tab" data-bs-target="#vitals" type="button"><i class="bi bi-heart-pulse me-1"></i>Vitals</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="exam-tab" data-bs-toggle="tab" data-bs-target="#exam" type="button"><i class="bi bi-clipboard2-data me-1"></i>Examination</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="diag-tab" data-bs-toggle="tab" data-bs-target="#diag" type="button"><i class="bi bi-search-heart me-1"></i>Diagnosis</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="treatment-tab" data-bs-toggle="tab" data-bs-target="#treatment" type="button"><i class="bi bi-chat-square-text me-1"></i>Treatment</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="rx-tab" data-bs-toggle="tab" data-bs-target="#rx" type="button"><i class="bi bi-capsule me-1"></i>Prescriptions</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="anc-tab" data-bs-toggle="tab" data-bs-target="#anc" type="button"><i class="bi bi-tools me-1"></i>Ancillary</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="consultTabsContent">
+            <!-- ═══ Vitals ═══ -->
+            <div class="tab-pane fade show active" id="vitals" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Vital Signs</h6>
+                        <div id="vitals-recorded" class="text-muted small" style="display:none"></div>
+                    </div>
+                    <div class="card-body">
+                        <input type="hidden" id="vitals_id">
+                        <div class="row g-3">
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">BP Systolic (mmHg)</label>
+                                <input type="number" class="form-control" id="bp_systolic" placeholder="120">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">BP Diastolic (mmHg)</label>
+                                <input type="number" class="form-control" id="bp_diastolic" placeholder="80">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">Heart Rate (bpm)</label>
+                                <input type="number" class="form-control" id="heart_rate" placeholder="72">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">Temperature (&deg;C)</label>
+                                <input type="number" step="0.1" class="form-control" id="temperature" placeholder="36.5">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">Respiratory Rate (/min)</label>
+                                <input type="number" class="form-control" id="respiratory_rate" placeholder="16">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">O<sub>2</sub> Saturation (%)</label>
+                                <input type="number" class="form-control" id="oxygen_saturation" placeholder="98">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">Weight (kg)</label>
+                                <input type="number" step="0.1" class="form-control" id="weight" placeholder="70">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">Height (cm)</label>
+                                <input type="number" step="0.1" class="form-control" id="height" placeholder="175">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="form-label">BMI</label>
+                                <input type="text" class="form-control" id="bmi" readonly>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Notes</label>
+                                <textarea class="form-control" id="vitals_notes" rows="2" placeholder="Any observations..."></textarea>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary mt-3" onclick="saveVitals()"><i class="bi bi-save me-1"></i>Save Vitals</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Medical Examination ═══ -->
+            <div class="tab-pane fade" id="exam" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Medical Examination</h6>
+                        <button class="btn btn-sm btn-primary" onclick="addExamRow()"><i class="bi bi-plus-lg"></i> Add System</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table" id="exam-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:180px">Body System</th>
+                                        <th>Findings</th>
+                                        <th style="width:120px">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="exam-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="exam-empty" class="text-center text-muted py-4" style="display:none">
+                            <i class="bi bi-clipboard2-x" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                            No examinations recorded. Click "Add System" to begin.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Diagnosis ═══ -->
+            <div class="tab-pane fade" id="diag" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Diagnoses</h6>
+                        <button class="btn btn-sm btn-primary" onclick="addDiagRow()"><i class="bi bi-plus-lg"></i> Add Diagnosis</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table" id="diag-table">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Diagnosis</th>
+                                        <th>ICD-10 Code</th>
+                                        <th>Notes</th>
+                                        <th style="width:80px">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="diag-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="diag-empty" class="text-center text-muted py-4" style="display:none">
+                            <i class="bi bi-journal-x" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                            No diagnoses added yet.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Treatment ═══ -->
+            <div class="tab-pane fade" id="treatment" role="tabpanel">
+                <div class="card">
+                    <div class="card-header"><h6>Treatment Plan &amp; Notes</h6></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Diagnosis / Findings (Summary)</label>
+                            <textarea class="form-control" id="diagnosis" rows="3" placeholder="Summary of findings..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Treatment Plan &amp; Doctor's Notes</label>
+                            <textarea class="form-control" id="notes" rows="6" placeholder="Detailed treatment plan, instructions, follow-up..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Prescriptions ═══ -->
+            <div class="tab-pane fade" id="rx" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Prescriptions</h6>
+                        <button class="btn btn-sm btn-primary" onclick="addRxRow()"><i class="bi bi-plus-lg"></i> Add Prescription</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table" id="rx-table">
+                                <thead>
+                                    <tr>
+                                        <th>Drug</th>
+                                        <th>Dosage</th>
+                                        <th>Frequency</th>
+                                        <th>Duration</th>
+                                        <th>Route</th>
+                                        <th>Qty</th>
+                                        <th>Status</th>
+                                        <th style="width:80px">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rx-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="rx-empty" class="text-center text-muted py-4" style="display:none">
+                            <i class="bi bi-capsule" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                            No prescriptions added yet.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Ancillary ═══ -->
+            <div class="tab-pane fade" id="anc" role="tabpanel">
+                <div class="card">
+                    <div class="card-header"><h6>Ancillary Services</h6></div>
+                    <div class="card-body">
+                        <div class="ancillary-grid">
+                            <button type="button" class="ancillary-btn" onclick="showAncillary('lab')">
+                                <i class="bi bi-flask text-info"></i>Lab Test
+                            </button>
+                            <button type="button" class="ancillary-btn" onclick="showAncillary('procedure')">
+                                <i class="bi bi-activity text-warning"></i>Procedure
+                            </button>
+                            <button type="button" class="ancillary-btn" onclick="showAncillary('certificate')">
+                                <i class="bi bi-file-earmark-text text-success"></i>Certificate
+                            </button>
+                            <button type="button" class="ancillary-btn" onclick="showAncillary('referral')">
+                                <i class="bi bi-send text-secondary"></i>Referral
+                            </button>
+                            <button type="button" class="ancillary-btn" onclick="showAncillary('diet')">
+                                <i class="bi bi-basket text-primary"></i>Diet Support
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Ancillary Modal -->
 <div class="modal fade" id="ancillaryModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -83,194 +265,702 @@
     </div>
 </div>
 
+<!-- Prescription Modal -->
+<div class="modal fade" id="rxModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-capsule me-1"></i>Prescription</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rx_edit_id">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Drug <span class="text-danger">*</span></label>
+                        <select class="form-select" id="rx_inventory_id" style="width:100%">
+                            <option value="">-- Select from inventory --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Or type drug name</label>
+                        <input type="text" class="form-control" id="rx_drug_name" placeholder="e.g. Amoxicillin">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Dosage</label>
+                        <input type="text" class="form-control" id="rx_dosage" placeholder="e.g. 500mg">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Frequency</label>
+                        <select class="form-select" id="rx_frequency">
+                            <option value="">Select...</option>
+                            <option value="OD">Once daily (OD)</option>
+                            <option value="BD">Twice daily (BD)</option>
+                            <option value="TID">Three times daily (TID)</option>
+                            <option value="QID">Four times daily (QID)</option>
+                            <option value="QHS">At bedtime (QHS)</option>
+                            <option value="PRN">As needed (PRN)</option>
+                            <option value="STAT">Immediately (STAT)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Duration</label>
+                        <input type="text" class="form-control" id="rx_duration" placeholder="e.g. 7 days">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Route</label>
+                        <select class="form-select" id="rx_route">
+                            <option value="">Select...</option>
+                            <option value="oral">Oral</option>
+                            <option value="iv">Intravenous (IV)</option>
+                            <option value="im">Intramuscular (IM)</option>
+                            <option value="sc">Subcutaneous (SC)</option>
+                            <option value="topical">Topical</option>
+                            <option value="inhaled">Inhaled</option>
+                            <option value="sublingual">Sublingual</option>
+                            <option value="rectal">Rectal</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="rx_quantity" placeholder="e.g. 21">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="rx_status">
+                            <option value="active">Active</option>
+                            <option value="discontinued">Discontinued</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Instructions</label>
+                        <textarea class="form-control" id="rx_instructions" rows="2" placeholder="e.g. Take after meals"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="submitRx()"><i class="bi bi-check-lg me-1"></i>Save Prescription</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Exam Modal -->
+<div class="modal fade" id="examModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-clipboard2-data me-1"></i>Body System Examination</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="exam_edit_id">
+                <div class="mb-3">
+                    <label class="form-label">Body System</label>
+                    <select class="form-select" id="exam_system">
+                        <option value="">Select system...</option>
+                        <option value="General">General / Constitutional</option>
+                        <option value="Cardiovascular">Cardiovascular</option>
+                        <option value="Respiratory">Respiratory</option>
+                        <option value="Gastrointestinal">Gastrointestinal / Abdominal</option>
+                        <option value="Neurological">Neurological</option>
+                        <option value="Musculoskeletal">Musculoskeletal</option>
+                        <option value="Genitourinary">Genitourinary</option>
+                        <option value="ENT">ENT / Head &amp; Neck</option>
+                        <option value="Ophthalmological">Ophthalmological</option>
+                        <option value="Dermatological">Dermatological</option>
+                        <option value="Psychiatric">Psychiatric / Mental State</option>
+                        <option value="Endocrine">Endocrine</option>
+                        <option value="Lymphatic">Lymphatic / Reticuloendothelial</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Findings</label>
+                    <textarea class="form-control" id="exam_findings" rows="3" placeholder="Normal / Abnormal findings..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="exam_notes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="submitExam()"><i class="bi bi-check-lg me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Diagnosis Modal -->
+<div class="modal fade" id="diagModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-search-heart me-1"></i>Diagnosis</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="diag_edit_id">
+                <div class="mb-3">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" id="diag_type">
+                        <option value="primary">Primary Diagnosis</option>
+                        <option value="secondary">Secondary Diagnosis</option>
+                        <option value="complication">Complication</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Diagnosis <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="diag_name" placeholder="e.g. Malaria">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ICD-10 Code</label>
+                    <input type="text" class="form-control" id="diag_icd" placeholder="e.g. B50">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="diag_notes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="submitDiag()"><i class="bi bi-check-lg me-1"></i>Save Diagnosis</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+const CSLT_ID = {% if consultation_id %}{{ consultation_id }}{% else %}null{% endif %};
+let currentAncillaryType = null;
+let examData = [];
+let diagData = [];
+let rxData = [];
+let inventoryList = [];
+
+// ─── Page Load ───
 document.addEventListener('DOMContentLoaded', async function() {
-    const [patientsRes, appointmentsRes] = await Promise.all([
+    const [patientsRes, appointmentsRes, invRes] = await Promise.all([
         fetchWithAuth('/patients/api'),
-        fetchWithAuth('/appointments/api?status=scheduled')
+        fetchWithAuth('/appointments/api?status=scheduled'),
+        fetchWithAuth('/pharmacy/api/inventory')
     ]);
     const patients = await patientsRes.json();
     const appointments = await appointmentsRes.json();
+    inventoryList = await invRes.json();
 
-    const patientSelect = document.getElementById('patient_id');
-    patients.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id; opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name}`;
-        patientSelect.appendChild(opt);
-    });
+    fillSelect('#patient_id', patients, p => ({ value: p.id, text: p.patient_id + ' - ' + p.first_name + ' ' + p.last_name }));
+    fillSelect('#appointment_id', appointments, a => ({ value: a.id, text: a.appointment_date + ' ' + a.appointment_time + ' - ' + a.p_first + ' ' + a.p_last }));
+    fillSelect('#rx_inventory_id', inventoryList, i => ({ value: i.id, text: i.drug_name + (i.generic_name ? ' (' + i.generic_name + ')' : '') }));
 
-    const aptSelect = document.getElementById('appointment_id');
-    appointments.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id; opt.textContent = `${a.appointment_date} ${a.appointment_time} - ${a.p_first} ${a.p_last}`;
-        aptSelect.appendChild(opt);
-    });
-
-    let currentAncillaryType = null;
-
-    window.showAncillary = function(type) {
-        currentAncillaryType = type;
-        const modal = new bootstrap.Modal(document.getElementById('ancillaryModal'));
-        const titleMap = {
-            lab: 'Order Lab Test', procedure: 'Add Procedure', certificate: 'Medical Certificate',
-            referral: 'Referral', diet: 'Diet Support'
-        };
-        document.getElementById('ancillaryModalTitle').textContent = titleMap[type] || type;
-
-        const bodyMap = {
-            lab: `
-                <div class="mb-3">
-                    <label class="form-label">Test Name *</label>
-                    <input type="text" class="form-control" id="anc_test_name" list="labTests">
-                    <datalist id="labTests">
-                        <option value="Full Blood Count"><option value="Urinalysis"><option value="Blood Sugar"><option value="Lipid Profile">
-                        <option value="Liver Function Test"><option value="Renal Function Test"><option value="Ultrasound Scan">
-                        <option value="Cardiac Echo"><option value="ECG"><option value="Malaria Test"><option value="Typhoid Test">
-                        <option value="Pregnancy Test"><option value="HIV Test"><option value="COVID-19 Test">
-                    </datalist>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Category</label>
-                    <select class="form-select" id="anc_test_category">
-                        <option value="general">General</option><option value="ultrasound">Ultrasound</option>
-                        <option value="cardiac">Cardiac</option><option value="microbiology">Microbiology</option>
-                    </select>
-                </div>
-            `,
-            procedure: `
-                <div class="mb-3">
-                    <label class="form-label">Procedure Type</label>
-                    <select class="form-select" id="anc_procedure_type">
-                        <option value="short_stay">Short-Stay Admission</option>
-                        <option value="nebulisation">Nebulisation</option>
-                        <option value="burn_wound">Burn/Trauma Wound Management</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" id="anc_procedure_notes" rows="3"></textarea>
-                </div>
-            `,
-            certificate: `
-                <div class="mb-3">
-                    <label class="form-label">Certificate Type</label>
-                    <select class="form-select" id="anc_cert_type">
-                        <option value="sick_note">Sick Note</option>
-                        <option value="tep">Temporary Employment Permit (TEP)</option>
-                        <option value="insurance">Insurance</option>
-                        <option value="police">Police Medical</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Valid Until</label>
-                    <input type="date" class="form-control" id="anc_cert_valid">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" id="anc_cert_notes" rows="2"></textarea>
-                </div>
-            `,
-            referral: `
-                <div class="mb-3">
-                    <label class="form-label">To Facility *</label>
-                    <input type="text" class="form-control" id="anc_ref_facility" placeholder="e.g. Kenyatta National Hospital">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Reason</label>
-                    <textarea class="form-control" id="anc_ref_reason" rows="2"></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" id="anc_ref_notes" rows="2"></textarea>
-                </div>
-            `,
-            diet: `
-                <div class="mb-3">
-                    <label class="form-label">Dietitian Name</label>
-                    <input type="text" class="form-control" id="anc_diet_name">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Plan Details</label>
-                    <textarea class="form-control" id="anc_diet_plan" rows="3"></textarea>
-                </div>
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label">Start Date</label>
-                        <input type="date" class="form-control" id="anc_diet_start">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">End Date</label>
-                        <input type="date" class="form-control" id="anc_diet_end">
-                    </div>
-                </div>
-            `
-        };
-        document.getElementById('ancillaryModalBody').innerHTML = bodyMap[type] || '';
-        document.getElementById('saveAncillaryBtn').onclick = saveAncillary;
-        modal.show();
-    };
-
-    async function saveAncillary() {
-        const patient_id = document.getElementById('patient_id').value;
-        if (!patient_id) { alert('Please select a patient first'); return; }
-
-        let data = { type: currentAncillaryType, patient_id: parseInt(patient_id) };
-
-        if (currentAncillaryType === 'lab') {
-            data.test_name = document.getElementById('anc_test_name').value;
-            data.test_category = document.getElementById('anc_test_category').value;
-            if (!data.test_name) { alert('Enter test name'); return; }
-        } else if (currentAncillaryType === 'procedure') {
-            data.procedure_type = document.getElementById('anc_procedure_type').value;
-            data.notes = document.getElementById('anc_procedure_notes').value;
-        } else if (currentAncillaryType === 'certificate') {
-            data.certificate_type = document.getElementById('anc_cert_type').value;
-            data.valid_until = document.getElementById('anc_cert_valid').value;
-            data.notes = document.getElementById('anc_cert_notes').value;
-        } else if (currentAncillaryType === 'referral') {
-            data.to_facility = document.getElementById('anc_ref_facility').value;
-            data.reason = document.getElementById('anc_ref_reason').value;
-            data.notes = document.getElementById('anc_ref_notes').value;
-            if (!data.to_facility) { alert('Enter facility name'); return; }
-        } else if (currentAncillaryType === 'diet') {
-            data.dietitian_name = document.getElementById('anc_diet_name').value;
-            data.plan_details = document.getElementById('anc_diet_plan').value;
-            data.start_date = document.getElementById('anc_diet_start').value;
-            data.end_date = document.getElementById('anc_diet_end').value;
-        }
-
-        const res = await fetchWithAuth('/consultations/api/ancillaries', {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            alert('Saved successfully!');
-            bootstrap.Modal.getInstance(document.getElementById('ancillaryModal')).hide();
-        } else {
-            const err = await res.json();
-            alert(err.error || 'Error saving');
-        }
+    if (CSLT_ID) {
+        document.getElementById('form-title').textContent = 'Edit Consultation';
+        const res = await fetchWithAuth('/consultations/api/' + CSLT_ID);
+        const data = await res.json();
+        populateForm(data);
     }
 
-    document.getElementById('consultation-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const data = {
-            patient_id: document.getElementById('patient_id').value,
-            appointment_id: document.getElementById('appointment_id').value || null,
-            consultation_type: document.getElementById('consultation_type').value,
-            diagnosis: document.getElementById('diagnosis').value,
-            notes: document.getElementById('notes').value
-        };
-        const res = await fetchWithAuth('/consultations/api', {
-            method: 'POST', body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            window.location.href = '/consultations';
-        } else {
-            alert('Error saving consultation');
+    // Patient select change → auto-fill vitals patient context
+    // Auto-calculate BMI
+    ['weight', 'height'].forEach(id => {
+        document.getElementById(id).addEventListener('input', calcBMI);
+    });
+
+    // Drug name from inventory
+    document.getElementById('rx_inventory_id').addEventListener('change', function() {
+        if (this.value) {
+            const item = inventoryList.find(i => i.id == this.value);
+            if (item) document.getElementById('rx_drug_name').value = item.drug_name;
         }
     });
 });
+
+function fillSelect(selId, items, mapFn) {
+    const sel = document.querySelector(selId);
+    items.forEach(item => {
+        const o = document.createElement('option');
+        const mapped = mapFn(item);
+        o.value = mapped.value;
+        o.textContent = mapped.text;
+        sel.appendChild(o);
+    });
+}
+
+function calcBMI() {
+    const wt = parseFloat(document.getElementById('weight').value);
+    const ht = parseFloat(document.getElementById('height').value);
+    if (wt && ht && ht > 0) {
+        document.getElementById('bmi').value = (wt / ((ht / 100) ** 2)).toFixed(1);
+    } else {
+        document.getElementById('bmi').value = '';
+    }
+}
+
+function populateForm(data) {
+    document.getElementById('patient_id').value = data.patient_id;
+    if (data.appointment_id) document.getElementById('appointment_id').value = data.appointment_id;
+    document.getElementById('consultation_type').value = data.consultation_type || 'general';
+    document.getElementById('diagnosis').value = data.diagnosis || '';
+    document.getElementById('notes').value = data.notes || '';
+
+    // Vitals
+    if (data.vitals && data.vitals.length) {
+        const v = data.vitals[0];
+        document.getElementById('vitals_id').value = v.id;
+        if (v.bp_systolic) document.getElementById('bp_systolic').value = v.bp_systolic;
+        if (v.bp_diastolic) document.getElementById('bp_diastolic').value = v.bp_diastolic;
+        if (v.heart_rate) document.getElementById('heart_rate').value = v.heart_rate;
+        if (v.temperature) document.getElementById('temperature').value = v.temperature;
+        if (v.respiratory_rate) document.getElementById('respiratory_rate').value = v.respiratory_rate;
+        if (v.oxygen_saturation) document.getElementById('oxygen_saturation').value = v.oxygen_saturation;
+        if (v.weight) document.getElementById('weight').value = v.weight;
+        if (v.height) document.getElementById('height').value = v.height;
+        if (v.bmi) document.getElementById('bmi').value = v.bmi;
+        if (v.notes) document.getElementById('vitals_notes').value = v.notes;
+        const el = document.getElementById('vitals-recorded');
+        el.style.display = 'block';
+        el.textContent = 'Recorded: ' + (v.recorded_at || '');
+    }
+
+    // Examinations
+    if (data.examinations) {
+        examData = data.examinations;
+        renderExamTable();
+    }
+
+    // Diagnoses
+    if (data.diagnoses) {
+        diagData = data.diagnoses;
+        renderDiagTable();
+    }
+
+    // Prescriptions
+    if (data.prescriptions) {
+        rxData = data.prescriptions;
+        renderRxTable();
+    }
+}
+
+// ─── Consultation Save ───
+document.getElementById('btn-save-main').addEventListener('click', async function() {
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { alert('Please select a patient'); return; }
+
+    const payload = {
+        patient_id: parseInt(patientId),
+        appointment_id: document.getElementById('appointment_id').value || null,
+        consultation_type: document.getElementById('consultation_type').value,
+        diagnosis: document.getElementById('diagnosis').value,
+        notes: document.getElementById('notes').value
+    };
+
+    let res;
+    if (CSLT_ID) {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID, {
+            method: 'PUT', body: JSON.stringify(payload)
+        });
+    } else {
+        res = await fetchWithAuth('/consultations/api', {
+            method: 'POST', body: JSON.stringify(payload)
+        });
+    }
+
+    if (res.ok) {
+        const result = CSLT_ID ? {} : await res.json();
+        if (!CSLT_ID) window.location.href = '/consultations/' + result.id + '/edit';
+        else location.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving consultation');
+    }
+});
+
+// ─── Vitals ───
+async function saveVitals() {
+    if (!CSLT_ID) { alert('Save the consultation first before adding vitals'); return; }
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { alert('No patient selected'); return; }
+
+    const payload = {
+        patient_id: parseInt(patientId),
+        bp_systolic: document.getElementById('bp_systolic').value || null,
+        bp_diastolic: document.getElementById('bp_diastolic').value || null,
+        heart_rate: document.getElementById('heart_rate').value || null,
+        temperature: document.getElementById('temperature').value || null,
+        respiratory_rate: document.getElementById('respiratory_rate').value || null,
+        oxygen_saturation: document.getElementById('oxygen_saturation').value || null,
+        weight: document.getElementById('weight').value || null,
+        height: document.getElementById('height').value || null,
+        notes: document.getElementById('vitals_notes').value || null
+    };
+
+    const vid = document.getElementById('vitals_id').value;
+    let res;
+    if (vid) {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/vitals/' + vid, {
+            method: 'PUT', body: JSON.stringify(payload)
+        });
+    } else {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/vitals', {
+            method: 'POST', body: JSON.stringify(payload)
+        });
+    }
+
+    if (res.ok) {
+        alert('Vitals saved');
+        location.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving vitals');
+    }
+}
+
+// ─── Examinations ───
+function addExamRow(data) {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    if (data) {
+        document.getElementById('exam_edit_id').value = data.id || '';
+        document.getElementById('exam_system').value = data.system_name || '';
+        document.getElementById('exam_findings').value = data.findings || '';
+        document.getElementById('exam_notes').value = data.notes || '';
+    } else {
+        document.getElementById('exam_edit_id').value = '';
+        document.getElementById('exam_system').value = '';
+        document.getElementById('exam_findings').value = '';
+        document.getElementById('exam_notes').value = '';
+    }
+    new bootstrap.Modal(document.getElementById('examModal')).show();
+}
+
+async function submitExam() {
+    const systemName = document.getElementById('exam_system').value;
+    if (!systemName) { alert('Select a body system'); return; }
+    const payload = {
+        system_name: systemName,
+        findings: document.getElementById('exam_findings').value,
+        notes: document.getElementById('exam_notes').value
+    };
+    const eid = document.getElementById('exam_edit_id').value;
+    let res;
+    if (eid) {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/examinations/' + eid, {
+            method: 'PUT', body: JSON.stringify(payload)
+        });
+    } else {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/examinations', {
+            method: 'POST', body: JSON.stringify(payload)
+        });
+    }
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('examModal')).hide();
+        location.reload();
+    } else {
+        alert('Error saving examination');
+    }
+}
+
+function editExam(id) {
+    const item = examData.find(e => e.id == id);
+    if (item) addExamRow(item);
+}
+
+async function deleteExam(id) {
+    if (!confirm('Delete this examination entry?')) return;
+    const res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/examinations/' + id, { method: 'DELETE' });
+    if (res.ok) location.reload();
+}
+
+function renderExamTable() {
+    const tbody = document.getElementById('exam-tbody');
+    const empty = document.getElementById('exam-empty');
+    tbody.innerHTML = '';
+    if (examData.length) {
+        empty.style.display = 'none';
+        examData.forEach(e => {
+            tbody.innerHTML += '<tr><td><strong>' + escHtml(e.system_name) + '</strong></td>' +
+                '<td>' + escHtml(e.findings || '') + '</td>' +
+                '<td><div class="d-flex gap-1">' +
+                '<button class="btn-action edit" onclick="editExam(' + e.id + ')"><i class="bi bi-pencil"></i></button>' +
+                '<button class="btn-action delete" onclick="deleteExam(' + e.id + ')"><i class="bi bi-trash"></i></button>' +
+                '</div></td></tr>';
+        });
+    } else {
+        empty.style.display = 'block';
+    }
+}
+
+// ─── Diagnoses ───
+function addDiagRow(data) {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    if (data) {
+        document.getElementById('diag_edit_id').value = data.id || '';
+        document.getElementById('diag_type').value = data.diagnosis_type || 'primary';
+        document.getElementById('diag_name').value = data.diagnosis_name || '';
+        document.getElementById('diag_icd').value = data.icd_code || '';
+        document.getElementById('diag_notes').value = data.notes || '';
+    } else {
+        document.getElementById('diag_edit_id').value = '';
+        document.getElementById('diag_type').value = 'primary';
+        document.getElementById('diag_name').value = '';
+        document.getElementById('diag_icd').value = '';
+        document.getElementById('diag_notes').value = '';
+    }
+    new bootstrap.Modal(document.getElementById('diagModal')).show();
+}
+
+async function submitDiag() {
+    const name = document.getElementById('diag_name').value;
+    if (!name) { alert('Enter diagnosis name'); return; }
+    const payload = {
+        diagnosis_name: name,
+        diagnosis_type: document.getElementById('diag_type').value,
+        icd_code: document.getElementById('diag_icd').value,
+        notes: document.getElementById('diag_notes').value
+    };
+    const did = document.getElementById('diag_edit_id').value;
+    let res;
+    if (did) {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/diagnoses/' + did, {
+            method: 'PUT', body: JSON.stringify(payload)
+        });
+    } else {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/diagnoses', {
+            method: 'POST', body: JSON.stringify(payload)
+        });
+    }
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('diagModal')).hide();
+        location.reload();
+    } else {
+        alert('Error saving diagnosis');
+    }
+}
+
+function editDiag(id) {
+    const item = diagData.find(d => d.id == id);
+    if (item) addDiagRow(item);
+}
+
+async function deleteDiag(id) {
+    if (!confirm('Delete this diagnosis?')) return;
+    const res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/diagnoses/' + id, { method: 'DELETE' });
+    if (res.ok) location.reload();
+}
+
+function renderDiagTable() {
+    const tbody = document.getElementById('diag-tbody');
+    const empty = document.getElementById('diag-empty');
+    tbody.innerHTML = '';
+    if (diagData.length) {
+        empty.style.display = 'none';
+        const typeLabels = { primary: 'Primary', secondary: 'Secondary', complication: 'Complication' };
+        diagData.forEach(d => {
+            tbody.innerHTML += '<tr><td><span class="badge bg-' + (d.diagnosis_type === 'primary' ? 'danger' : d.diagnosis_type === 'secondary' ? 'warning' : 'info') + '">' + (typeLabels[d.diagnosis_type] || d.diagnosis_type) + '</span></td>' +
+                '<td><strong>' + escHtml(d.diagnosis_name) + '</strong></td>' +
+                '<td><code>' + escHtml(d.icd_code || '-') + '</code></td>' +
+                '<td><small class="text-muted">' + escHtml(d.notes || '') + '</small></td>' +
+                '<td><div class="d-flex gap-1">' +
+                '<button class="btn-action edit" onclick="editDiag(' + d.id + ')"><i class="bi bi-pencil"></i></button>' +
+                '<button class="btn-action delete" onclick="deleteDiag(' + d.id + ')"><i class="bi bi-trash"></i></button>' +
+                '</div></td></tr>';
+        });
+    } else {
+        empty.style.display = 'block';
+    }
+}
+
+// ─── Prescriptions ───
+function addRxRow(data) {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    if (data) {
+        document.getElementById('rx_edit_id').value = data.id || '';
+        document.getElementById('rx_inventory_id').value = data.inventory_id || '';
+        document.getElementById('rx_drug_name').value = data.drug_name || '';
+        document.getElementById('rx_dosage').value = data.dosage || '';
+        document.getElementById('rx_frequency').value = data.frequency || '';
+        document.getElementById('rx_duration').value = data.duration || '';
+        document.getElementById('rx_route').value = data.route || '';
+        document.getElementById('rx_quantity').value = data.quantity || '';
+        document.getElementById('rx_status').value = data.status || 'active';
+        document.getElementById('rx_instructions').value = data.instructions || '';
+    } else {
+        document.getElementById('rx_edit_id').value = '';
+        document.getElementById('rx_inventory_id').value = '';
+        document.getElementById('rx_drug_name').value = '';
+        document.getElementById('rx_dosage').value = '';
+        document.getElementById('rx_frequency').value = '';
+        document.getElementById('rx_duration').value = '';
+        document.getElementById('rx_route').value = '';
+        document.getElementById('rx_quantity').value = '';
+        document.getElementById('rx_status').value = 'active';
+        document.getElementById('rx_instructions').value = '';
+    }
+    new bootstrap.Modal(document.getElementById('rxModal')).show();
+}
+
+async function submitRx() {
+    const drugName = document.getElementById('rx_drug_name').value;
+    if (!drugName) { alert('Enter a drug name'); return; }
+
+    // Check insurance authorization for drips/IV fluids
+    const patientId = parseInt(document.getElementById('patient_id').value);
+    const authCheck = await checkAuthRequired(patientId, drugName);
+    if (authCheck) {
+        if (!confirm('⚠ Prior Authorization Required\n\n' + authCheck.provider + ' requires authorization for "' + authCheck.item + '".\n\nContinue with adding this prescription anyway?')) {
+            return;
+        }
+    }
+
+    const payload = {
+        patient_id: patientId,
+        inventory_id: document.getElementById('rx_inventory_id').value || null,
+        drug_name: drugName,
+        dosage: document.getElementById('rx_dosage').value,
+        frequency: document.getElementById('rx_frequency').value,
+        duration: document.getElementById('rx_duration').value,
+        route: document.getElementById('rx_route').value,
+        quantity: document.getElementById('rx_quantity').value || null,
+        status: document.getElementById('rx_status').value,
+        instructions: document.getElementById('rx_instructions').value
+    };
+    const rid = document.getElementById('rx_edit_id').value;
+    let res;
+    if (rid) {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/prescriptions/' + rid, {
+            method: 'PUT', body: JSON.stringify(payload)
+        });
+    } else {
+        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/prescriptions', {
+            method: 'POST', body: JSON.stringify(payload)
+        });
+    }
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('rxModal')).hide();
+        location.reload();
+    } else {
+        alert('Error saving prescription');
+    }
+}
+
+async function checkAuthRequired(patientId, drugName) {
+    try {
+        const res = await fetchWithAuth('/insurance/api/authorization-rules/check', {
+            method: 'POST', body: JSON.stringify({ patient_id: patientId, item: drugName, item_type: 'pharmacy' })
+        });
+        const data = await res.json();
+        if (data.requires_auth) return data;
+    } catch(e) {}
+    return null;
+}
+
+function editRx(id) {
+    const item = rxData.find(r => r.id == id);
+    if (item) addRxRow(item);
+}
+
+async function deleteRx(id) {
+    if (!confirm('Delete this prescription?')) return;
+    const res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/prescriptions/' + id, { method: 'DELETE' });
+    if (res.ok) location.reload();
+}
+
+function renderRxTable() {
+    const tbody = document.getElementById('rx-tbody');
+    const empty = document.getElementById('rx-empty');
+    tbody.innerHTML = '';
+    if (rxData.length) {
+        empty.style.display = 'none';
+        const freqLabels = { OD: 'OD', BD: 'BD', TID: 'TID', QID: 'QID', QHS: 'QHS', PRN: 'PRN', STAT: 'STAT' };
+        const statusBadges = { active: 'success', discontinued: 'secondary', completed: 'info' };
+        rxData.forEach(r => {
+            tbody.innerHTML += '<tr>' +
+                '<td><strong>' + escHtml(r.drug_name) + '</strong></td>' +
+                '<td>' + escHtml(r.dosage || '-') + '</td>' +
+                '<td>' + (freqLabels[r.frequency] || r.frequency || '-') + '</td>' +
+                '<td>' + escHtml(r.duration || '-') + '</td>' +
+                '<td>' + escHtml(r.route || '-') + '</td>' +
+                '<td>' + (r.quantity || '-') + '</td>' +
+                '<td><span class="badge bg-' + (statusBadges[r.status] || 'secondary') + '">' + (r.status || 'active') + '</span></td>' +
+                '<td><div class="d-flex gap-1">' +
+                '<button class="btn-action edit" onclick="editRx(' + r.id + ')"><i class="bi bi-pencil"></i></button>' +
+                '<button class="btn-action delete" onclick="deleteRx(' + r.id + ')"><i class="bi bi-trash"></i></button>' +
+                '</div></td></tr>';
+        });
+    } else {
+        empty.style.display = 'block';
+    }
+}
+
+// ─── Ancillary (existing) ───
+window.showAncillary = function(type) {
+    currentAncillaryType = type;
+    const modal = new bootstrap.Modal(document.getElementById('ancillaryModal'));
+    const titleMap = {
+        lab: 'Order Lab Test', procedure: 'Add Procedure', certificate: 'Medical Certificate',
+        referral: 'Referral', diet: 'Diet Support'
+    };
+    document.getElementById('ancillaryModalTitle').textContent = titleMap[type] || type;
+
+    const bodyMap = {
+        lab: '<div class="mb-3"><label class="form-label">Test Name *</label><input type="text" class="form-control" id="anc_test_name" list="labTests"><datalist id="labTests"><option value="Full Blood Count"><option value="Urinalysis"><option value="Blood Sugar"><option value="Lipid Profile"><option value="Liver Function Test"><option value="Renal Function Test"><option value="Ultrasound Scan"><option value="Cardiac Echo"><option value="ECG"><option value="Malaria Test"><option value="Typhoid Test"><option value="Pregnancy Test"><option value="HIV Test"><option value="COVID-19 Test"></datalist></div><div class="mb-3"><label class="form-label">Category</label><select class="form-select" id="anc_test_category"><option value="general">General</option><option value="ultrasound">Ultrasound</option><option value="cardiac">Cardiac</option><option value="microbiology">Microbiology</option></select></div>',
+        procedure: '<div class="mb-3"><label class="form-label">Procedure Type</label><select class="form-select" id="anc_procedure_type"><option value="short_stay">Short-Stay Admission</option><option value="nebulisation">Nebulisation</option><option value="burn_wound">Burn/Trauma Wound Management</option><option value="other">Other</option></select></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" id="anc_procedure_notes" rows="3"></textarea></div>',
+        certificate: '<div class="mb-3"><label class="form-label">Certificate Type</label><select class="form-select" id="anc_cert_type"><option value="sick_note">Sick Note</option><option value="tep">Temporary Employment Permit (TEP)</option><option value="insurance">Insurance</option><option value="police">Police Medical</option></select></div><div class="mb-3"><label class="form-label">Valid Until</label><input type="date" class="form-control" id="anc_cert_valid"></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" id="anc_cert_notes" rows="2"></textarea></div>',
+        referral: '<div class="mb-3"><label class="form-label">To Facility *</label><input type="text" class="form-control" id="anc_ref_facility" placeholder="e.g. Queen Elizabeth Central Hospital"></div><div class="mb-3"><label class="form-label">Reason</label><textarea class="form-control" id="anc_ref_reason" rows="2"></textarea></div><div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" id="anc_ref_notes" rows="2"></textarea></div>',
+        diet: '<div class="mb-3"><label class="form-label">Dietitian Name</label><input type="text" class="form-control" id="anc_diet_name"></div><div class="mb-3"><label class="form-label">Plan Details</label><textarea class="form-control" id="anc_diet_plan" rows="3"></textarea></div><div class="row g-2"><div class="col-md-6"><label class="form-label">Start Date</label><input type="date" class="form-control" id="anc_diet_start"></div><div class="col-md-6"><label class="form-label">End Date</label><input type="date" class="form-control" id="anc_diet_end"></div></div>'
+    };
+    document.getElementById('ancillaryModalBody').innerHTML = bodyMap[type] || '';
+    document.getElementById('saveAncillaryBtn').onclick = saveAncillary;
+    modal.show();
+};
+
+async function saveAncillary() {
+    const patient_id = document.getElementById('patient_id').value;
+    if (!patient_id) { alert('Please select a patient first'); return; }
+    let data = { type: currentAncillaryType, patient_id: parseInt(patient_id) };
+
+    if (currentAncillaryType === 'lab') {
+        data.test_name = document.getElementById('anc_test_name').value;
+        data.test_category = document.getElementById('anc_test_category').value;
+        if (!data.test_name) { alert('Enter test name'); return; }
+    } else if (currentAncillaryType === 'procedure') {
+        data.procedure_type = document.getElementById('anc_procedure_type').value;
+        data.notes = document.getElementById('anc_procedure_notes').value;
+    } else if (currentAncillaryType === 'certificate') {
+        data.certificate_type = document.getElementById('anc_cert_type').value;
+        data.valid_until = document.getElementById('anc_cert_valid').value;
+        data.notes = document.getElementById('anc_cert_notes').value;
+    } else if (currentAncillaryType === 'referral') {
+        data.to_facility = document.getElementById('anc_ref_facility').value;
+        data.reason = document.getElementById('anc_ref_reason').value;
+        data.notes = document.getElementById('anc_ref_notes').value;
+        if (!data.to_facility) { alert('Enter facility name'); return; }
+    } else if (currentAncillaryType === 'diet') {
+        data.dietitian_name = document.getElementById('anc_diet_name').value;
+        data.plan_details = document.getElementById('anc_diet_plan').value;
+        data.start_date = document.getElementById('anc_diet_start').value;
+        data.end_date = document.getElementById('anc_diet_end').value;
+    }
+
+    const res = await fetchWithAuth('/consultations/api/ancillaries', {
+        method: 'POST', body: JSON.stringify(data)
+    });
+    if (res.ok) {
+        alert('Saved successfully!');
+        bootstrap.Modal.getInstance(document.getElementById('ancillaryModal')).hide();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving');
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
 </script>
 {% endblock %}

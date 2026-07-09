@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-plus-circle"></i> New Lab Order</h4>
+    <a href="/lab/orders" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Orders</a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="order-form">
+                    <div class="mb-3">
+                        <label class="form-label">Patient <span class="text-danger">*</span></label>
+                        <select class="form-select" id="patient_id" required>
+                            <option value="">Select patient...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Test <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select class="form-select" id="catalog_id" required>
+                                <option value="">Select test...</option>
+                            </select>
+                            <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#addCatalogModal" title="Add to catalog"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Test Name (if not in catalog)</label>
+                        <input type="text" class="form-control" id="test_name_other" placeholder="Free-text test name">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" id="test_category">
+                            <option value="general">General</option>
+                            <option value="ultrasound">Ultrasound</option>
+                            <option value="cardiac">Cardiac</option>
+                            <option value="microbiology">Microbiology</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>Create Order</button>
+                    <a href="/lab/orders" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="order-success" class="alert alert-success mt-3" style="display:none">
+                    <i class="bi bi-check-circle me-1"></i> Lab order created! <a href="/lab/orders/" class="alert-link">Back to orders</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addCatalogModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="quick-catalog-form">
+                <div class="modal-header"><h5 class="modal-title"><i class="bi bi-bookmark-plus me-1"></i>Add to Catalog</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Test Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="qc-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" id="qc-category">
+                            <option value="general">General</option>
+                            <option value="ultrasound">Ultrasound</option>
+                            <option value="cardiac">Cardiac</option>
+                            <option value="microbiology">Microbiology</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="qc-desc" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-3" id="btn-qc-save"><i class="bi bi-check-lg me-1"></i>Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [patientsRes, catalogRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/lab/api/catalog')
+    ]);
+    const patients = await patientsRes.json();
+    const catalog = await catalogRes.json();
+
+    const pSel = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        pSel.appendChild(o);
+    });
+
+    const cSel = document.getElementById('catalog_id');
+    const activeItems = catalog.filter(c => c.is_active);
+    activeItems.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = c.test_name + ' (' + c.category + ')';
+        o.dataset.name = c.test_name;
+        o.dataset.category = c.category;
+        cSel.appendChild(o);
+    });
+
+    cSel.addEventListener('change', function() {
+        if (this.value) {
+            const opt = this.options[this.selectedIndex];
+            document.getElementById('test_name_other').value = opt.dataset.name || '';
+            document.getElementById('test_category').value = opt.dataset.category || 'general';
+        }
+    });
+
+    document.getElementById('quick-catalog-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const name = document.getElementById('qc-name').value.trim();
+        if (!name) return;
+        const btn = document.getElementById('btn-qc-save');
+        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding...';
+        const res = await fetchWithAuth('/lab/api/catalog', {
+            method: 'POST',
+            body: JSON.stringify({
+                test_name: name,
+                category: document.getElementById('qc-category').value,
+                description: document.getElementById('qc-desc').value.trim(),
+                parameters: '[]'
+            })
+        });
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Add';
+        if (res.ok) {
+            const data = await res.json();
+            bootstrap.Modal.getInstance(document.getElementById('addCatalogModal')).hide();
+            document.getElementById('qc-name').value = '';
+            document.getElementById('qc-desc').value = '';
+            catalog.push({ id: data.id, test_name: name, category: document.getElementById('qc-category').value, is_active: 1 });
+            const o = document.createElement('option');
+            o.value = data.id;
+            o.textContent = name + ' (' + document.getElementById('qc-category').value + ')';
+            o.dataset.name = name;
+            o.dataset.category = document.getElementById('qc-category').value;
+            document.getElementById('catalog_id').appendChild(o);
+            document.getElementById('catalog_id').value = data.id;
+            document.getElementById('catalog_id').dispatchEvent(new Event('change'));
+            showToast('Test added to catalog', 'success');
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Failed to add', 'danger');
+        }
+    });
+
+    document.getElementById('order-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const patientId = document.getElementById('patient_id').value;
+        const catalogId = document.getElementById('catalog_id').value;
+        let testName = document.getElementById('test_name_other').value.trim();
+        if (!catalogId && !testName) { alert('Select a test or enter a test name'); return; }
+        if (!testName && catalogId) {
+            const opt = document.getElementById('catalog_id').options[document.getElementById('catalog_id').selectedIndex];
+            testName = opt.dataset.name;
+        }
+
+        const btn = document.getElementById('btn-submit');
+        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+
+        const res = await fetchWithAuth('/lab/api/orders', {
+            method: 'POST',
+            body: JSON.stringify({
+                patient_id: parseInt(patientId),
+                catalog_id: catalogId || null,
+                test_name: testName,
+                test_category: document.getElementById('test_category').value
+            })
+        });
+
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create Order';
+        if (res.ok) {
+            document.getElementById('order-form').style.display = 'none';
+            document.getElementById('order-success').style.display = 'block';
+        } else {
+            const err = await res.json();
+            alert(err.error || 'Failed to create order');
+        }
+    });
+});
+</script>
+{% endblock %}

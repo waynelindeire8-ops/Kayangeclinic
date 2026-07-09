@@ -1,5 +1,6 @@
+from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, role_required, log_audit
 
@@ -100,8 +101,12 @@ def api_delete(id):
     if not dept:
         db.close()
         return jsonify({'error': 'Department not found'}), 404
-    db.execute('DELETE FROM departments WHERE id = ?', (id,))
-    db.commit()
+    try:
+        db.execute('DELETE FROM departments WHERE id = ?', (id,))
+        db.commit()
+    except IntegrityError:
+        db.close()
+        return jsonify({'error': 'Cannot delete department with existing linked data.'}), 409
     log_audit(current_user['id'], current_user['username'], 'delete', 'department', id,
               f'Deleted department {dept["name"]}', request.remote_addr)
     db.close()

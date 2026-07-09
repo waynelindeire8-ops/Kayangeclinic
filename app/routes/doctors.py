@@ -1,5 +1,6 @@
+from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from werkzeug.security import generate_password_hash
 from app.database import get_db
 from app.auth import login_required, role_required, log_audit
@@ -120,8 +121,12 @@ def api_delete(id):
     if not doctor:
         db.close()
         return jsonify({'error': 'Doctor not found'}), 404
-    db.execute('DELETE FROM users WHERE id = ?', (id,))
-    db.commit()
+    try:
+        db.execute('DELETE FROM users WHERE id = ?', (id,))
+        db.commit()
+    except IntegrityError:
+        db.close()
+        return jsonify({'error': 'Cannot delete doctor with existing appointments, consultations, or other related data. Deactivate the account instead.'}), 409
     log_audit(current_user['id'], current_user['username'], 'delete', 'user', id,
               f'Deleted doctor {doctor["first_name"]} {doctor["last_name"]}', request.remote_addr)
     db.close()

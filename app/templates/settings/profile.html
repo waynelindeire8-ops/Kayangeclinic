@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-person-gear"></i> My Profile</h4>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><h6>Profile Information</h6></div>
+            <div class="card-body">
+                <form id="profile-form">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="first_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="last_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" id="phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Role</label>
+                            <input type="text" class="form-control" id="role" disabled>
+                        </div>
+                    </div>
+                    <hr>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-save-profile"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><h6>Change Password</h6></div>
+            <div class="card-body">
+                <form id="password-form">
+                    <div class="mb-3">
+                        <label class="form-label">Current Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="old_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="new_password" required minlength="6">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="confirm_password" required minlength="6">
+                    </div>
+                    <hr>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-change-pw"><i class="bi bi-shield-lock me-1"></i>Change Password</button>
+                </form>
+                <div class="form-text mt-2">Password must be at least 6 characters long.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadProfile);
+
+async function loadProfile() {
+    const res = await fetchWithAuth('/settings/api/profile');
+    const user = await res.json();
+    if (user.error) { alert(user.error); return; }
+    document.getElementById('first_name').value = user.first_name || '';
+    document.getElementById('last_name').value = user.last_name || '';
+    document.getElementById('email').value = user.email || '';
+    document.getElementById('phone').value = user.phone || '';
+    document.getElementById('username').value = user.username || '';
+    document.getElementById('role').value = (user.role || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+document.getElementById('profile-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-profile');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const res = await fetchWithAuth('/settings/api/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+            first_name: document.getElementById('first_name').value.trim(),
+            last_name: document.getElementById('last_name').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            phone: document.getElementById('phone').value.trim()
+        })
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Changes';
+    if (res.ok) {
+        showToast('Profile updated', 'success');
+        const data = await res.json();
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        user.first_name = document.getElementById('first_name').value.trim();
+        user.last_name = document.getElementById('last_name').value.trim();
+        localStorage.setItem('user', JSON.stringify(user));
+        document.getElementById('sidebar-user-name').textContent = user.first_name + ' ' + user.last_name;
+        document.getElementById('topbar-user-name').textContent = user.first_name || 'User';
+        const initials = (user.first_name || 'U').charAt(0) + (user.last_name || '').charAt(0);
+        document.getElementById('user-avatar').textContent = initials;
+        document.getElementById('topbar-avatar').textContent = initials;
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to save', 'danger');
+    }
+});
+
+document.getElementById('password-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const np = document.getElementById('new_password').value;
+    const cp = document.getElementById('confirm_password').value;
+    if (np !== cp) { showToast('Passwords do not match', 'danger'); return; }
+    if (np.length < 6) { showToast('Password must be at least 6 characters', 'danger'); return; }
+    const btn = document.getElementById('btn-change-pw');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Changing...';
+    const res = await fetchWithAuth('/settings/api/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ old_password: document.getElementById('old_password').value, new_password: np })
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-shield-lock me-1"></i>Change Password';
+    if (res.ok) {
+        showToast('Password changed successfully', 'success');
+        document.getElementById('password-form').reset();
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to change password', 'danger');
+    }
+});
+</script>
+{% endblock %}

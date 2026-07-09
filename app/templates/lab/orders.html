@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-list-check"></i> Lab Orders</h4>
+    <div class="d-flex gap-2">
+        <a href="/lab/orders/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Order</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="filter-status">
+                    <option value="">All</option>
+                    <option value="ordered">Ordered</option>
+                    <option value="collected">Collected</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">From</label>
+                <input type="date" class="form-control" id="filter-from">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">To</label>
+                <input type="date" class="form-control" id="filter-to">
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" onclick="loadOrders()"><i class="bi bi-search me-1"></i>Filter</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="orders-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Patient</th>
+                        <th>Test</th>
+                        <th>Doctor</th>
+                        <th>Ordered</th>
+                        <th>Status</th>
+                        <th style="width:90px">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="orders-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-journal-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No orders found
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('filter-to').value = new Date().toISOString().split('T')[0];
+    loadOrders();
+    document.getElementById('filter-status').addEventListener('change', loadOrders);
+});
+
+async function loadOrders() {
+    const status = document.getElementById('filter-status').value;
+    const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    let url = '/lab/api/orders?';
+    if (status) url += 'status=' + status + '&';
+    if (from) url += 'date_from=' + from + '&';
+    if (to) url += 'date_to=' + to + '&';
+    const res = await fetchWithAuth(url);
+    const orders = await res.json();
+    const tbody = document.querySelector('#orders-table tbody');
+    const empty = document.getElementById('orders-empty');
+    tbody.innerHTML = '';
+    if (orders.length) {
+        document.getElementById('orders-table').style.display = '';
+        empty.style.display = 'none';
+        const colors = { ordered: 'secondary', collected: 'info', in_progress: 'primary', completed: 'success' };
+        orders.forEach(o => {
+            tbody.innerHTML += '<tr>' +
+                '<td><span class="fw-semibold">' + o.id + '</span></td>' +
+                '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + (o.p_first || '') + ' ' + (o.p_last || '') + '</a><br><small class="text-muted">' + (o.p_patient_id || '') + '</small></td>' +
+                '<td>' + escHtml(o.test_name || '') + '</td>' +
+                '<td>Dr. ' + (o.d_first || '') + ' ' + (o.d_last || '') + '</td>' +
+                '<td>' + (o.ordered_date ? new Date(o.ordered_date).toLocaleDateString() : '') + '</td>' +
+                '<td><span class="badge bg-' + (colors[o.status] || 'secondary') + '">' + (o.status || '').replace('_', ' ') + '</span></td>' +
+                '<td><a href="/lab/orders/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a></td></tr>';
+        });
+    } else {
+        document.getElementById('orders-table').style.display = 'none';
+        empty.style.display = 'block';
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

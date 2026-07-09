@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, role_required, log_audit
 

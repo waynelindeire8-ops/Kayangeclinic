@@ -44,6 +44,30 @@ def create_app():
     from app.routes.reports import reports_bp
     app.register_blueprint(reports_bp)
 
+    from app.routes.messages import messages_bp
+    app.register_blueprint(messages_bp)
+
+    from app.routes.lab import lab_bp
+    app.register_blueprint(lab_bp)
+
+    from app.routes.prescriptions import prescriptions_bp
+    app.register_blueprint(prescriptions_bp)
+
+    from app.routes.settings import settings_bp
+    app.register_blueprint(settings_bp)
+
+    from app.routes.insurance import insurance_bp
+    app.register_blueprint(insurance_bp)
+
+    from app.routes.notifications import notifications_bp
+    app.register_blueprint(notifications_bp)
+
+    from app.routes.radiology import radiology_bp
+    app.register_blueprint(radiology_bp)
+
+    from app.routes.telemedicine import telemedicine_bp
+    app.register_blueprint(telemedicine_bp)
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

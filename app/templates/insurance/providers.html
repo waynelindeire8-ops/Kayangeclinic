@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-building"></i> Insurance Providers</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#providerModal"><i class="bi bi-plus-lg me-1"></i>Add Provider</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="providers-table">
+                <thead>
+                    <tr><th>Name</th><th>Code</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th><th style="width:90px">Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="providers-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-building" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No providers
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="providerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="provider-form">
+                <div class="modal-header"><h5 class="modal-title" id="prov-title">Add Provider</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="prov-id">
+                    <div class="mb-3"><label class="form-label">Name *</label><input type="text" class="form-control" id="prov-name" required></div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="form-label">Code</label><input type="text" class="form-control" id="prov-code" placeholder="e.g. NHIMA"></div>
+                        <div class="col-6"><label class="form-label">Contact Person</label><input type="text" class="form-control" id="prov-contact"></div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="form-label">Phone</label><input type="text" class="form-control" id="prov-phone"></div>
+                        <div class="col-6"><label class="form-label">Email</label><input type="email" class="form-control" id="prov-email"></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Address</label><input type="text" class="form-control" id="prov-address"></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" id="prov-active" checked><label class="form-check-label">Active</label></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-3" id="btn-prov-save"><i class="bi bi-check-lg me-1"></i>Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadProviders);
+
+async function loadProviders() {
+    const res = await fetchWithAuth('/insurance/api/providers');
+    const items = await res.json();
+    const tbody = document.querySelector('#providers-table tbody');
+    const empty = document.getElementById('providers-empty');
+    tbody.innerHTML = '';
+    if (items.length) {
+        document.getElementById('providers-table').style.display = '';
+        empty.style.display = 'none';
+        items.forEach(p => {
+            tbody.innerHTML += '<tr><td><strong>' + esc(p.name) + '</strong></td><td><span class="badge bg-secondary">' + esc(p.code || '') + '</span></td><td>' + esc(p.contact_person || '') + '</td><td>' + esc(p.phone || '') + '</td><td>' + esc(p.email || '') + '</td><td><span class="badge bg-' + (p.is_active ? 'success' : 'secondary') + '">' + (p.is_active ? 'Active' : 'Inactive') + '</span></td><td><button class="btn-action edit" onclick="editProvider(' + p.id + ')"><i class="bi bi-pencil"></i></button></td></tr>';
+        });
+    } else { document.getElementById('providers-table').style.display = 'none'; empty.style.display = 'block'; }
+}
+
+async function editProvider(id) {
+    const res = await fetchWithAuth('/insurance/api/providers');
+    const items = await res.json();
+    const p = items.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('prov-title').textContent = 'Edit Provider';
+    document.getElementById('prov-id').value = p.id;
+    document.getElementById('prov-name').value = p.name;
+    document.getElementById('prov-code').value = p.code || '';
+    document.getElementById('prov-contact').value = p.contact_person || '';
+    document.getElementById('prov-phone').value = p.phone || '';
+    document.getElementById('prov-email').value = p.email || '';
+    document.getElementById('prov-address').value = p.address || '';
+    document.getElementById('prov-active').checked = p.is_active;
+    new bootstrap.Modal(document.getElementById('providerModal')).show();
+}
+
+document.getElementById('provider-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('prov-id').value;
+    const body = {
+        name: document.getElementById('prov-name').value.trim(),
+        code: document.getElementById('prov-code').value.trim() || null,
+        contact_person: document.getElementById('prov-contact').value.trim() || null,
+        phone: document.getElementById('prov-phone').value.trim() || null,
+        email: document.getElementById('prov-email').value.trim() || null,
+        address: document.getElementById('prov-address').value.trim() || null,
+        is_active: document.getElementById('prov-active').checked ? 1 : 0
+    };
+    const btn = document.getElementById('btn-prov-save');
+    btn.disabled = true;
+    const res = await fetchWithAuth(id ? '/insurance/api/providers/' + id : '/insurance/api/providers', {
+        method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+    });
+    btn.disabled = false;
+    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('providerModal')).hide(); loadProviders(); showToast('Provider saved', 'success'); resetForm(); }
+    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+
+function resetForm() { document.getElementById('prov-title').textContent = 'Add Provider'; document.getElementById('provider-form').reset(); document.getElementById('prov-id').value = ''; document.getElementById('prov-active').checked = true; }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

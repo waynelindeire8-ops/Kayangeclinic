@@ -42,12 +42,13 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card">
+                <div class="card" id="info-tab-card">
                     <div class="card-body">
                         <h6>Medical & Insurance</h6>
                         <table class="table table-sm">
                             <tr><td class="text-muted">Blood Group</td><td id="p-blood"></td></tr>
-                            <tr><td class="text-muted">Scheme Provider</td><td id="p-scheme-provider"></td></tr>
+                            <tr><td class="text-muted">Insurance Scheme</td><td id="p-scheme-id"></td></tr>
+                            <tr><td class="text-muted">Scheme Number</td><td id="p-scheme-number"></td></tr>
                             <tr><td class="text-muted">Scheme Type</td><td id="p-scheme-type"></td></tr>
                         </table>
                         <h6 class="mt-3">Allergies</h6>
@@ -109,7 +110,13 @@
 <script>
 const patientId = {{ patient_id }};
 
-fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
+// Load insurance providers first
+let insuranceProviders = {};
+fetchWithAuth('/insurance/api/providers').then(r => r.json()).then(providers => {
+    providers.forEach(p => { insuranceProviders[p.id] = p.name; });
+    // Then load patient data
+    return fetchWithAuth(`/patients/api/${patientId}`);
+}).then(r => r.json()).then(data => {
     document.getElementById('patient-name').textContent = `${data.first_name} ${data.last_name}`;
     document.getElementById('patient-id-display').textContent = data.patient_id;
     document.getElementById('patient-dob-age').textContent = data.dob ? `${data.dob} (${new Date().getFullYear() - new Date(data.dob).getFullYear()} yrs)` : '';
@@ -121,8 +128,22 @@ fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
     document.getElementById('p-emergency-name').textContent = data.emergency_contact_name || '-';
     document.getElementById('p-emergency-phone').textContent = data.emergency_contact_phone || '-';
     document.getElementById('p-blood').textContent = data.blood_group || '-';
-    document.getElementById('p-scheme-provider').textContent = data.scheme_provider || '-';
+    document.getElementById('p-scheme-id').textContent = (data.scheme_id && insuranceProviders[data.scheme_id]) ? insuranceProviders[data.scheme_id] : 'None';
+    document.getElementById('p-scheme-number').textContent = data.scheme_number || '-';
     document.getElementById('p-scheme-type').textContent = data.scheme_type || '-';
+
+    // Check authorization requirements
+    if (data.scheme_id && insuranceProviders[data.scheme_id] && insuranceProviders[data.scheme_id].toLowerCase().includes('medhealth')) {
+        fetchWithAuth('/insurance/api/authorization-rules?provider_id=' + data.scheme_id).then(r => r.json()).then(rules => {
+            if (rules.length) {
+                const itemsList = rules.map(r => '<strong>' + r.item_name + '</strong>').join(', ');
+                const banner = document.createElement('div');
+                banner.className = 'alert alert-warning d-flex align-items-center mt-3';
+                banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i><div><strong>Prior Authorization Required</strong> — This patient needs pre-authorization for: ' + itemsList + ' under ' + insuranceProviders[data.scheme_id] + '.</div>';
+                document.getElementById('info-tab-card').prepend(banner);
+            }
+        });
+    }
 
     const allergiesDiv = document.getElementById('p-allergies');
     if (data.allergies && data.allergies.length) {

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: null, render: d => 'Dr. ' + (d.d_first || '') + ' ' + (d.d_last || '') },
             { data: 'consultation_type', render: d => '<span class="badge bg-success">' + (d || 'General') + '</span>' },
             { data: 'diagnosis', render: d => d || '-' },
-            { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="btn-action view"><i class="bi bi-eye"></i></a>' }
+            { data: null, render: d => '<a href="/consultations/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a><a href="/patients/' + d.patient_id + '" class="btn-action view" title="View Patient"><i class="bi bi-eye"></i></a>' }
         ],
         order: [[0, 'desc']],
         pageLength: 20

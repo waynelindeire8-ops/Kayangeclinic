@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-gear"></i> System Settings</h4>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><h6>Clinic Information</h6></div>
+            <div class="card-body">
+                <form id="system-form">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Clinic Name</label>
+                            <input type="text" class="form-control" id="clinic_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="clinic_email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" id="clinic_phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Timezone</label>
+                            <select class="form-select" id="timezone">
+                                <option value="Africa/Blantyre">Africa/Blantyre (CAT +2)</option>
+                                <option value="Africa/Johannesburg">Africa/Johannesburg (SAST +2)</option>
+                                <option value="Africa/Nairobi">Africa/Nairobi (EAT +3)</option>
+                                <option value="Africa/Lagos">Africa/Lagos (WAT +1)</option>
+                                <option value="Africa/Lubumbashi">Africa/Lubumbashi (CAT +2)</option>
+                                <option value="Europe/London">Europe/London (GMT/BST)</option>
+                                <option value="America/New_York">America/New_York (EST)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address</label>
+                            <textarea class="form-control" id="clinic_address" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6>Preferences</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Date Format</label>
+                            <select class="form-select" id="date_format">
+                                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                                <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency</label>
+                            <select class="form-select" id="currency">
+                                <option value="MWK">MWK - Malawian Kwacha</option>
+                                <option value="USD">USD - US Dollar</option>
+                                <option value="ZAR">ZAR - South African Rand</option>
+                                <option value="TZS">TZS - Tanzanian Shilling</option>
+                                <option value="ZMW">ZMW - Zambian Kwacha</option>
+                                <option value="MZN">MZN - Mozambican Metical</option>
+                                <option value="KES">KES - Kenyan Shilling</option>
+                                <option value="GBP">GBP - British Pound</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Low Stock Threshold</label>
+                            <input type="number" class="form-control" id="low_stock_threshold" min="0">
+                            <div class="form-text">Alert when pharmacy stock falls below this level</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Appointment Slot (min)</label>
+                            <input type="number" class="form-control" id="appointment_slot_minutes" min="5" step="5">
+                            <div class="form-text">Default duration in minutes</div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-save"><i class="bi bi-check-lg me-1"></i>Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6>Quick Actions</h6></div>
+            <div class="card-body">
+                <a href="/staff/new" class="btn btn-outline-primary w-100 mb-2"><i class="bi bi-person-plus me-1"></i>Add New User</a>
+                <a href="/doctors" class="btn btn-outline-primary w-100 mb-2"><i class="bi bi-stethoscope me-1"></i>Manage Doctors</a>
+                <a href="/departments" class="btn btn-outline-primary w-100 mb-2"><i class="bi bi-building me-1"></i>Manage Departments</a>
+                <a href="/pharmacy" class="btn btn-outline-primary w-100 mb-2"><i class="bi bi-capsule me-1"></i>Pharmacy Inventory</a>
+                <a href="/lab/catalog" class="btn btn-outline-primary w-100 mb-2"><i class="bi bi-book me-1"></i>Lab Test Catalog</a>
+                <a href="/lab/orders" class="btn btn-outline-primary w-100"><i class="bi bi-list-check me-1"></i>Lab Orders</a>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header"><h6>System Info</h6></div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><td class="text-muted">Version</td><td>1.0.0</td></tr>
+                    <tr><td class="text-muted">Database</td><td>SQLite</td></tr>
+                    <tr><td class="text-muted">Tables</td><td id="table-count">-</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/settings/api/system');
+    const cfg = await res.json();
+    if (cfg.error) { showToast(cfg.error, 'danger'); return; }
+    document.getElementById('clinic_name').value = cfg.clinic_name || '';
+    document.getElementById('clinic_email').value = cfg.clinic_email || '';
+    document.getElementById('clinic_phone').value = cfg.clinic_phone || '';
+    document.getElementById('clinic_address').value = cfg.clinic_address || '';
+    document.getElementById('timezone').value = cfg.timezone || 'Africa/Blantyre';
+    document.getElementById('date_format').value = cfg.date_format || 'DD/MM/YYYY';
+    document.getElementById('currency').value = cfg.currency || 'MWK';
+    document.getElementById('low_stock_threshold').value = cfg.low_stock_threshold || '10';
+    document.getElementById('appointment_slot_minutes').value = cfg.appointment_slot_minutes || '30';
+});
+
+document.getElementById('system-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const fields = ['clinic_name','clinic_email','clinic_phone','clinic_address','timezone','date_format','currency','low_stock_threshold','appointment_slot_minutes'];
+    const body = {};
+    fields.forEach(f => body[f] = document.getElementById(f).value);
+    const res = await fetchWithAuth('/settings/api/system', { method: 'PUT', body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Settings';
+    if (res.ok) showToast('Settings saved', 'success');
+    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+</script>
+{% endblock %}

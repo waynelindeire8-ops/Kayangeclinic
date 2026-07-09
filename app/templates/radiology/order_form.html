@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-reels"></i> New Radiology Order</h4>
+    <a href="/radiology/orders" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="order-form">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Patient <span class="text-danger">*</span></label>
+                            <select class="form-select" id="patient_id" required><option value="">Select patient...</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Modality <span class="text-danger">*</span></label>
+                            <select class="form-select" id="modality" required>
+                                <option value="">Select...</option>
+                                <option value="xray">X-Ray</option><option value="ultrasound">Ultrasound</option>
+                                <option value="ct">CT Scan</option><option value="mri">MRI</option>
+                                <option value="ecg">ECG (12-Lead)</option><option value="echo">Echocardiogram</option>
+                                <option value="mammogram">Mammogram</option><option value="fluoroscopy">Fluoroscopy</option>
+                                <option value="other">Other</option></select></div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Body Part / Region</label>
+                            <input type="text" class="form-control" id="body_part" placeholder="e.g. Chest, Abdomen, Left Knee"></div>
+                        <div class="col-md-6"><label class="form-label">Priority</label>
+                            <select class="form-select" id="priority">
+                                <option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></select></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Clinical History / Indication</label>
+                        <textarea class="form-control" id="clinical_history" rows="3" placeholder="Relevant clinical information for the radiologist..."></textarea></div>
+                    <div class="mb-3"><label class="form-label">Additional Notes</label>
+                        <textarea class="form-control" id="notes" rows="2"></textarea></div>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>Create Order</button>
+                    <a href="/radiology/orders" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="order-success" class="alert alert-success mt-3" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6>Quick Test Selection</h6></div>
+            <div class="card-body">
+                <div id="quick-tests"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/patients/api');
+    const patients = await res.json();
+    const sel = document.getElementById('patient_id');
+    patients.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name; sel.appendChild(o); });
+
+    const catRes = await fetchWithAuth('/lab/api/catalog');
+    const catalog = await catRes.json();
+    const radTests = catalog.filter(c => c.category === 'radiology' && c.is_active);
+    const qt = document.getElementById('quick-tests');
+    radTests.forEach(t => {
+        qt.innerHTML += '<button type="button" class="btn btn-outline-primary btn-sm w-100 mb-1 text-start" onclick="quickFill(this)" data-mod="' + esc(t.sample_type || 'xray') + '" data-part="' + esc(t.test_name) + '">' + esc(t.test_name) + '</button>';
+    });
+});
+function quickFill(btn) {
+    document.getElementById('modality').value = btn.dataset.mod;
+    document.getElementById('body_part').value = btn.dataset.part;
+}
+document.getElementById('order-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const body = {
+        patient_id: parseInt(document.getElementById('patient_id').value),
+        modality: document.getElementById('modality').value,
+        body_part: document.getElementById('body_part').value.trim(),
+        clinical_history: document.getElementById('clinical_history').value.trim(),
+        priority: document.getElementById('priority').value,
+        notes: document.getElementById('notes').value.trim()
+    };
+    if (!body.patient_id || !body.modality) { showToast('Patient and modality required', 'danger'); return; }
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+    const res = await fetchWithAuth('/radiology/api/orders', { method: 'POST', body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create Order';
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('order-form').style.display = 'none';
+        document.getElementById('order-success').style.display = 'block';
+        document.getElementById('order-success').innerHTML = '<i class="bi bi-check-circle me-1"></i> Order <strong>' + data.order_number + '</strong> created! <a href="/radiology/orders/' + data.id + '" class="alert-link">View Order</a>';
+    } else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

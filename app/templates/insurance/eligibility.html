@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-shield-check"></i> Eligibility Verification</h4>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><h6>Check Coverage</h6></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Patient <span class="text-danger">*</span></label>
+                    <select class="form-select" id="patient_id" required>
+                        <option value="">Select patient...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Insurance Provider (optional)</label>
+                    <select class="form-select" id="provider_id">
+                        <option value="">All providers</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary w-100" onclick="checkEligibility()"><i class="bi bi-search me-1"></i>Check Eligibility</button>
+            </div>
+        </div>
+
+        <div class="card mt-3" id="patient-info-card" style="display:none">
+            <div class="card-header"><h6>Patient Info</h6></div>
+            <div class="card-body" id="patient-info"></div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><h6>Verification Results</h6></div>
+            <div class="card-body p-0" id="results-area">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-shield-check" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+                    Select a patient and click "Check Eligibility"
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [pRes, provRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/insurance/api/providers')
+    ]);
+    const patients = await pRes.json();
+    const providers = await provRes.json();
+    const pSel = document.getElementById('patient_id');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        o.dataset.dob = p.dob || '';
+        o.dataset.phone = p.phone || '';
+        pSel.appendChild(o);
+    });
+    const provSel = document.getElementById('provider_id');
+    providers.filter(p => p.is_active).forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name;
+        provSel.appendChild(o);
+    });
+});
+
+async function checkEligibility() {
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { showToast('Select a patient', 'danger'); return; }
+    const providerId = document.getElementById('provider_id').value;
+    let url = '/insurance/api/eligibility?patient_id=' + patientId;
+    if (providerId) url += '&provider_id=' + providerId;
+
+    const area = document.getElementById('results-area');
+    area.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Verifying...</div>';
+
+    const res = await fetchWithAuth(url);
+    const policies = await res.json();
+
+    const opt = document.getElementById('patient_id').options[document.getElementById('patient_id').selectedIndex];
+    document.getElementById('patient-info-card').style.display = 'block';
+    document.getElementById('patient-info').innerHTML = '<strong>' + esc(opt.textContent) + '</strong><br><small class="text-muted">DOB: ' + (opt.dataset.dob || '-') + '</small><br><small class="text-muted">Phone: ' + (opt.dataset.phone || '-') + '</small>';
+
+    if (!policies.length) {
+        area.innerHTML = '<div class="p-4"><div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i>No active insurance policies found for this patient. They will need to pay out of pocket or register with an insurance provider.</div></div>';
+        return;
+    }
+
+    let html = '';
+    policies.forEach(p => {
+        const icon = p.eligibility === 'active' ? 'bi-check-circle-fill text-success' : p.eligibility === 'expired' ? 'bi-x-circle-fill text-danger' : 'bi-clock-fill text-warning';
+        html += '<div class="p-3 border-bottom">' +
+            '<div class="d-flex justify-content-between align-items-start">' +
+            '<div><strong>' + esc(p.provider_name) + '</strong>' +
+            '<br><small class="text-muted">Policy: ' + esc(p.policy_number) + (p.member_name ? ' | Member: ' + esc(p.member_name) : '') + '</small>' +
+            (p.group_number ? '<br><small class="text-muted">Group: ' + esc(p.group_number) + '</small>' : '') +
+            '</div>' +
+            '<span class="badge bg-' + (p.eligibility === 'active' ? 'success' : p.eligibility === 'expired' ? 'danger' : 'warning') + '">' + p.eligibility.replace('_', ' ') + '</span>' +
+            '</div>' +
+            '<div class="mt-2"><i class="bi ' + icon + ' me-1"></i>' + esc(p.eligibility_message) + '</div>' +
+            '<div class="mt-1"><small class="text-muted">Effective: ' + (p.effective_date || 'N/A') + ' | Expiry: ' + (p.expiry_date || 'N/A') + ' | ' + (p.is_primary ? 'Primary' : 'Secondary') + '</small></div>' +
+            '</div>';
+    });
+    area.innerHTML = html;
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

@@ -72,7 +72,7 @@
                 <div class="card-header"><h6>Medical & Insurance</h6></div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label">Blood Group</label>
                             <select class="form-select" id="blood_group">
                                 <option value="">Select</option>
@@ -82,13 +82,19 @@
                                 <option value="O+">O+</option><option value="O-">O-</option>
                             </select>
                         </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Insurance Scheme</label>
+                            <select class="form-select" id="scheme_id">
+                                <option value="">None</option>
+                            </select>
+                        </div>
                         <div class="col-md-4">
-                            <label class="form-label">Scheme Provider</label>
-                            <input type="text" class="form-control" id="scheme_provider">
+                            <label class="form-label">Scheme Number</label>
+                            <input type="text" class="form-control" id="scheme_number" placeholder="e.g. NHIMA-001234">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Scheme Type</label>
-                            <input type="text" class="form-control" id="scheme_type">
+                            <input type="text" class="form-control" id="scheme_type" placeholder="e.g. Family, Individual">
                         </div>
                     </div>
                 </div>
@@ -142,6 +148,41 @@
 
 <script>
 const patientId = {{ patient_id or 'null' }};
+
+// Load insurance providers
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/insurance/api/providers');
+    const providers = await res.json();
+    const sel = document.getElementById('scheme_id');
+    providers.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name;
+        sel.appendChild(o);
+    });
+
+    if (patientId) {
+        const pRes = await fetchWithAuth(`/patients/api/${patientId}`);
+        const data = await pRes.json();
+        document.getElementById('first_name').value = data.first_name || '';
+        document.getElementById('last_name').value = data.last_name || '';
+        document.getElementById('dob').value = data.dob || '';
+        document.getElementById('gender').value = data.gender || '';
+        document.getElementById('phone').value = data.phone || '';
+        document.getElementById('email').value = data.email || '';
+        document.getElementById('address').value = data.address || '';
+        document.getElementById('emergency_contact_name').value = data.emergency_contact_name || '';
+        document.getElementById('emergency_contact_phone').value = data.emergency_contact_phone || '';
+        document.getElementById('blood_group').value = data.blood_group || '';
+        document.getElementById('scheme_id').value = data.scheme_id || '';
+        document.getElementById('scheme_number').value = data.scheme_number || '';
+        document.getElementById('scheme_type').value = data.scheme_type || '';
+
+        (data.allergies || []).forEach(a => addAllergy(a.allergy));
+        (data.medical_history || []).forEach(c => addCondition(c));
+        (data.medications || []).forEach(m => addMedication(m));
+    }
+});
 
 function addAllergy(value) {
     const container = document.getElementById('allergies-container');
@@ -216,7 +257,8 @@ document.getElementById('patient-form').addEventListener('submit', async functio
         emergency_contact_name: document.getElementById('emergency_contact_name').value,
         emergency_contact_phone: document.getElementById('emergency_contact_phone').value,
         blood_group: document.getElementById('blood_group').value,
-        scheme_provider: document.getElementById('scheme_provider').value,
+        scheme_id: document.getElementById('scheme_id').value ? parseInt(document.getElementById('scheme_id').value) : null,
+        scheme_number: document.getElementById('scheme_number').value,
         scheme_type: document.getElementById('scheme_type').value,
         allergies: Array.from(document.querySelectorAll('input[name="allergy"]')).map(i => i.value).filter(Boolean),
         medical_history: Array.from(document.querySelectorAll('.condition-row')).map(r => ({
@@ -249,25 +291,5 @@ document.getElementById('patient-form').addEventListener('submit', async functio
     }
 });
 
-if (patientId) {
-    fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
-        document.getElementById('first_name').value = data.first_name || '';
-        document.getElementById('last_name').value = data.last_name || '';
-        document.getElementById('dob').value = data.dob || '';
-        document.getElementById('gender').value = data.gender || '';
-        document.getElementById('phone').value = data.phone || '';
-        document.getElementById('email').value = data.email || '';
-        document.getElementById('address').value = data.address || '';
-        document.getElementById('emergency_contact_name').value = data.emergency_contact_name || '';
-        document.getElementById('emergency_contact_phone').value = data.emergency_contact_phone || '';
-        document.getElementById('blood_group').value = data.blood_group || '';
-        document.getElementById('scheme_provider').value = data.scheme_provider || '';
-        document.getElementById('scheme_type').value = data.scheme_type || '';
-
-        (data.allergies || []).forEach(a => addAllergy(a.allergy));
-        (data.medical_history || []).forEach(c => addCondition(c));
-        (data.medications || []).forEach(m => addMedication(m));
-    });
-}
 </script>
 {% endblock %}

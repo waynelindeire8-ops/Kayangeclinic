@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required
 
@@ -163,6 +163,56 @@ def api_audit_logs():
     })
 
 
+@reports_bp.route('/api/queue', methods=['GET'])
+@login_required
+def api_queue():
+    db = get_db()
+    from datetime import date, datetime
+    today = date.today().isoformat()
+    now = datetime.now()
+
+    queue = db.execute(
+        '''SELECT a.id, a.appointment_time, a.reason, a.status, a.type,
+                  p.id as patient_id, p.first_name as p_first, p.last_name as p_last, p.phone as p_phone,
+                  u.id as doctor_id, u.first_name as d_first, u.last_name as d_last
+           FROM appointments a
+           JOIN patients p ON a.patient_id = p.id
+           LEFT JOIN users u ON a.doctor_id = u.id
+           WHERE a.appointment_date = ? AND a.status IN ('scheduled', 'confirmed', 'in_progress')
+           ORDER BY a.appointment_time ASC''', (today,)).fetchall()
+
+    completed = db.execute(
+        '''SELECT a.appointment_time, a.reason,
+                  p.first_name as p_first, p.last_name as p_last,
+                  u.first_name as d_first, u.last_name as d_last
+           FROM appointments a
+           JOIN patients p ON a.patient_id = p.id
+           LEFT JOIN users u ON a.doctor_id = u.id
+           WHERE a.appointment_date = ? AND a.status = 'completed'
+           ORDER BY a.updated_at DESC LIMIT 10''', (today,)).fetchall()
+
+    result = []
+    for i, apt in enumerate(queue):
+        entry = dict(apt)
+        entry['position'] = i + 1
+        try:
+            apt_time = datetime.strptime(apt['appointment_time'], '%H:%M')
+            wait_minutes = int((now - apt_time).total_seconds() / 60)
+            entry['wait_minutes'] = max(0, wait_minutes)
+        except:
+            entry['wait_minutes'] = 0
+        result.append(entry)
+
+    db.close()
+    return jsonify({
+        'queue': result,
+        'waiting_count': sum(1 for a in queue if a['status'] != 'in_progress'),
+        'in_progress_count': sum(1 for a in queue if a['status'] == 'in_progress'),
+        'completed_today': len(completed),
+        'completed': [dict(c) for c in completed]
+    })
+
+
 @reports_bp.route('/api/consultations', methods=['GET'])
 @login_required
 def api_consultation_stats():
@@ -171,3 +221,40 @@ def api_consultation_stats():
         'SELECT consultation_type, COUNT(*) as c FROM consultations GROUP BY consultation_type').fetchall()
     db.close()
     return jsonify([dict(s) for s in stats])
+
+
+@reports_bp.route('/api/procedures', methods=['GET'])
+@login_required
+def api_procedure_stats():
+    db = get_db()
+    from datetime import date, datetime
+    today = date.today().isoformat()
+
+    total = db.execute('SELECT COUNT(*) as c FROM procedures').fetchone()['c']
+    today_count = db.execute(
+        'SELECT COUNT(*) as c FROM procedures WHERE DATE(created_at) = ?', (today,)).fetchone()['c']
+
+    by_type = db.execute(
+        '''SELECT COALESCE(procedure_type, 'other') as type, COUNT(*) as c
+           FROM procedures GROUP BY procedure_type ORDER BY c DESC''').fetchall()
+
+    by_month = db.execute(
+        '''SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as c
+           FROM procedures GROUP BY month ORDER BY month DESC LIMIT 12''').fetchall()
+
+    recent = db.execute(
+        '''SELECT p.*, pt.first_name as p_first, pt.last_name as p_last,
+                  u.first_name as u_first, u.last_name as u_last
+           FROM procedures p
+           LEFT JOIN patients pt ON p.patient_id = pt.id
+           LEFT JOIN users u ON p.performed_by = u.id
+           ORDER BY p.created_at DESC LIMIT 10''').fetchall()
+
+    db.close()
+    return jsonify({
+        'total': total,
+        'today': today_count,
+        'by_type': [dict(t) for t in by_type],
+        'by_month': [dict(m) for m in by_month],
+        'recent': [dict(r) for r in recent]
+    })

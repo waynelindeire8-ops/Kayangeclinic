@@ -51,6 +51,44 @@
     </div>
 </div>
 
+<!-- Patient Queue -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h6><i class="bi bi-people"></i> Patient Queue</h6>
+            <small class="text-muted">Today's walk-in and scheduled patients</small>
+        </div>
+        <div class="d-flex gap-3">
+            <span><span class="badge bg-warning" id="queue-waiting-badge">0</span> Waiting</span>
+            <span><span class="badge bg-primary" id="queue-inprog-badge">0</span> In Consultation</span>
+            <span><span class="badge bg-success" id="queue-done-badge">0</span> Completed</span>
+            <button class="btn btn-sm btn-primary ms-2" onclick="showWalkinModal()"><i class="bi bi-plus-lg me-1"></i>Walk-in</button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="queue-table">
+                <thead>
+                    <tr>
+                        <th style="width:50px">#</th>
+                        <th>Patient</th>
+                        <th>Doctor</th>
+                        <th>Time</th>
+                        <th>Waiting</th>
+                        <th>Status</th>
+                        <th style="width:140px">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="queue-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-emoji-smile" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No patients in queue
+        </div>
+    </div>
+</div>
+
 <!-- Charts Row -->
 <div class="row g-3 mb-4">
     <div class="col-xl-8">
@@ -136,19 +174,66 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('rev-start').value = weekAgo.toISOString().split('T')[0];
 
     try {
-        const [dashRes, consultRes, aptRes] = await Promise.all([
+        const [dashRes, consultRes, aptRes, queueRes] = await Promise.all([
             fetchWithAuth('/reports/api/dashboard'),
             fetchWithAuth('/reports/api/consultations'),
-            fetchWithAuth('/reports/api/appointments')
+            fetchWithAuth('/reports/api/appointments'),
+            fetchWithAuth('/reports/api/queue')
         ]);
         const dash = await dashRes.json();
         const consultData = await consultRes.json();
         const aptData = await aptRes.json();
+        const queueData = await queueRes.json();
 
         document.getElementById('stat-patients').textContent = (dash.total_patients || 0).toLocaleString();
         document.getElementById('stat-appointments').textContent = dash.today_appointments || 0;
         document.getElementById('stat-revenue').textContent = 'MK ' + (dash.today_revenue || 0).toLocaleString();
         document.getElementById('stat-low-stock').textContent = dash.low_stock || 0;
+
+        // Patient Queue
+        document.getElementById('queue-waiting-badge').textContent = queueData.waiting_count || 0;
+        document.getElementById('queue-inprog-badge').textContent = queueData.in_progress_count || 0;
+        document.getElementById('queue-done-badge').textContent = queueData.completed_today || 0;
+
+        const qTbody = document.querySelector('#queue-table tbody');
+        const queue = queueData.queue || [];
+        if (queue.length) {
+            document.getElementById('queue-empty').style.display = 'none';
+            const colors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899'];
+            queue.forEach((apt, i) => {
+                const name = (apt.p_first || '') + ' ' + (apt.p_last || '');
+                const initials = (apt.p_first || 'P').charAt(0) + (apt.p_last || '').charAt(0);
+                const color = colors[i % colors.length];
+                const statusBadge = apt.status === 'scheduled'
+                    ? '<span class="badge bg-secondary">Not Checked In</span>'
+                    : apt.status === 'confirmed'
+                    ? '<span class="badge bg-warning">Waiting</span>'
+                    : '<span class="badge bg-primary">In Consultation</span>';
+                const waitDisplay = apt.wait_minutes < 60
+                    ? apt.wait_minutes + ' min'
+                    : Math.floor(apt.wait_minutes / 60) + 'h ' + (apt.wait_minutes % 60) + 'm';
+                let nextAction = '';
+                if (apt.status === 'scheduled') {
+                    nextAction = '<button class="btn-action view" title="Check In" onclick="updateAptStatus(' + apt.id + ',\'confirmed\')"><i class="bi bi-door-open"></i></button>';
+                } else if (apt.status === 'confirmed') {
+                    nextAction = '<button class="btn-action edit" title="Start Consultation" onclick="updateAptStatus(' + apt.id + ',\'in_progress\')"><i class="bi bi-play-fill"></i></button>';
+                } else {
+                    nextAction = '<a href="/consultations/new?patient_id=' + apt.patient_id + '&appointment_id=' + apt.id + '" class="btn-action view" title="Consult"><i class="bi bi-clipboard2-pulse"></i></a>';
+                }
+                qTbody.innerHTML += '<tr>' +
+                    '<td><span class="fw-bold" style="font-size:1.1rem">' + apt.position + '</span></td>' +
+                    '<td><div class="patient-cell"><div class="patient-avatar" style="background:' + color + '">' + initials + '</div><div><div class="fw-semibold" style="color:#0f172a"><a href="/patients/' + apt.patient_id + '" class="text-decoration-none" style="color:inherit">' + name + '</a></div><small class="text-muted">' + (apt.p_phone || '') + '</small></div></div></td>' +
+                    '<td>' + (apt.d_first ? 'Dr. ' + apt.d_first + ' ' + apt.d_last : '<span class="text-muted">Unassigned</span>') + '</td>' +
+                    '<td><span class="fw-semibold">' + apt.appointment_time + '</span></td>' +
+                    '<td><span class="' + (apt.wait_minutes > 30 ? 'text-danger fw-semibold' : 'text-muted') + '">' + waitDisplay + '</span></td>' +
+                    '<td>' + statusBadge + '</td>' +
+                    '<td><div class="d-flex gap-1">' + nextAction + '</div></td>' +
+                    '</tr>';
+            });
+        } else {
+            document.getElementById('queue-table').style.display = 'none';
+            document.getElementById('queue-empty').style.display = 'block';
+        }
 
         const tbody = document.querySelector('#today-appointments-table tbody');
         const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
@@ -289,5 +374,119 @@ async function loadRevenueChart() {
         }
     } catch(e) {}
 }
+
+async function updateAptStatus(id, status) {
+    await fetchWithAuth('/appointments/api/' + id + '/status', {
+        method: 'PATCH',
+        body: JSON.stringify({status})
+    });
+    location.reload();
+}
+
+// Auto-refresh queue every 30 seconds
+setInterval(async function() {
+    try {
+        const res = await fetchWithAuth('/reports/api/queue');
+        const data = await res.json();
+        document.getElementById('queue-waiting-badge').textContent = data.waiting_count || 0;
+        document.getElementById('queue-inprog-badge').textContent = data.in_progress_count || 0;
+        document.getElementById('queue-done-badge').textContent = data.completed_today || 0;
+    } catch(e) {}
+}, 30000);
 </script>
+<!-- Walk-in Modal -->
+<div class="modal fade" id="walkinModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-add text-primary me-1"></i>Add Walk-in Patient</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Patient <span class="text-danger">*</span></label>
+                    <select class="form-select" id="wi-patient_id" style="width:100%"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Assign Doctor <small class="text-muted">(optional)</small></label>
+                    <select class="form-select" id="wi-doctor_id">
+                        <option value="">-- Not assigned --</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason</label>
+                    <input type="text" class="form-control" id="wi-reason" placeholder="e.g. Walk-in consultation" value="Walk-in">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="submitWalkin()"><i class="bi bi-person-add me-1"></i>Add to Queue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let walkinPatients = [];
+let walkinDoctors = [];
+
+async function showWalkinModal() {
+    if (!walkinPatients.length || !walkinDoctors.length) {
+        try {
+            const [pRes, dRes] = await Promise.all([
+                fetchWithAuth('/patients/api?search='),
+                fetchWithAuth('/staff/api/doctors')
+            ]);
+            walkinPatients = await pRes.json();
+            walkinDoctors = await dRes.json();
+            const pSel = document.getElementById('wi-patient_id');
+            pSel.innerHTML = '';
+            walkinPatients.forEach(p => {
+                const o = document.createElement('option');
+                o.value = p.id;
+                o.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone})`;
+                pSel.appendChild(o);
+            });
+            const dSel = document.getElementById('wi-doctor_id');
+            dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+            walkinDoctors.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.id;
+                o.textContent = `Dr. ${d.first_name} ${d.last_name} (${d.role.replace('_',' ')})`;
+                dSel.appendChild(o);
+            });
+            $(pSel).select2({ placeholder: 'Search patient...', allowClear: true, width: '100%', dropdownParent: $('#walkinModal') });
+        } catch(e) {
+            console.error('Failed to load walk-in data:', e);
+            alert('Failed to load patient data');
+            return;
+        }
+    }
+    new bootstrap.Modal(document.getElementById('walkinModal')).show();
+}
+
+async function submitWalkin() {
+    const pSel = document.getElementById('wi-patient_id');
+    const patientId = pSel.value;
+    if (!patientId) { alert('Please select a patient'); return; }
+    const doctorId = document.getElementById('wi-doctor_id').value;
+    const reason = document.getElementById('wi-reason').value || 'Walk-in';
+    try {
+        const res = await fetchWithAuth('/appointments/api/quick-add', {
+            method: 'POST',
+            body: JSON.stringify({ patient_id: parseInt(patientId), doctor_id: doctorId || null, reason })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.error || 'Failed to add walk-in');
+            return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('walkinModal')).hide();
+        location.reload();
+    } catch(e) {
+        alert('Failed to add walk-in');
+    }
+}
+</script>
+
 {% endblock %}

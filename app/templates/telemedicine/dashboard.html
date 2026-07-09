@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-video"></i> Telemedicine Dashboard</h4>
+    <div class="d-flex gap-2">
+        <a href="/telemedicine/waiting-room" class="btn btn-outline-warning"><i class="bi bi-hourglass-split me-1"></i>Waiting Room</a>
+        <a href="/telemedicine/sessions/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Session</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon yellow"><i class="bi bi-calendar-check"></i></div>
+            <div class="stat-value" id="stat-scheduled">0</div><div class="stat-label">Scheduled</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon orange"><i class="bi bi-hourglass"></i></div>
+            <div class="stat-value" id="stat-waiting">0</div><div class="stat-label">In Waiting Room</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-camera-video"></i></div>
+            <div class="stat-value" id="stat-inprog">0</div><div class="stat-label">In Progress</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon green"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-value" id="stat-completed">0</div><div class="stat-label">Completed Today</div></div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Recent Sessions</h6>
+                <a href="/telemedicine/sessions" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0" id="recent-table">
+                        <thead><tr><th>Session</th><th>Patient</th><th>Doctor</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="recent-empty" class="text-center text-muted py-4" style="display:none"><i class="bi bi-camera-video" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No recent sessions</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6><i class="bi bi-hourglass-split me-1"></i>Waiting Room</h6>
+                <a href="/telemedicine/waiting-room" class="btn btn-sm btn-outline-warning">Manage</a>
+            </div>
+            <div class="card-body p-0" id="waiting-list">
+                <div class="text-center text-muted py-3" style="font-size:0.875rem">No patients waiting</div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6><i class="bi bi-cash-stack me-1"></i>Today's Revenue</h6></div>
+            <div class="card-body text-center">
+                <div class="fs-2 fw-bold" style="color:#0f172a" id="stat-revenue">MWK 0</div>
+                <small class="text-muted">collected from telemedicine sessions</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const TYPE = {video:'Video Call',audio:'Audio Only',chat:'Chat'};
+const ST = {scheduled:'secondary',waiting:'warning',in_progress:'primary',completed:'success',cancelled:'danger',no_show:'dark'};
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+async function loadDashboard() {
+    const res = await fetchWithAuth('/telemedicine/api/dashboard');
+    const d = await res.json();
+
+    document.getElementById('stat-scheduled').textContent = d.scheduled || 0;
+    document.getElementById('stat-waiting').textContent = d.waiting || 0;
+    document.getElementById('stat-inprog').textContent = d.in_progress || 0;
+    document.getElementById('stat-completed').textContent = d.completed_today || 0;
+    document.getElementById('stat-revenue').textContent = 'MWK ' + (d.total_revenue || 0).toLocaleString();
+
+    const tbody = document.querySelector('#recent-table tbody');
+    const recent = d.recent || [];
+    if (recent.length) {
+        document.getElementById('recent-table').style.display = '';
+        document.getElementById('recent-empty').style.display = 'none';
+        recent.forEach(s => {
+            tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(s.session_id || '') + '</span></td>' +
+                '<td>' + esc(s.p_first || '') + ' ' + esc(s.p_last || '') + '</td>' +
+                '<td>Dr. ' + esc(s.d_first || '') + ' ' + esc(s.d_last || '') + '</td>' +
+                '<td>' + (TYPE[s.session_type] || s.session_type) + '</td>' +
+                '<td><span class="badge bg-' + (ST[s.status] || 'secondary') + '">' + s.status.replace('_', ' ') + '</span></td>' +
+                '<td class="text-nowrap">' +
+                    (s.status === 'in_progress' ? '<a href="/telemedicine/sessions/' + s.id + '/room" class="btn btn-sm btn-success"><i class="bi bi-camera-video"></i></a> ' : '') +
+                    '<a href="/telemedicine/sessions/' + s.id + '" class="btn-action view"><i class="bi bi-eye"></i></a>' +
+                '</td></tr>';
+        });
+    } else {
+        document.getElementById('recent-table').style.display = 'none';
+        document.getElementById('recent-empty').style.display = 'block';
+    }
+
+    // Waiting room
+    const wRes = await fetchWithAuth('/telemedicine/api/waiting-room');
+    const waiting = await wRes.json();
+    const wl = document.getElementById('waiting-list');
+    if (waiting.length) {
+        wl.innerHTML = '';
+        waiting.forEach(w => {
+            wl.innerHTML += '<div class="d-flex align-items-center justify-content-between p-2 border-bottom">' +
+                '<div><div class="fw-semibold" style="font-size:0.875rem">' + esc(w.p_first || '') + ' ' + esc(w.p_last || '') + '</div>' +
+                '<small class="text-muted">' + esc(w.session_id || '') + '</small></div>' +
+                '<div><span class="badge bg-' + (w.status === 'waiting' ? 'warning' : 'secondary') + '">' + w.status + '</span></div></div>';
+        });
+    }
+}
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

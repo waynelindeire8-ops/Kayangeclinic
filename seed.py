@@ -52,7 +52,6 @@ def seed():
         ('front.desk1', generate_password_hash('front123'), 'front_desk', 'Jane', 'Wanjeri', 'front.wanjeri@kayange.com', '0700000009'),
         ('front.desk2', generate_password_hash('front123'), 'front_desk', 'Paul', 'Njoroge', 'front.njoroge@kayange.com', '0700000010'),
         ('file.mgr1', generate_password_hash('file123'), 'file_manager', 'Lucy', 'Akinyi', 'file.akinyi@kayange.com', '0700000011'),
-        ('file.mgr2', generate_password_hash('file123'), 'file_manager', 'Tom', 'Odhiambo', 'file.odhiambo@kayange.com', '0700000012'),
     ]
 
     for u in users:
@@ -114,12 +113,12 @@ def seed():
 
     today = date.today()
     appointments = [
-        (1, 2, today.isoformat(), '09:00', 'General checkup', 'scheduled', 'phone'),
+        (1, 2, today.isoformat(), '09:00', 'General checkup', 'completed', 'phone'),
         (2, 3, today.isoformat(), '10:00', 'Blood pressure review', 'confirmed', 'online'),
         (3, 2, today.isoformat(), '11:30', 'Follow-up', 'scheduled', 'phone'),
-        (4, 4, (today + timedelta(days=1)).isoformat(), '14:00', 'Annual physical', 'scheduled', 'phone'),
-        (5, 5, (today + timedelta(days=2)).isoformat(), '08:30', 'Diabetes management', 'scheduled', 'online'),
-        (6, 2, (today + timedelta(days=1)).isoformat(), '15:00', 'Chest pain', 'scheduled', 'phone'),
+        (4, 4, today.isoformat(), '14:00', 'Annual physical', 'confirmed', 'phone'),
+        (5, 5, today.isoformat(), '08:30', 'Diabetes management', 'completed', 'online'),
+        (6, 2, today.isoformat(), '15:00', 'Chest pain', 'scheduled', 'phone'),
         (7, 3, today.isoformat(), '12:00', 'Migraine consultation', 'scheduled', 'phone'),
         (8, 4, today.isoformat(), '16:00', 'General consultation', 'in_progress', 'phone'),
     ]

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
 
@@ -80,6 +80,14 @@ def api_create():
     )
     new_id = cursor.lastrowid
     db.commit()
+    if data.get('doctor_id'):
+        from app.routes.notifications import notify
+        from app.database import get_db as _gdb
+        _db = _gdb()
+        pat = _db.execute('SELECT first_name, last_name FROM patients WHERE id = ?', (data['patient_id'],)).fetchone()
+        pat_name = (pat['first_name'] + ' ' + pat['last_name']) if pat else 'Patient #' + str(data['patient_id'])
+        notify(_db, data['doctor_id'], 'New Appointment', f'Appointment with {pat_name} on {data["appointment_date"]} at {data["appointment_time"]}', 'appointment', '/appointments')
+        _db.close()
     log_audit(current_user['id'], current_user['username'], 'create', 'appointment', new_id,
               f'Created appointment for patient {data["patient_id"]}', request.remote_addr)
     db.close()
@@ -119,6 +127,39 @@ def api_update_status(id):
               f'Changed appointment {id} status to {data["status"]}', request.remote_addr)
     db.close()
     return jsonify({'message': 'Status updated'})
+
+
+@appointments_bp.route('/api/quick-add', methods=['POST'])
+@login_required
+def api_quick_add():
+    current_user = get_jwt()
+    data = request.json
+    from datetime import date, datetime
+    today = date.today().isoformat()
+    now = datetime.now().strftime('%H:%M')
+
+    db = get_db()
+    cursor = db.execute(
+        '''INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, type, status, created_by)
+           VALUES (?, ?, ?, ?, ?, 'walk_in', 'scheduled', ?)''',
+        (data['patient_id'], data.get('doctor_id'), today, now,
+         data.get('reason', 'Walk-in'), current_user['id'])
+    )
+    new_id = cursor.lastrowid
+
+    apt = db.execute(
+        '''SELECT a.*, p.first_name as p_first, p.last_name as p_last, p.phone as p_phone,
+                  u.first_name as d_first, u.last_name as d_last
+           FROM appointments a
+           LEFT JOIN patients p ON a.patient_id = p.id
+           LEFT JOIN users u ON a.doctor_id = u.id
+           WHERE a.id = ?''', (new_id,)).fetchone()
+
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'walk_in', 'appointment', new_id,
+              f'Walk-in added for patient ID {data["patient_id"]}', request.remote_addr)
+    db.close()
+    return jsonify(dict(apt)), 201
 
 
 @appointments_bp.route('/api/today', methods=['GET'])

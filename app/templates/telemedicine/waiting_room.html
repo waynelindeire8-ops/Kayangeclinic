@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-hourglass-split"></i> Telemedicine Waiting Room</h4>
+    <a href="/telemedicine/sessions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Sessions</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Patients in Waiting Room</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadWaiting()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0" id="waiting-table">
+                        <thead><tr><th>Session</th><th>Patient</th><th>Doctor</th><th>Type</th><th>Wait Time</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="waiting-empty" class="text-center text-muted py-5" style="display:none">
+                    <i class="bi bi-hourglass-split" style="font-size:3rem;display:block;margin-bottom:0.5rem"></i>
+                    <h5>Waiting Room Empty</h5>
+                    <p>No patients are currently waiting</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6>Quick Stats</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="text-muted">Waiting:</span>
+                    <strong id="stat-waiting">0</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="text-muted">Scheduled:</span>
+                    <strong id="stat-scheduled">0</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="text-muted">In Progress:</span>
+                    <strong id="stat-inprog">0</strong>
+                </div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Instructions</h6></div>
+            <div class="card-body">
+                <ul class="text-muted" style="font-size:0.875rem; padding-left: 1.2rem;">
+                    <li>Patients join the waiting room when they click "Join Session"</li>
+                    <li>Click "Start Session" to begin the video call</li>
+                    <li>Wait times are shown in real-time</li>
+                    <li>Refresh to see updates</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const TYPE = {video:'Video Call',audio:'Audio Only',chat:'Chat'};
+const ST = {scheduled:'secondary',waiting:'warning',in_progress:'primary'};
+
+document.addEventListener('DOMContentLoaded', loadWaiting);
+setInterval(loadWaiting, 30000);
+
+async function loadWaiting() {
+    const [wRes, dRes] = await Promise.all([
+        fetchWithAuth('/telemedicine/api/waiting-room'),
+        fetchWithAuth('/telemedicine/api/dashboard')
+    ]);
+    const waiting = await wRes.json();
+    const dashboard = await dRes.json();
+
+    document.getElementById('stat-waiting').textContent = dashboard.waiting || 0;
+    document.getElementById('stat-scheduled').textContent = dashboard.scheduled || 0;
+    document.getElementById('stat-inprog').textContent = dashboard.in_progress || 0;
+
+    const tbody = document.querySelector('#waiting-table tbody');
+    tbody.innerHTML = '';
+
+    if (waiting.length) {
+        document.getElementById('waiting-table').style.display = '';
+        document.getElementById('waiting-empty').style.display = 'none';
+
+        waiting.forEach(w => {
+            const waitTime = w.created_at ? getWaitTime(w.created_at) : '-';
+            tbody.innerHTML += '<tr>' +
+                '<td><span class="fw-semibold">' + esc(w.session_id || '') + '</span></td>' +
+                '<td><div>' + esc(w.p_first || '') + ' ' + esc(w.p_last || '') + '</div></td>' +
+                '<td>Dr. ' + esc(w.d_first || '') + ' ' + esc(w.d_last || '') + '</td>' +
+                '<td>' + (TYPE[w.session_type] || w.session_type) + '</td>' +
+                '<td><span class="text-warning fw-semibold">' + waitTime + '</span></td>' +
+                '<td><span class="badge bg-' + (ST[w.status] || 'secondary') + '">' + w.status + '</span></td>' +
+                '<td>' +
+                    (w.status === 'waiting' ?
+                        '<button class="btn btn-sm btn-success me-1" onclick="startSession(' + w.id + ')"><i class="bi bi-play-circle me-1"></i>Start</button>' : '') +
+                    '<a href="/telemedicine/sessions/' + w.id + '/room" class="btn btn-sm btn-primary"><i class="bi bi-camera-video"></i></a>' +
+                '</td></tr>';
+        });
+    } else {
+        document.getElementById('waiting-table').style.display = 'none';
+        document.getElementById('waiting-empty').style.display = '';
+    }
+}
+
+function getWaitTime(createdAt) {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diff = Math.floor((now - created) / 1000);
+    const mins = Math.floor(diff / 60);
+    const secs = diff % 60;
+    if (mins > 60) return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+    return mins + 'm ' + secs + 's';
+}
+
+async function startSession(id) {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + id, {
+        method: 'PUT', body: JSON.stringify({ status: 'in_progress' })
+    });
+    if (res.ok) {
+        showToast('Session started', 'success');
+        window.location.href = '/telemedicine/sessions/' + id + '/room';
+    }
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

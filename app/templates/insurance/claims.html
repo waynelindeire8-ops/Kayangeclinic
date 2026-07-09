@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-file-earmark-medical"></i> Insurance Claims</h4>
+    <div class="d-flex gap-2">
+        <a href="/insurance/claims/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Claim</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-icon yellow"><i class="bi bi-hourglass"></i></div><div class="stat-value" id="stat-pending">0</div><div class="stat-label">Pending</div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-check-circle"></i></div><div class="stat-value" id="stat-approved">0</div><div class="stat-label">Approved</div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-cash-stack"></i></div><div class="stat-value" id="stat-paid">0</div><div class="stat-label">Paid</div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-icon red"><i class="bi bi-x-circle"></i></div><div class="stat-value" id="stat-denied">0</div><div class="stat-label">Denied</div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2"><label class="form-label">Status</label>
+                <select class="form-select" id="filter-status"><option value="">All</option>
+                    <option value="draft">Draft</option><option value="submitted">Submitted</option>
+                    <option value="in_review">In Review</option><option value="approved">Approved</option>
+                    <option value="paid">Paid</option><option value="denied">Denied</option>
+                </select></div>
+            <div class="col-md-3"><label class="form-label">Patient</label><select class="form-select" id="filter-patient"><option value="">All</option></select></div>
+            <div class="col-md-2"><label class="form-label">Provider</label><select class="form-select" id="filter-provider"><option value="">All</option></select></div>
+            <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="filter-from"></div>
+            <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="filter-to"></div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" onclick="loadClaims()"><i class="bi bi-search"></i></button></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="claims-table">
+                <thead><tr><th>Claim #</th><th>Patient</th><th>Provider</th><th>Amount</th><th>Approved</th><th>Paid</th><th>Status</th><th>Date</th><th style="width:80px">Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="claims-empty" class="text-center text-muted py-5" style="display:none"><i class="bi bi-file-earmark-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No claims found</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const [pRes, provRes, statsRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/insurance/api/providers'),
+        fetchWithAuth('/insurance/api/stats')
+    ]);
+    const patients = await pRes.json();
+    const providers = await provRes.json();
+    const stats = await statsRes.json();
+    patients.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name; document.getElementById('filter-patient').appendChild(o); });
+    providers.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; document.getElementById('filter-provider').appendChild(o); });
+    document.getElementById('stat-pending').textContent = stats.pending || 0;
+    document.getElementById('stat-approved').textContent = stats.approved || 0;
+    document.getElementById('stat-paid').textContent = stats.paid || 0;
+    document.getElementById('stat-denied').textContent = stats.denied || 0;
+    loadClaims();
+});
+
+async function loadClaims() {
+    const s = document.getElementById('filter-status').value;
+    const p = document.getElementById('filter-patient').value;
+    const pr = document.getElementById('filter-provider').value;
+    const f = document.getElementById('filter-from').value;
+    const t = document.getElementById('filter-to').value;
+    let url = '/insurance/api/claims?';
+    if (s) url += 'status=' + s + '&';
+    if (p) url += 'patient_id=' + p + '&';
+    if (pr) url += 'provider_id=' + pr + '&';
+    if (f) url += 'date_from=' + f + '&';
+    if (t) url += 'date_to=' + t + '&';
+    const res = await fetchWithAuth(url);
+    const claims = await res.json();
+    const tbody = document.querySelector('#claims-table tbody');
+    const empty = document.getElementById('claims-empty');
+    tbody.innerHTML = '';
+    if (claims.length) {
+        document.getElementById('claims-table').style.display = '';
+        empty.style.display = 'none';
+        const sc = {draft:'secondary',submitted:'info',in_review:'primary',additional_info:'warning',approved:'success',partially_approved:'success',denied:'danger',appealed:'warning',paid:'success',cancelled:'secondary'};
+        claims.forEach(c => {
+            tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(c.claim_number || '') + '</span></td><td>' + esc(c.p_first || '') + ' ' + esc(c.p_last || '') + '<br><small class="text-muted">' + esc(c.p_patient_id || '') + '</small></td><td>' + esc(c.provider_name || '') + '</td><td>' + fmt(c.total_amount) + '</td><td>' + fmt(c.approved_amount) + '</td><td>' + fmt(c.paid_amount) + '</td><td><span class="badge bg-' + (sc[c.status] || 'secondary') + '">' + c.status.replace(/_/g, ' ') + '</span></td><td>' + (c.claim_date || '') + '</td><td><a href="/insurance/claims/' + c.id + '" class="btn-action view"><i class="bi bi-eye"></i></a></td></tr>';
+        });
+    } else { document.getElementById('claims-table').style.display = 'none'; empty.style.display = 'block'; }
+}
+function fmt(v) { return 'MWK ' + Number(v || 0).toLocaleString('en-MW', {minimumFractionDigits: 2}); }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

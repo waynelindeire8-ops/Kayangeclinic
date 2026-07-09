@@ -8,6 +8,7 @@
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-revenue">Revenue</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-patients">Patients</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-appointments">Appointments</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-procedures">Procedures</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-inventory">Inventory</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-audit">Audit Logs</button></li>
 </ul>
@@ -120,6 +121,69 @@
         </div>
     </div>
 
+    <div class="tab-pane fade" id="tab-procedures">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 id="proc-total">0</h3>
+                        <small class="text-muted">Total Procedures</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 id="proc-today">0</h3>
+                        <small class="text-muted">Today</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 id="proc-short-stay">0</h3>
+                        <small class="text-muted">Short Stay</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 id="proc-nebulisation">0</h3>
+                        <small class="text-muted">Nebulisations</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-3 mt-2">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header"><h6>By Type</h6></div>
+                    <div class="card-body"><canvas id="procTypeChart" height="200"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header"><h6>Monthly Trend</h6></div>
+                    <div class="card-body"><canvas id="procTrendChart" height="200"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Recent Procedures</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="procedures-table">
+                        <thead><tr><th>Date</th><th>Patient</th><th>Type</th><th>Performed By</th><th>Notes</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="proc-empty" class="text-center text-muted py-3" style="display:none">No procedures recorded</div>
+            </div>
+        </div>
+    </div>
+
     <div class="tab-pane fade" id="tab-inventory">
         <div class="row g-3">
             <div class="col-md-3">
@@ -177,6 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadRevenue();
     loadPatientStats();
     loadAppointmentStats();
+    loadProcedureStats();
     loadInventoryStats();
     loadAuditLogs(1);
 
@@ -258,6 +323,47 @@ async function loadAppointmentStats() {
         },
         options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
     });
+}
+
+async function loadProcedureStats() {
+    const res = await fetchWithAuth('/reports/api/procedures');
+    const data = await res.json();
+    document.getElementById('proc-total').textContent = data.total;
+    document.getElementById('proc-today').textContent = data.today;
+
+    const typeMap = {};
+    data.by_type.forEach(t => { typeMap[t.type] = t.c; });
+    document.getElementById('proc-short-stay').textContent = typeMap['short_stay'] || 0;
+    document.getElementById('proc-nebulisation').textContent = typeMap['nebulisation'] || 0;
+
+    const typeLabels = { 'short_stay': 'Short Stay', 'nebulisation': 'Nebulisation', 'burn_wound': 'Burn Wound', 'other': 'Other' };
+    new Chart(document.getElementById('procTypeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: data.by_type.map(t => typeLabels[t.type] || t.type),
+            datasets: [{ data: data.by_type.map(t => t.c), backgroundColor: ['#16a34a', '#f59e0b', '#dc2626', '#94a3b8'] }]
+        },
+        options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
+    });
+
+    new Chart(document.getElementById('procTrendChart'), {
+        type: 'line',
+        data: {
+            labels: data.by_month.map(m => m.month).reverse(),
+            datasets: [{ label: 'Procedures', data: data.by_month.map(m => m.c).reverse(), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', fill: true, tension: 0.3 }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    const tbody = document.querySelector('#procedures-table tbody');
+    if (data.recent && data.recent.length) {
+        document.getElementById('proc-empty').style.display = 'none';
+        data.recent.forEach(p => {
+            tbody.innerHTML += `<tr><td>${p.created_at || ''}</td><td>${p.p_first || ''} ${p.p_last || ''}</td><td>${p.procedure_type || '-'}</td><td>${p.u_first || ''} ${p.u_last || ''}</td><td>${p.notes || '-'}</td></tr>`;
+        });
+    } else {
+        document.getElementById('proc-empty').style.display = '';
+    }
 }
 
 async function loadInventoryStats() {

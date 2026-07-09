@@ -1,5 +1,6 @@
+from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
 
@@ -52,7 +53,11 @@ def api_list():
 @login_required
 def api_get(id):
     db = get_db()
-    patient = db.execute('SELECT * FROM patients WHERE id = ?', (id,)).fetchone()
+    patient = db.execute(
+        '''SELECT p.*, ip.name as scheme_name 
+           FROM patients p 
+           LEFT JOIN insurance_providers ip ON p.scheme_id = ip.id
+           WHERE p.id = ?''', (id,)).fetchone()
     if not patient:
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
@@ -85,12 +90,12 @@ def api_create():
 
     cursor = db.execute(
         '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
-           emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+           emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (patient_id, data['first_name'], data['last_name'], data['dob'], data.get('gender'),
          data['phone'], data.get('email'), data.get('address'), data.get('emergency_contact_name'),
          data.get('emergency_contact_phone'), data.get('blood_group'), data.get('scheme_provider'),
-         data.get('scheme_type'))
+         data.get('scheme_type'), data.get('scheme_id'), data.get('scheme_number'))
     )
     new_id = cursor.lastrowid
 
@@ -124,11 +129,11 @@ def api_update(id):
     db.execute(
         '''UPDATE patients SET first_name=?, last_name=?, dob=?, gender=?, phone=?, email=?, address=?,
            emergency_contact_name=?, emergency_contact_phone=?, blood_group=?, scheme_provider=?, scheme_type=?,
-           updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+           scheme_id=?, scheme_number=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
         (data['first_name'], data['last_name'], data['dob'], data.get('gender'),
          data['phone'], data.get('email'), data.get('address'), data.get('emergency_contact_name'),
          data.get('emergency_contact_phone'), data.get('blood_group'), data.get('scheme_provider'),
-         data.get('scheme_type'), id)
+         data.get('scheme_type'), data.get('scheme_id'), data.get('scheme_number'), id)
     )
 
     db.execute('DELETE FROM patient_allergies WHERE patient_id = ?', (id,))
@@ -163,8 +168,12 @@ def api_delete(id):
     if not patient:
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
-    db.execute('DELETE FROM patients WHERE id = ?', (id,))
-    db.commit()
+    try:
+        db.execute('DELETE FROM patients WHERE id = ?', (id,))
+        db.commit()
+    except IntegrityError:
+        db.close()
+        return jsonify({'error': 'Cannot delete patient with existing consultations, lab tests, billing records, or other related data. Deactivate the patient instead.'}), 409
     log_audit(current_user['id'], current_user['username'], 'delete', 'patient', id,
               f'Deleted patient {patient["first_name"]} {patient["last_name"]}', request.remote_addr)
     db.close()

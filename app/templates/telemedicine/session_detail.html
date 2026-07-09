@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-camera-video"></i> <span id="session-num"></span></h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success" id="btn-join" style="display:none" onclick="joinCall()"><i class="bi bi-camera-video me-1"></i>Join Call</button>
+        <a href="/telemedicine/sessions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="sessionTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-info">Info</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-chat">Chat</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-prescriptions">E-Prescriptions</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-payments">Payments</a></li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-info">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><h6>Session Details</h6></div>
+                    <div class="card-body" id="session-info"><div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span></div></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Status & Notes</h6>
+                        <div>
+                            <select class="form-select form-select-sm d-inline-block w-auto" id="status-select">
+                                <option value="scheduled">Scheduled</option><option value="waiting">Waiting</option>
+                                <option value="in_progress">In Progress</option><option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option></select>
+                            <button class="btn btn-sm btn-outline-secondary ms-1" onclick="changeStatus()">Update</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3"><label class="form-label">Diagnosis</label>
+                            <textarea class="form-control" id="diagnosis" rows="2" placeholder="Enter diagnosis..."></textarea></div>
+                        <div class="mb-3"><label class="form-label">Session Notes</label>
+                            <textarea class="form-control" id="notes" rows="3" placeholder="Clinical notes..."></textarea></div>
+                        <button class="btn btn-primary btn-sm" onclick="saveNotes()"><i class="bi bi-check-lg me-1"></i>Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-chat">
+        <div class="card">
+            <div class="card-header"><h6>Session Chat</h6></div>
+            <div class="card-body">
+                <div id="chat-messages" style="height:400px;overflow-y:auto" class="border rounded p-3 mb-3">
+                    <div class="text-center text-muted">No messages yet</div>
+                </div>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="chat-input" placeholder="Type a message...">
+                    <button class="btn btn-primary" onclick="sendMessage()"><i class="bi bi-send"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-prescriptions">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>E-Prescriptions</h6>
+                <button class="btn btn-sm btn-primary" onclick="showAddPrescription()"><i class="bi bi-plus-lg me-1"></i>Add</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead><tr><th>Drug</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th>Route</th><th>Date</th></tr></thead>
+                        <tbody id="prescriptions-list"></tbody>
+                    </table>
+                </div>
+                <div id="presc-empty" class="text-center text-muted py-3">No prescriptions issued</div>
+            </div>
+        </div>
+        <div class="card mt-3" id="add-presc-form" style="display:none">
+            <div class="card-header"><h6>Add Prescription</h6></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Drug Name *</label>
+                        <input type="text" class="form-control" id="presc-drug" required></div>
+                    <div class="col-md-2"><label class="form-label">Dosage</label>
+                        <input type="text" class="form-control" id="presc-dosage" placeholder="e.g. 500mg"></div>
+                    <div class="col-md-2"><label class="form-label">Frequency</label>
+                        <select class="form-select" id="presc-frequency">
+                            <option value="">Select...</option><option value="Once daily">Once daily</option>
+                            <option value="Twice daily">Twice daily</option><option value="Three times daily">Three times daily</option>
+                            <option value="Four times daily">Four times daily</option><option value="As needed">As needed</option></select></div>
+                    <div class="col-md-2"><label class="form-label">Duration</label>
+                        <input type="text" class="form-control" id="presc-duration" placeholder="e.g. 7 days"></div>
+                    <div class="col-md-2"><label class="form-label">Route</label>
+                        <select class="form-select" id="presc-route">
+                            <option value="oral">Oral</option><option value="iv">IV</option><option value="im">IM</option>
+                            <option value="topical">Topical</option><option value="inhalation">Inhalation</option></select></div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-8"><label class="form-label">Instructions</label>
+                        <input type="text" class="form-control" id="presc-instructions" placeholder="e.g. Take with food"></div>
+                    <div class="col-md-2"><label class="form-label">Qty</label>
+                        <input type="number" class="form-control" id="presc-qty" min="1"></div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="addPrescription()">Save</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-payments">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Payments</h6>
+                <button class="btn btn-sm btn-primary" onclick="showAddPayment()"><i class="bi bi-plus-lg me-1"></i>Add Payment</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead><tr><th>Amount</th><th>Method</th><th>Transaction ID</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                        <tbody id="payments-list"></tbody>
+                    </table>
+                </div>
+                <div id="pay-empty" class="text-center text-muted py-3">No payments recorded</div>
+            </div>
+        </div>
+        <div class="card mt-3" id="add-pay-form" style="display:none">
+            <div class="card-header"><h6>Add Payment</h6></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3"><label class="form-label">Amount (MWK) *</label>
+                        <input type="number" class="form-control" id="pay-amount" min="1" required></div>
+                    <div class="col-md-3"><label class="form-label">Payment Method *</label>
+                        <select class="form-select" id="pay-method">
+                            <option value="mobile_money">Mobile Money</option><option value="card">Card</option>
+                            <option value="cash">Cash</option><option value="insurance">Insurance</option>
+                            <option value="bank_transfer">Bank Transfer</option></select></div>
+                    <div class="col-md-3"><label class="form-label">Transaction ID</label>
+                        <input type="text" class="form-control" id="pay-txn" placeholder="Optional"></div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="addPayment()">Record Payment</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const sessionId = {{ session_id }};
+let sessionData = null;
+
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId);
+    sessionData = await res.json();
+    if (sessionData.error) { document.getElementById('session-info').innerHTML = '<div class="alert alert-danger">' + sessionData.error + '</div>'; return; }
+
+    document.getElementById('session-num').textContent = sessionData.session_id;
+    document.getElementById('status-select').value = sessionData.status;
+    document.getElementById('diagnosis').value = sessionData.diagnosis || '';
+    document.getElementById('notes').value = sessionData.notes || '';
+
+    if (['scheduled', 'waiting', 'in_progress'].includes(sessionData.status)) {
+        document.getElementById('btn-join').style.display = '';
+    }
+
+    const TYPE = {video:'Video Call',audio:'Audio Only',chat:'Chat'};
+    const ST = {scheduled:'secondary',waiting:'warning',in_progress:'primary',completed:'success',cancelled:'danger'};
+    document.getElementById('session-info').innerHTML =
+        '<table class="table-details">' +
+        '<tr><td>Session #</td><td><strong>' + esc(sessionData.session_id) + '</strong></td></tr>' +
+        '<tr><td>Patient</td><td><strong><a href="/patients/' + sessionData.patient_id + '">' + esc(sessionData.p_first) + ' ' + esc(sessionData.p_last) + '</a></strong><br><small>' + esc(sessionData.p_patient_id || '') + '</small></td></tr>' +
+        '<tr><td>Doctor</td><td>Dr. ' + esc(sessionData.d_first) + ' ' + esc(sessionData.d_last) + '</td></tr>' +
+        '<tr><td>Type</td><td>' + (TYPE[sessionData.session_type] || sessionData.session_type) + '</td></tr>' +
+        '<tr><td>Status</td><td><span class="badge bg-' + (ST[sessionData.status] || 'secondary') + '">' + sessionData.status.replace('_', ' ') + '</span></td></tr>' +
+        '<tr><td>Reason</td><td>' + esc(sessionData.reason || '-') + '</td></tr>' +
+        (sessionData.started_at ? '<tr><td>Started</td><td>' + sessionData.started_at + '</td></tr>' : '') +
+        (sessionData.ended_at ? '<tr><td>Ended</td><td>' + sessionData.ended_at + '</td></tr>' : '') +
+        (sessionData.duration_minutes ? '<tr><td>Duration</td><td>' + sessionData.duration_minutes + ' minutes</td></tr>' : '') +
+        '</table>';
+
+    loadMessages();
+    loadPrescriptions();
+    loadPayments();
+}
+
+async function changeStatus() {
+    const status = document.getElementById('status-select').value;
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/status', {
+        method: 'PUT', body: JSON.stringify({ status })
+    });
+    if (res.ok) { loadData(); showToast('Status updated', 'success'); }
+}
+
+async function saveNotes() {
+    const body = {
+        diagnosis: document.getElementById('diagnosis').value.trim(),
+        notes: document.getElementById('notes').value.trim()
+    };
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId, {
+        method: 'PUT', body: JSON.stringify(body)
+    });
+    if (res.ok) { showToast('Notes saved', 'success'); }
+}
+
+function joinCall() { window.location.href = '/telemedicine/sessions/' + sessionId + '/room'; }
+
+// ─── Chat ───
+async function loadMessages() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/messages');
+    const messages = await res.json();
+    const container = document.getElementById('chat-messages');
+    if (messages.length) {
+        container.innerHTML = '';
+        messages.forEach(m => {
+            container.innerHTML += '<div class="mb-2"><strong>' + esc(m.sender_first) + ' ' + esc(m.sender_last) + ':</strong> ' + esc(m.message) + '<br><small class="text-muted">' + m.created_at + '</small></div>';
+        });
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/messages', {
+        method: 'POST', body: JSON.stringify({ message: msg })
+    });
+    input.value = '';
+    loadMessages();
+}
+
+document.getElementById('chat-input').addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
+
+// ─── Prescriptions ───
+async function loadPrescriptions() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/prescriptions');
+    const list = await res.json();
+    const tbody = document.getElementById('prescriptions-list');
+    tbody.innerHTML = '';
+    if (list.length) {
+        document.getElementById('presc-empty').style.display = 'none';
+        list.forEach(p => {
+            tbody.innerHTML += '<tr><td>' + esc(p.drug_name) + '</td><td>' + esc(p.dosage || '-') + '</td><td>' + esc(p.frequency || '-') + '</td><td>' + esc(p.duration || '-') + '</td><td>' + esc(p.route || '-') + '</td><td>' + (p.prescribed_date || '') + '</td></tr>';
+        });
+    } else { document.getElementById('presc-empty').style.display = ''; }
+}
+
+function showAddPrescription() { document.getElementById('add-presc-form').style.display = document.getElementById('add-presc-form').style.display === 'none' ? '' : 'none'; }
+
+async function addPrescription() {
+    const body = {
+        patient_id: sessionData.patient_id,
+        drug_name: document.getElementById('presc-drug').value.trim(),
+        dosage: document.getElementById('presc-dosage').value.trim(),
+        frequency: document.getElementById('presc-frequency').value,
+        duration: document.getElementById('presc-duration').value.trim(),
+        route: document.getElementById('presc-route').value,
+        instructions: document.getElementById('presc-instructions').value.trim(),
+        quantity: parseInt(document.getElementById('presc-qty').value) || null
+    };
+    if (!body.drug_name) { showToast('Drug name required', 'danger'); return; }
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/prescriptions', {
+        method: 'POST', body: JSON.stringify(body)
+    });
+    if (res.ok) { loadPrescriptions(); document.getElementById('add-presc-form').style.display = 'none'; showToast('Prescription added', 'success'); }
+}
+
+// ─── Payments ───
+async function loadPayments() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/payments');
+    const list = await res.json();
+    const tbody = document.getElementById('payments-list');
+    tbody.innerHTML = '';
+    if (list.length) {
+        document.getElementById('pay-empty').style.display = 'none';
+        const SC = {completed:'success',pending:'warning',failed:'danger',refunded:'info'};
+        list.forEach(p => {
+            tbody.innerHTML += '<tr><td>MWK ' + (p.amount || 0).toLocaleString() + '</td><td>' + esc(p.payment_method || '') + '</td><td>' + esc(p.transaction_id || '-') + '</td><td><span class="badge bg-' + (SC[p.status] || 'secondary') + '">' + p.status + '</span></td><td>' + (p.paid_at || '') + '</td><td>' + (p.status === 'completed' ? '<button class="btn btn-sm btn-outline-danger" onclick="refundPayment(' + p.id + ')">Refund</button>' : '') + '</td></tr>';
+        });
+    } else { document.getElementById('pay-empty').style.display = ''; }
+}
+
+function showAddPayment() { document.getElementById('add-pay-form').style.display = document.getElementById('add-pay-form').style.display === 'none' ? '' : 'none'; }
+
+async function addPayment() {
+    const body = {
+        amount: parseFloat(document.getElementById('pay-amount').value),
+        payment_method: document.getElementById('pay-method').value,
+        transaction_id: document.getElementById('pay-txn').value.trim()
+    };
+    if (!body.amount) { showToast('Amount required', 'danger'); return; }
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/payments', {
+        method: 'POST', body: JSON.stringify(body)
+    });
+    if (res.ok) { loadPayments(); document.getElementById('add-pay-form').style.display = 'none'; showToast('Payment recorded', 'success'); }
+}
+
+async function refundPayment(id) {
+    if (!confirm('Refund this payment?')) return;
+    const res = await fetchWithAuth('/telemedicine/api/payments/' + id + '/refund', { method: 'POST' });
+    if (res.ok) { loadPayments(); showToast('Payment refunded', 'success'); }
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+
+<style>.table-details td { padding: 0.375rem 0.5rem; vertical-align: top; }
+.table-details tr td:first-child { font-weight: 500; color: #64748b; width: 1%; white-space: nowrap; padding-right: 1rem; }</style>
+{% endblock %}

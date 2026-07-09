@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
 
@@ -16,6 +16,12 @@ def list_page():
 @login_required
 def new_page():
     return render_template('consultations/form.html')
+
+
+@consultations_bp.route('/<int:id>/edit', strict_slashes=False)
+@login_required
+def edit_page(id):
+    return render_template('consultations/form.html', consultation_id=id)
 
 
 @consultations_bp.route('/api', methods=['GET'])
@@ -69,15 +75,29 @@ def api_get(id):
     db = get_db()
     c = db.execute(
         '''SELECT c.*, p.first_name as p_first, p.last_name as p_last,
+                  p.dob, p.gender, p.blood_group,
                   u.first_name as d_first, u.last_name as d_last
            FROM consultations c
            LEFT JOIN patients p ON c.patient_id = p.id
            LEFT JOIN users u ON c.doctor_id = u.id
            WHERE c.id = ?''', (id,)).fetchone()
+    vitals = db.execute(
+        'SELECT * FROM vital_signs WHERE consultation_id = ? ORDER BY recorded_at DESC', (id,)).fetchall()
+    examinations = db.execute(
+        'SELECT * FROM medical_examinations WHERE consultation_id = ?', (id,)).fetchall()
+    diagnoses = db.execute(
+        'SELECT * FROM diagnoses WHERE consultation_id = ?', (id,)).fetchall()
+    prescriptions = db.execute(
+        'SELECT * FROM prescriptions WHERE consultation_id = ? ORDER BY created_at DESC', (id,)).fetchall()
     db.close()
     if not c:
         return jsonify({'error': 'Consultation not found'}), 404
-    return jsonify(dict(c))
+    result = dict(c)
+    result['vitals'] = [dict(v) for v in vitals]
+    result['examinations'] = [dict(e) for e in examinations]
+    result['diagnoses'] = [dict(d) for d in diagnoses]
+    result['prescriptions'] = [dict(p) for p in prescriptions]
+    return jsonify(result)
 
 
 @consultations_bp.route('/api/<int:id>', methods=['PUT'])
@@ -108,6 +128,246 @@ def api_delete(id):
               'Deleted consultation', request.remote_addr)
     db.close()
     return jsonify({'message': 'Deleted'})
+
+
+# ─── Vital Signs ───
+
+@consultations_bp.route('/api/<int:id>/vitals', methods=['GET'])
+@login_required
+def api_vitals_list(id):
+    db = get_db()
+    vitals = db.execute(
+        'SELECT * FROM vital_signs WHERE consultation_id = ? ORDER BY recorded_at DESC', (id,)).fetchall()
+    db.close()
+    return jsonify([dict(v) for v in vitals])
+
+
+@consultations_bp.route('/api/<int:id>/vitals', methods=['POST'])
+@login_required
+def api_vitals_create(id):
+    current_user = get_jwt()
+    data = request.json
+    db = get_db()
+    bp_s = data.get('bp_systolic')
+    bp_d = data.get('bp_diastolic')
+    weight = data.get('weight')
+    height = data.get('height')
+    bmi = None
+    if weight and height and float(height) > 0:
+        bmi = round(float(weight) / ((float(height) / 100) ** 2), 1)
+    cursor = db.execute(
+        '''INSERT INTO vital_signs (consultation_id, patient_id, bp_systolic, bp_diastolic, heart_rate,
+           temperature, respiratory_rate, oxygen_saturation, weight, height, bmi, notes, recorded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (id, data['patient_id'], bp_s, bp_d, data.get('heart_rate'),
+         data.get('temperature'), data.get('respiratory_rate'), data.get('oxygen_saturation'),
+         weight, height, bmi, data.get('notes'), current_user['id'])
+    )
+    db.commit()
+    db.close()
+    return jsonify({'id': cursor.lastrowid}), 201
+
+
+@consultations_bp.route('/api/<int:id>/vitals/<int:vid>', methods=['PUT'])
+@login_required
+def api_vitals_update(id, vid):
+    data = request.json
+    db = get_db()
+    weight = data.get('weight')
+    height = data.get('height')
+    bmi = None
+    if weight and height and float(height) > 0:
+        bmi = round(float(weight) / ((float(height) / 100) ** 2), 1)
+    db.execute(
+        '''UPDATE vital_signs SET bp_systolic=?, bp_diastolic=?, heart_rate=?, temperature=?,
+           respiratory_rate=?, oxygen_saturation=?, weight=?, height=?, bmi=?, notes=?
+           WHERE id=? AND consultation_id=?''',
+        (data.get('bp_systolic'), data.get('bp_diastolic'), data.get('heart_rate'),
+         data.get('temperature'), data.get('respiratory_rate'), data.get('oxygen_saturation'),
+         weight, height, bmi, data.get('notes'), vid, id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Vitals updated'})
+
+
+# ─── Medical Examinations ───
+
+@consultations_bp.route('/api/<int:id>/examinations', methods=['GET'])
+@login_required
+def api_exam_list(id):
+    db = get_db()
+    exams = db.execute(
+        'SELECT * FROM medical_examinations WHERE consultation_id = ?', (id,)).fetchall()
+    db.close()
+    return jsonify([dict(e) for e in exams])
+
+
+@consultations_bp.route('/api/<int:id>/examinations', methods=['POST'])
+@login_required
+def api_exam_create(id):
+    data = request.json
+    db = get_db()
+    cursor = db.execute(
+        '''INSERT INTO medical_examinations (consultation_id, system_name, findings, notes)
+           VALUES (?, ?, ?, ?)''',
+        (id, data['system_name'], data.get('findings'), data.get('notes'))
+    )
+    db.commit()
+    db.close()
+    return jsonify({'id': cursor.lastrowid}), 201
+
+
+@consultations_bp.route('/api/<int:id>/examinations/<int:eid>', methods=['PUT'])
+@login_required
+def api_exam_update(id, eid):
+    data = request.json
+    db = get_db()
+    db.execute(
+        'UPDATE medical_examinations SET system_name=?, findings=?, notes=? WHERE id=? AND consultation_id=?',
+        (data.get('system_name'), data.get('findings'), data.get('notes'), eid, id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Examination updated'})
+
+
+@consultations_bp.route('/api/<int:id>/examinations/<int:eid>', methods=['DELETE'])
+@login_required
+def api_exam_delete(id, eid):
+    db = get_db()
+    db.execute('DELETE FROM medical_examinations WHERE id=? AND consultation_id=?', (eid, id))
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Examination deleted'})
+
+
+# ─── Diagnoses ───
+
+@consultations_bp.route('/api/<int:id>/diagnoses', methods=['GET'])
+@login_required
+def api_diagnosis_list(id):
+    db = get_db()
+    diags = db.execute(
+        'SELECT * FROM diagnoses WHERE consultation_id = ?', (id,)).fetchall()
+    db.close()
+    return jsonify([dict(d) for d in diags])
+
+
+@consultations_bp.route('/api/<int:id>/diagnoses', methods=['POST'])
+@login_required
+def api_diagnosis_create(id):
+    data = request.json
+    db = get_db()
+    cursor = db.execute(
+        '''INSERT INTO diagnoses (consultation_id, diagnosis_name, diagnosis_type, icd_code, notes)
+           VALUES (?, ?, ?, ?, ?)''',
+        (id, data['diagnosis_name'], data.get('diagnosis_type', 'primary'),
+         data.get('icd_code'), data.get('notes'))
+    )
+    db.commit()
+    db.close()
+    return jsonify({'id': cursor.lastrowid}), 201
+
+
+@consultations_bp.route('/api/<int:id>/diagnoses/<int:did>', methods=['PUT'])
+@login_required
+def api_diagnosis_update(id, did):
+    data = request.json
+    db = get_db()
+    db.execute(
+        '''UPDATE diagnoses SET diagnosis_name=?, diagnosis_type=?, icd_code=?, notes=?
+           WHERE id=? AND consultation_id=?''',
+        (data.get('diagnosis_name'), data.get('diagnosis_type'),
+         data.get('icd_code'), data.get('notes'), did, id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Diagnosis updated'})
+
+
+@consultations_bp.route('/api/<int:id>/diagnoses/<int:did>', methods=['DELETE'])
+@login_required
+def api_diagnosis_delete(id, did):
+    db = get_db()
+    db.execute('DELETE FROM diagnoses WHERE id=? AND consultation_id=?', (did, id))
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Diagnosis deleted'})
+
+
+# ─── Prescriptions ───
+
+@consultations_bp.route('/api/<int:id>/prescriptions', methods=['GET'])
+@login_required
+def api_rx_list(id):
+    db = get_db()
+    rxs = db.execute(
+        '''SELECT p.*, i.drug_name as inventory_drug, i.unit_price
+           FROM prescriptions p
+           LEFT JOIN pharmacy_inventory i ON p.inventory_id = i.id
+           WHERE p.consultation_id = ?
+           ORDER BY p.created_at DESC''', (id,)).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rxs])
+
+
+@consultations_bp.route('/api/<int:id>/prescriptions', methods=['POST'])
+@login_required
+def api_rx_create(id):
+    current_user = get_jwt()
+    data = request.json
+    db = get_db()
+    drug_name = data.get('drug_name')
+    if data.get('inventory_id'):
+        inv = db.execute('SELECT drug_name FROM pharmacy_inventory WHERE id=?',
+                         (data['inventory_id'],)).fetchone()
+        if inv:
+            drug_name = inv['drug_name']
+    cursor = db.execute(
+        '''INSERT INTO prescriptions (consultation_id, patient_id, inventory_id, drug_name, dosage,
+           frequency, duration, route, instructions, quantity, status, prescribed_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)''',
+        (id, data['patient_id'], data.get('inventory_id'), drug_name,
+         data.get('dosage'), data.get('frequency'), data.get('duration'),
+         data.get('route'), data.get('instructions'), data.get('quantity'), current_user['id'])
+    )
+    db.commit()
+    db.close()
+    return jsonify({'id': cursor.lastrowid}), 201
+
+
+@consultations_bp.route('/api/<int:id>/prescriptions/<int:rid>', methods=['PUT'])
+@login_required
+def api_rx_update(id, rid):
+    data = request.json
+    db = get_db()
+    drug_name = data.get('drug_name')
+    if data.get('inventory_id'):
+        inv = db.execute('SELECT drug_name FROM pharmacy_inventory WHERE id=?',
+                         (data['inventory_id'],)).fetchone()
+        if inv:
+            drug_name = inv['drug_name']
+    db.execute(
+        '''UPDATE prescriptions SET inventory_id=?, drug_name=?, dosage=?, frequency=?, duration=?,
+           route=?, instructions=?, quantity=?, status=? WHERE id=? AND consultation_id=?''',
+        (data.get('inventory_id'), drug_name, data.get('dosage'), data.get('frequency'),
+         data.get('duration'), data.get('route'), data.get('instructions'),
+         data.get('quantity'), data.get('status', 'active'), rid, id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Prescription updated'})
+
+
+@consultations_bp.route('/api/<int:id>/prescriptions/<int:rid>', methods=['DELETE'])
+@login_required
+def api_rx_delete(id, rid):
+    db = get_db()
+    db.execute('DELETE FROM prescriptions WHERE id=? AND consultation_id=?', (rid, id))
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Prescription deleted'})
 
 
 @consultations_bp.route('/api/ancillaries', methods=['GET', 'POST'])

@@ -39,6 +39,12 @@
                 <li class="nav-item" data-roles="admin,doctor,front_desk">
                     <a class="nav-link" href="/reports"><i class="bi bi-bar-chart-line"></i>Reports</a>
                 </li>
+                <li class="nav-item" data-roles="all">
+                    <a class="nav-link" href="/messages">
+                        <i class="bi bi-envelope"></i>Messages
+                        <span class="badge bg-danger ms-auto" id="msg-unread-badge" style="display:none;font-size:0.6rem">0</span>
+                    </a>
+                </li>
             </ul>
 
             <div class="sidebar-section">Clinical</div>
@@ -52,6 +58,31 @@
                 <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
                     <a class="nav-link" href="/pharmacy"><i class="bi bi-capsule"></i>Pharmacy</a>
                 </li>
+                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                    <a class="nav-link" href="/lab"><i class="bi bi-flask"></i>Lab</a>
+                </li>
+                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                    <a class="nav-link" href="/radiology"><i class="bi bi-camera-reels"></i>Radiology</a>
+                </li>
+                <li class="nav-item" data-roles="doctor,locum_doctor,admin">
+                    <a class="nav-link" href="/prescriptions"><i class="bi bi-prescription2"></i>Prescriptions</a>
+                </li>
+                <li class="nav-item" data-roles="admin,doctor,locum_doctor,front_desk">
+                    <a class="nav-link" href="/telemedicine"><i class="bi bi-camera-video"></i>Telemedicine</a>
+                </li>
+            </ul>
+
+            <div class="sidebar-section">Insurance</div>
+            <ul class="sidebar-nav">
+                <li class="nav-item" data-roles="admin,front_desk">
+                    <a class="nav-link" href="/insurance/claims"><i class="bi bi-file-earmark-medical"></i>Claims</a>
+                </li>
+                <li class="nav-item" data-roles="admin,front_desk">
+                    <a class="nav-link" href="/insurance/eligibility"><i class="bi bi-shield-check"></i>Eligibility</a>
+                </li>
+                <li class="nav-item" data-roles="admin">
+                    <a class="nav-link" href="/insurance/providers"><i class="bi bi-building"></i>Providers</a>
+                </li>
             </ul>
 
             <div class="sidebar-section">Administration</div>
@@ -63,7 +94,17 @@
                     <a class="nav-link" href="/departments"><i class="bi bi-building"></i>Departments</a>
                 </li>
                 <li class="nav-item" data-roles="admin">
-                    <a class="nav-link" href="/staff"><i class="bi bi-gear"></i>Settings</a>
+                    <a class="nav-link" href="/staff"><i class="bi bi-gear"></i>Staff</a>
+                </li>
+            </ul>
+
+            <div class="sidebar-section">Account</div>
+            <ul class="sidebar-nav">
+                <li class="nav-item" data-roles="all">
+                    <a class="nav-link" href="/settings/profile"><i class="bi bi-person"></i>Profile</a>
+                </li>
+                <li class="nav-item" data-roles="admin">
+                    <a class="nav-link" href="/settings/system"><i class="bi bi-sliders"></i>System Settings</a>
                 </li>
                 <li class="nav-item" data-roles="all">
                     <a class="nav-link logout-link" href="#" onclick="logout()"><i class="bi bi-box-arrow-left"></i>Logout</a>
@@ -96,10 +137,23 @@
                     <input type="text" placeholder="Search patients..." id="global-search">
                 </div>
                 <div class="topbar-actions">
-                    <button class="btn-icon" title="Notifications">
-                        <i class="bi bi-bell"></i>
-                        <span class="badge-dot"></span>
-                    </button>
+                    <div class="dropdown" id="notif-dropdown">
+                        <button class="btn-icon" title="Notifications" data-bs-toggle="dropdown" aria-expanded="false" onclick="loadNotifications()">
+                            <i class="bi bi-bell"></i>
+                            <span class="badge bg-danger text-white rounded-pill" id="notif-badge" style="position:absolute;top:-2px;right:-2px;font-size:0.6rem;min-width:16px;height:16px;display:none"></span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end notif-panel" style="width:380px;max-height:480px;overflow-y:auto">
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                <h6 class="mb-0">Notifications</h6>
+                                <button class="btn btn-sm btn-link text-decoration-none p-0" onclick="markAllRead()">Mark all read</button>
+                            </div>
+                            <div id="notif-list" class="notif-list"></div>
+                            <div id="notif-empty" class="text-center text-muted py-4" style="display:none">
+                                <i class="bi bi-bell-slash" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                                No notifications
+                            </div>
+                        </div>
+                    </div>
                     <div class="topbar-user-btn" id="topbar-user-btn">
                         <div class="avatar" id="topbar-avatar">SA</div>
                         <span class="user-name-small d-none d-md-inline" id="topbar-user-name">Admin</span>
@@ -160,8 +214,16 @@
                 '/pharmacy': 'Pharmacy',
                 '/doctors': 'Doctors',
                 '/departments': 'Departments',
-                '/staff': 'Settings',
-                '/reports': 'Reports'
+                '/staff': 'Staff',
+                '/reports': 'Reports',
+                '/messages': 'Messages',
+                '/lab': 'Lab',
+                '/prescriptions': 'Prescriptions',
+                '/settings/profile': 'My Profile',
+                '/settings/system': 'System Settings',
+                '/insurance/claims': 'Insurance Claims',
+                '/insurance/eligibility': 'Eligibility Verification',
+                '/insurance/providers': 'Insurance Providers'
             };
             for (const [key, val] of Object.entries(titles)) {
                 if (path.startsWith(key)) { document.getElementById('page-title').textContent = val; break; }
@@ -201,6 +263,132 @@
                 window.location.href = '/patients?search=' + encodeURIComponent(this.value.trim());
             }
         });
+
+        // Notification system
+        async function loadNotifications() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const res = await fetch('/notifications/api?limit=15', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const notifs = await res.json();
+                const list = document.getElementById('notif-list');
+                const empty = document.getElementById('notif-empty');
+                list.innerHTML = '';
+                if (!notifs.length) {
+                    list.style.display = 'none';
+                    empty.style.display = 'block';
+                    return;
+                }
+                list.style.display = 'block';
+                empty.style.display = 'none';
+                const typeIcons = {
+                    info: 'bi-info-circle text-primary',
+                    success: 'bi-check-circle text-success',
+                    warning: 'bi-exclamation-triangle text-warning',
+                    danger: 'bi-exclamation-circle text-danger',
+                    message: 'bi-envelope text-info',
+                    lab: 'bi-flask text-primary',
+                    appointment: 'bi-calendar-check text-success',
+                    prescription: 'bi-prescription2 text-primary',
+                    insurance: 'bi-shield-check text-success'
+                };
+                notifs.forEach(n => {
+                    const icon = typeIcons[n.type] || typeIcons.info;
+                    const time = notifTime(n.created_at);
+                    list.innerHTML += '<div class="notif-item ' + (n.is_read ? '' : 'unread') + '" onclick="handleNotifClick(this, ' + n.id + ', \'' + (n.reference_url || '') + '\')">' +
+                        '<div class="d-flex gap-2">' +
+                        '<div class="notif-icon"><i class="bi ' + icon + '"></i></div>' +
+                        '<div class="flex-grow-1">' +
+                        '<div class="notif-title">' + notifEsc(n.title) + '</div>' +
+                        '<div class="notif-msg">' + notifEsc(n.message || '') + '</div>' +
+                        '<div class="notif-time">' + time + '</div>' +
+                        '</div>' +
+                        '<button class="notif-dismiss" onclick="event.stopPropagation(); dismissNotif(' + n.id + ', this)" title="Dismiss"><i class="bi bi-x"></i></button>' +
+                        '</div>' +
+                        '</div>';
+                });
+            } catch(e) {}
+        }
+
+        async function checkUnread() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const res = await fetch('/notifications/api/unread-count', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                const badge = document.getElementById('notif-badge');
+                if (data.count > 0) {
+                    badge.textContent = data.count > 99 ? '99+' : data.count;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        async function handleNotifClick(el, id, url) {
+            if (!el.classList.contains('unread')) {
+                if (url) window.location.href = url;
+                return;
+            }
+            const token = localStorage.getItem('token');
+            await fetch('/notifications/api/' + id + '/read', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            el.classList.remove('unread');
+            checkUnread();
+            if (url) window.location.href = url;
+        }
+
+        async function dismissNotif(id, btn) {
+            const token = localStorage.getItem('token');
+            await fetch('/notifications/api/' + id, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            btn.closest('.notif-item').remove();
+            checkUnread();
+            const list = document.getElementById('notif-list');
+            if (!list.children.length) { list.style.display = 'none'; document.getElementById('notif-empty').style.display = 'block'; }
+        }
+
+        async function markAllRead() {
+            const token = localStorage.getItem('token');
+            await fetch('/notifications/api/read-all', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+            checkUnread();
+        }
+
+        function notifTime(ts) {
+            if (!ts) return '';
+            const diff = Date.now() - new Date(ts).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return 'Just now';
+            if (mins < 60) return mins + 'm ago';
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return hrs + 'h ago';
+            const days = Math.floor(hrs / 24);
+            return days + 'd ago';
+        }
+
+        function notifEsc(s) {
+            if (!s) return '';
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        // Poll for unread notifications every 60 seconds
+        checkUnread();
+        setInterval(checkUnread, 60000);
     </script>
 </body>
 </html>
