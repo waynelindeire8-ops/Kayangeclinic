@@ -11,7 +11,8 @@
             <div class="col-md-2"><label class="form-label">Status</label>
                 <select class="form-select" id="filter-status"><option value="">All</option>
                     <option value="ordered">Ordered</option><option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+                    <option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+                    <option value="referred">Referred Out</option></select></div>
             <div class="col-md-2"><label class="form-label">Modality</label>
                 <select class="form-select" id="filter-modality"><option value="">All</option>
                     <option value="xray">X-Ray</option><option value="ultrasound">Ultrasound</option>
@@ -66,7 +67,7 @@ async function loadOrders() {
     if (orders.length) {
         document.getElementById('orders-table').style.display = '';
         empty.style.display = 'none';
-        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger',referred:'info'};
         const pc = {routine:'secondary',urgent:'warning',stat:'danger'};
         orders.forEach(o => {
             tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(o.order_number || '') + '</span></td>' +

@@ -34,7 +34,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6>Results</h6>
                 <div class="d-flex gap-2">
-                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'admin', 'doctor') %}
+                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'lab_supervisor', 'lab_tech', 'lab_care', 'admin', 'doctor') %}
                     <button class="btn btn-sm btn-primary" onclick="addResultRow()"><i class="bi bi-plus-lg me-1"></i>Add Row</button>
                     {% endif %}
                 </div>
@@ -58,7 +58,7 @@
                         <i class="bi bi-journal-x" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
                         No results yet
                     </div>
-                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'admin', 'doctor') %}
+                    {% if order.status != 'completed' and current_user.role in ('lab_staff', 'lab_supervisor', 'lab_tech', 'lab_care', 'admin', 'doctor') %}
                     <button type="submit" class="btn btn-primary px-4" id="btn-save-results"><i class="bi bi-save me-1"></i>Save Results</button>
                     <button type="button" class="btn btn-success px-4 ms-2" id="btn-complete" onclick="completeOrder()"><i class="bi bi-check-lg me-1"></i>Complete &amp; Save</button>
                     {% endif %}

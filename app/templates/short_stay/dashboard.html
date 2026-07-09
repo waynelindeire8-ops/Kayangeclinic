@@ -20,11 +20,14 @@
             </div>
         </div>
         <div class="card mt-3">
-            <div class="card-header"><h6>Currently Occupied</h6></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Occupied Patients</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadOccupancy()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table mb-0" id="occupied-table">
-                        <thead><tr><th>Patient</th><th>Resource</th><th>Diagnosis</th><th>Admitted</th><th>Duration</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Patient</th><th>Resource</th><th>Diagnosis</th><th>Admitted</th><th>Duration</th><th>ECG</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -90,8 +93,24 @@
     </div>
 </div></div></div>
 
+<!-- ECG Modal -->
+<div class="modal fade" id="ecgModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5><i class="bi bi-activity me-1"></i>Record ECG</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <p class="text-muted" id="ecg-patient-label">Recording ECG for patient</p>
+        <div class="mb-3"><label class="form-label">Notes / Findings</label>
+            <textarea class="form-control" id="ecg-notes" rows="4" placeholder="Heart rate, rhythm, abnormalities..."></textarea></div>
+        <button class="btn btn-primary" onclick="recordECG()"><i class="bi bi-activity me-1"></i>Record ECG</button>
+        <hr>
+        <h6>Previous ECG Records</h6>
+        <div id="ecg-history"><p class="text-muted">No previous ECGs recorded</p></div>
+    </div>
+</div></div></div>
+
 <script>
 let dischargeId = null;
+let ecgAdmissionId = null;
+let ecgPatientId = null;
 
 document.addEventListener('DOMContentLoaded', async function() {
     const pRes = await fetchWithAuth('/patients/api');
@@ -178,6 +197,7 @@ async function loadOccupancy() {
             tbody.innerHTML += '<tr><td><a href="/patients/' + o.patient_id + '" class="fw-semibold text-decoration-none" style="color:#0f172a">' + (o.p_first || '') + ' ' + (o.p_last || '') + '</a><br><small class="text-muted">' + (o.p_patient_id || '') + '</small></td>' +
                 '<td>' + resource + '</td><td>' + (o.diagnosis || '-') + '</td>' +
                 '<td>' + (o.admitted_at || '') + '</td><td><span class="badge bg-warning">' + duration + '</span></td>' +
+                '<td><button class="btn btn-sm btn-outline-info" onclick="showRecordECG(' + o.id + ', ' + o.patient_id + ')"><i class="bi bi-activity"></i></button></td>' +
                 '<td><button class="btn btn-sm btn-outline-danger" onclick="showDischarge(' + o.id + ')">Discharge</button></td></tr>';
         });
     } else { document.getElementById('occupied-table').style.display = 'none'; document.getElementById('occupied-empty').style.display = ''; }
@@ -264,6 +284,43 @@ async function dischargePatient() {
         bootstrap.Modal.getInstance(document.getElementById('dischargeModal')).hide();
         loadOccupancy();
         showToast('Patient discharged', 'success');
+    }
+}
+
+async function showRecordECG(admissionId, patientId) {
+    ecgAdmissionId = admissionId;
+    ecgPatientId = patientId;
+    document.getElementById('ecg-notes').value = '';
+    document.getElementById('ecg-patient-label').textContent = 'Recording ECG for admission #' + admissionId;
+    const res = await fetchWithAuth('/short-stay/api/ecg/' + admissionId);
+    const ecgs = await res.json();
+    const container = document.getElementById('ecg-history');
+    if (ecgs.length) {
+        container.innerHTML = ecgs.map(e =>
+            '<div class="d-flex justify-content-between align-items-start border-bottom py-2" style="font-size:0.85rem">' +
+            '<div><div class="fw-semibold">' + (e.u_first || '') + ' ' + (e.u_last || '') + '</div>' +
+            '<small class="text-muted">' + (e.notes || '-') + '</small></div>' +
+            '<small class="text-muted">' + (e.created_at || '') + '</small></div>'
+        ).join('');
+    } else {
+        container.innerHTML = '<p class="text-muted">No previous ECGs recorded</p>';
+    }
+    new bootstrap.Modal(document.getElementById('ecgModal')).show();
+}
+
+async function recordECG() {
+    const notes = document.getElementById('ecg-notes').value.trim();
+    const res = await fetchWithAuth('/short-stay/api/ecg', {
+        method: 'POST',
+        body: JSON.stringify({ admission_id: ecgAdmissionId, patient_id: ecgPatientId, notes: notes })
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('ecgModal')).hide();
+        loadOccupancy();
+        showToast('ECG recorded', 'success');
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed', 'danger');
     }
 }
 </script>

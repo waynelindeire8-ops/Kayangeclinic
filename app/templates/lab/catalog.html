@@ -15,6 +15,7 @@
                     <tr>
                         <th>Test Name</th>
                         <th>Category</th>
+                        <th>Classification</th>
                         <th>Parameters</th>
                         <th>Status</th>
                         <th style="width:90px">Action</th>
@@ -48,6 +49,15 @@
                             <option value="ultrasound">Ultrasound</option>
                             <option value="cardiac">Cardiac</option>
                             <option value="microbiology">Microbiology</option>
+                            <option value="radiology">Radiology</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Classification</label>
+                        <select class="form-select" id="classification">
+                            <option value="standard">Standard</option>
+                            <option value="rapid">Rapid</option>
+                            <option value="reusable">Reusable</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -98,11 +108,13 @@ async function loadCatalog() {
     if (items.length) {
         document.getElementById('catalog-table').style.display = '';
         empty.style.display = 'none';
+        const clsColors = {rapid:'warning',reusable:'info',standard:'secondary'};
         items.forEach(c => {
             const params = c.parameters ? JSON.parse(c.parameters) : [];
             tbody.innerHTML += '<tr>' +
                 '<td><strong>' + escHtml(c.test_name) + '</strong></td>' +
                 '<td><span class="badge bg-secondary">' + escHtml(c.category) + '</span></td>' +
+                '<td><span class="badge bg-' + (clsColors[c.classification] || 'secondary') + '">' + escHtml(c.classification || 'standard') + '</span></td>' +
                 '<td><small class="text-muted">' + params.map(p => escHtml(p.parameter_name)).join(', ') + '</small></td>' +
                 '<td><span class="badge bg-' + (c.is_active ? 'success' : 'secondary') + '">' + (c.is_active ? 'Active' : 'Inactive') + '</span></td>' +
                 '<td><button class="btn-action edit" onclick="editCatalog(' + c.id + ')"><i class="bi bi-pencil"></i></button></td></tr>';
@@ -135,6 +147,7 @@ async function editCatalog(id) {
     document.getElementById('edit-id').value = c.id;
     document.getElementById('test_name').value = c.test_name;
     document.getElementById('category').value = c.category;
+    document.getElementById('classification').value = c.classification || 'standard';
     document.getElementById('description').value = c.description || '';
     document.getElementById('is_active').checked = c.is_active;
 
@@ -163,6 +176,7 @@ document.getElementById('catalog-form').addEventListener('submit', async functio
     const body = {
         test_name: document.getElementById('test_name').value.trim(),
         category: document.getElementById('category').value,
+        classification: document.getElementById('classification').value,
         description: document.getElementById('description').value.trim(),
         parameters: JSON.stringify(params),
         is_active: document.getElementById('is_active').checked

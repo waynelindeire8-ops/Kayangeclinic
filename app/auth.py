@@ -13,7 +13,10 @@ ROLE_HIERARCHY = {
     'locum_doctor': 70,
     'nurse': 60,
     'locum_nurse': 50,
+    'lab_supervisor': 55,
     'lab_staff': 50,
+    'lab_tech': 50,
+    'lab_care': 45,
     'front_desk': 40,
     'file_manager': 30,
 }

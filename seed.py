@@ -148,6 +148,8 @@ def seed():
         ('Cetirizine 10mg', 'Cetirizine', 'Antihistamines', 150, 8.00, '2027-01-31', 'HealthPharm', 40),
         ('Diclofenac Gel', 'Diclofenac', 'Topical', 80, 350.00, '2026-10-31', 'Mediplus Ltd', 15),
         ('Multivitamin Tablets', 'Multivitamin', 'Supplements', 600, 5.00, '2027-12-31', 'HealthPharm', 100),
+        ('Red Top Tube (Serum)', 'Vacutainer Red', 'Lab Supplies', 500, 12.00, '2028-06-30', 'BD Medical', 100),
+        ('Purple Top Tube (EDTA)', 'Vacutainer EDTA', 'Lab Supplies', 500, 14.00, '2028-06-30', 'BD Medical', 100),
     ]
 
     for item in pharmacy_items:

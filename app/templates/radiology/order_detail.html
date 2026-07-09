@@ -48,6 +48,27 @@
                 </div>
             </div>
         </div>
+        <div class="card mt-3" id="refer-card">
+            <div class="card-header"><h6>Refer to External Facility</h6></div>
+            <div class="card-body">
+                <div id="refer-status"></div>
+                <div id="refer-form">
+                    <div class="mb-3">
+                        <label class="form-label">Facility</label>
+                        <select class="form-select" id="refer-facility">
+                            <option value="DR Sam Kampondeni Clinic">DR Sam Kampondeni Clinic</option>
+                            <option value="Queen Elizabeth Hospital">Queen Elizabeth Hospital (Microbiology)</option>
+                            <option value="Blood Transfusion Centre">Blood Transfusion Centre</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason / Notes</label>
+                        <textarea class="form-control" id="refer-notes" rows="3" placeholder="Reason for referral..."></textarea>
+                    </div>
+                    <button class="btn btn-warning" onclick="referOut()"><i class="bi bi-send me-1"></i>Send to External Facility</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -73,7 +94,7 @@ async function loadData() {
 
     const MOD = {xray:'X-Ray',ultrasound:'Ultrasound',ct:'CT Scan',mri:'MRI',ecg:'ECG',echo:'Echocardiogram',mammogram:'Mammogram',fluoroscopy:'Fluoroscopy',other:'Other'};
     const pc = {routine:'secondary',urgent:'warning',stat:'danger'};
-    const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+    const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger',referred:'info'};
     document.getElementById('order-info').innerHTML =
         '<table class="table-details">' +
         '<tr><td>Order #</td><td><strong>' + esc(orderData.order_number) + '</strong></td></tr>' +
@@ -114,6 +135,17 @@ async function loadData() {
 
     if (orderData.status !== 'completed' && orderData.status !== 'cancelled') {
         document.getElementById('result-form-area').style.display = 'block';
+    }
+
+    // Handle refer card visibility
+    const referCard = document.getElementById('refer-card');
+    const referForm = document.getElementById('refer-form');
+    const referStatus = document.getElementById('refer-status');
+    if (orderData.status === 'referred') {
+        referForm.style.display = 'none';
+        referStatus.innerHTML = '<div class="alert alert-info mb-0"><i class="bi bi-send me-1"></i>Referred to <strong>' + esc(orderData.referred_to || 'External Facility') + '</strong></div>';
+    } else if (orderData.status === 'completed' || orderData.status === 'cancelled') {
+        referCard.style.display = 'none';
     }
 }
 
@@ -158,6 +190,17 @@ function doPrintBarcode() {
     win.document.close();
     win.print();
     bootstrap.Modal.getInstance(document.getElementById('barcodeModal')).hide();
+}
+
+async function referOut() {
+    const facility = document.getElementById('refer-facility').value.trim();
+    const notes = document.getElementById('refer-notes').value.trim();
+    if (!facility) { showToast('Enter facility name', 'danger'); return; }
+    const res = await fetchWithAuth('/radiology/api/orders/' + orderId + '/refer', {
+        method: 'POST', body: JSON.stringify({ facility, notes })
+    });
+    if (res.ok) { loadData(); showToast('Order referred to ' + facility, 'success'); }
+    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
 }
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

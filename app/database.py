@@ -16,6 +16,7 @@ def _migrate_appointments_type(conn):
     ).fetchone()
     if schema and 'walk_in' not in schema['sql']:
         conn.executescript('''
+            DROP TABLE IF EXISTS appointments_new;
             CREATE TABLE appointments_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 patient_id INTEGER NOT NULL,
@@ -48,7 +49,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('admin','doctor','locum_doctor','nurse','locum_nurse','lab_staff','front_desk','file_manager')),
+            role TEXT NOT NULL CHECK(role IN ('admin','doctor','locum_doctor','nurse','locum_nurse','lab_staff','lab_supervisor','lab_tech','lab_care','front_desk','file_manager')),
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
             email TEXT,
@@ -172,7 +173,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             patient_id INTEGER NOT NULL,
             doctor_id INTEGER NOT NULL,
-            certificate_type TEXT CHECK(certificate_type IN ('sick_note','tep','insurance','police')),
+            certificate_type TEXT CHECK(certificate_type IN ('sick_note','tep','insurance','police','yellow_book','foreign_stamp')),
             issue_date DATE NOT NULL,
             valid_until DATE,
             notes TEXT,
@@ -228,6 +229,50 @@ def init_db():
             unit_price REAL NOT NULL,
             total_price REAL NOT NULL,
             FOREIGN KEY(billing_id) REFERENCES billing(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS lab_invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_number TEXT UNIQUE NOT NULL,
+            patient_id INTEGER NOT NULL,
+            total_amount REAL NOT NULL DEFAULT 0,
+            amount_paid REAL DEFAULT 0,
+            balance REAL DEFAULT 0,
+            payment_method TEXT CHECK(payment_method IN ('cash','card','insurance','mobile_money')),
+            payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending','partial','paid')),
+            notes TEXT,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS lab_invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lab_invoice_id INTEGER NOT NULL,
+            lab_test_id INTEGER,
+            item_name TEXT NOT NULL,
+            description TEXT,
+            quantity INTEGER DEFAULT 1,
+            unit_price REAL NOT NULL,
+            total_price REAL NOT NULL,
+            FOREIGN KEY(lab_invoice_id) REFERENCES lab_invoices(id) ON DELETE CASCADE,
+            FOREIGN KEY(lab_test_id) REFERENCES lab_tests(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS suppliers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            contact_person TEXT,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            category TEXT DEFAULT 'general',
+            notes TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS pharmacy_inventory (
@@ -386,6 +431,7 @@ def init_db():
             test_name TEXT NOT NULL,
             category TEXT DEFAULT 'general',
             sample_type TEXT DEFAULT 'blood',
+            classification TEXT DEFAULT 'standard',
             description TEXT,
             default_price REAL DEFAULT 0,
             is_active INTEGER DEFAULT 1,
@@ -536,9 +582,10 @@ def init_db():
             modality TEXT NOT NULL CHECK(modality IN ('xray','ultrasound','ct','mri','ecg','echo','mammogram','fluoroscopy','other')),
             body_part TEXT,
             clinical_history TEXT,
-            status TEXT DEFAULT 'ordered' CHECK(status IN ('ordered','in_progress','completed','cancelled')),
+            status TEXT DEFAULT 'ordered' CHECK(status IN ('ordered','in_progress','completed','cancelled','referred')),
             ordered_date DATE,
             completed_date DATE,
+            referred_to TEXT,
             priority TEXT DEFAULT 'routine' CHECK(priority IN ('routine','urgent','stat')),
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -679,6 +726,11 @@ def init_db():
     _seed_auth_rules(conn)
     _seed_short_stay(conn)
     _migrate_procedures_ecg(conn)
+    _migrate_radiology_refer(conn)
+    _migrate_lab_roles(conn)
+    _seed_inventory(conn)
+    _migrate_catalog_classification(conn)
+    _migrate_certificates_yellow_book(conn)
     conn.close()
 
 
@@ -703,6 +755,7 @@ def _migrate_prescriptions(conn):
     ).fetchone()
     if schema and 'NOT NULL' in schema['sql'].split('consultation_id')[-1].split(',')[0]:
         conn.executescript('''
+            DROP TABLE IF EXISTS prescriptions_new;
             CREATE TABLE prescriptions_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 consultation_id INTEGER,
@@ -927,6 +980,7 @@ def _migrate_procedures_ecg(conn):
     ).fetchone()
     if schema and 'ecg' not in schema['sql']:
         conn.executescript('''
+            DROP TABLE IF EXISTS procedures_new;
             CREATE TABLE procedures_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 patient_id INTEGER NOT NULL,
@@ -942,5 +996,119 @@ def _migrate_procedures_ecg(conn):
             INSERT INTO procedures_new SELECT * FROM procedures;
             DROP TABLE procedures;
             ALTER TABLE procedures_new RENAME TO procedures;
+        ''')
+        conn.commit()
+
+
+def _migrate_radiology_refer(conn):
+    try:
+        conn.execute("ALTER TABLE radiology_orders ADD COLUMN referred_to TEXT")
+    except sqlite3.OperationalError:
+        pass
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='radiology_orders'"
+    ).fetchone()
+    if schema and 'referred' not in schema['sql']:
+        conn.executescript('''
+            DROP TABLE IF EXISTS radiology_orders_new;
+            CREATE TABLE radiology_orders_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_number TEXT UNIQUE,
+                patient_id INTEGER NOT NULL,
+                doctor_id INTEGER,
+                modality TEXT NOT NULL CHECK(modality IN ('xray','ultrasound','ct','mri','ecg','echo','mammogram','fluoroscopy','other')),
+                body_part TEXT,
+                clinical_history TEXT,
+                status TEXT DEFAULT 'ordered' CHECK(status IN ('ordered','in_progress','completed','cancelled','referred')),
+                ordered_date DATE,
+                completed_date DATE,
+                referred_to TEXT,
+                priority TEXT DEFAULT 'routine' CHECK(priority IN ('routine','urgent','stat')),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(patient_id) REFERENCES patients(id),
+                FOREIGN KEY(doctor_id) REFERENCES users(id)
+            );
+            INSERT INTO radiology_orders_new SELECT * FROM radiology_orders;
+            DROP TABLE radiology_orders;
+            ALTER TABLE radiology_orders_new RENAME TO radiology_orders;
+        ''')
+        conn.commit()
+
+
+def _migrate_lab_roles(conn):
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).fetchone()
+    if schema and 'lab_supervisor' not in schema['sql']:
+        conn.execute('PRAGMA foreign_keys = OFF')
+        conn.executescript('''
+            DROP TABLE IF EXISTS users_new;
+            CREATE TABLE users_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('admin','doctor','locum_doctor','nurse','locum_nurse','lab_staff','lab_supervisor','lab_tech','lab_care','front_desk','file_manager')),
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO users_new SELECT * FROM users;
+            DROP TABLE users;
+            ALTER TABLE users_new RENAME TO users;
+        ''')
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.commit()
+
+
+def _seed_inventory(conn):
+    existing = conn.execute("SELECT COUNT(*) as c FROM pharmacy_inventory WHERE drug_name LIKE '%Tube%'").fetchone()['c']
+    if existing > 0:
+        return
+    tubes = [
+        ('Red Top Tube (Serum)', 'Vacutainer Red', 'Lab Supplies', 500, 12.00, '2028-06-30', 'BD Medical', 100),
+        ('Purple Top Tube (EDTA)', 'Vacutainer EDTA', 'Lab Supplies', 500, 14.00, '2028-06-30', 'BD Medical', 100),
+    ]
+    for item in tubes:
+        conn.execute(
+            'INSERT INTO pharmacy_inventory (drug_name, generic_name, category, stock_quantity, unit_price, expiry_date, supplier, reorder_level) VALUES (?,?,?,?,?,?,?,?)',
+            item)
+    conn.commit()
+
+
+def _migrate_catalog_classification(conn):
+    try:
+        conn.execute("ALTER TABLE lab_test_catalog ADD COLUMN classification TEXT DEFAULT 'standard'")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
+def _migrate_certificates_yellow_book(conn):
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='medical_certificates'"
+    ).fetchone()
+    if schema and 'yellow_book' not in schema['sql']:
+        conn.executescript('''
+            DROP TABLE IF EXISTS medical_certificates_new;
+            CREATE TABLE medical_certificates_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL,
+                doctor_id INTEGER NOT NULL,
+                certificate_type TEXT CHECK(certificate_type IN ('sick_note','tep','insurance','police','yellow_book','foreign_stamp')),
+                issue_date DATE NOT NULL,
+                valid_until DATE,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(patient_id) REFERENCES patients(id),
+                FOREIGN KEY(doctor_id) REFERENCES users(id)
+            );
+            INSERT INTO medical_certificates_new SELECT * FROM medical_certificates;
+            DROP TABLE medical_certificates;
+            ALTER TABLE medical_certificates_new RENAME TO medical_certificates;
         ''')
         conn.commit()

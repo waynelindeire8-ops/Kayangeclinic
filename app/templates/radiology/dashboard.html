@@ -24,6 +24,10 @@
         <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-plus-circle"></i></div>
             <div class="stat-value" id="stat-ordered">0</div><div class="stat-label">Ordered Today</div></div>
     </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-send"></i></div>
+            <div class="stat-value" id="stat-referred">0</div><div class="stat-label">Referred Out</div></div>
+    </div>
 </div>
 
 <div class="row g-3">
@@ -61,12 +65,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('stat-inprog').textContent = (data.recent || []).filter(r => r.status === 'in_progress').length;
     document.getElementById('stat-completed').textContent = data.completed_today || 0;
     document.getElementById('stat-ordered').textContent = data.ordered_today || 0;
+    document.getElementById('stat-referred').textContent = data.referred || 0;
 
     const tbody = document.querySelector('#recent-table tbody');
     const recent = data.recent || [];
     if (recent.length) {
         document.getElementById('recent-empty').style.display = 'none';
-        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger'};
+        const sc = {ordered:'secondary',in_progress:'primary',completed:'success',cancelled:'danger',referred:'info'};
         recent.forEach(o => {
             tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(o.order_number || '') + '</span></td>' +
                 '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + esc(o.p_first || '') + ' ' + esc(o.p_last || '') + '</a></td>' +

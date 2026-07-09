@@ -73,6 +73,9 @@ def api_dashboard():
     ordered_today = db.execute(
         'SELECT COUNT(*) as c FROM radiology_orders WHERE DATE(ordered_date) = ?', (today,)
     ).fetchone()['c']
+    referred = db.execute(
+        "SELECT COUNT(*) as c FROM radiology_orders WHERE status = 'referred'"
+    ).fetchone()['c']
     recent = db.execute(
         '''SELECT r.*, p.first_name as p_first, p.last_name as p_last,
                   u.first_name as d_first, u.last_name as d_last
@@ -84,7 +87,7 @@ def api_dashboard():
     db.close()
     return jsonify({
         'pending': pending, 'completed_today': completed_today,
-        'ordered_today': ordered_today,
+        'ordered_today': ordered_today, 'referred': referred,
         'recent': [dict(r) for r in recent]
     })
 
@@ -153,9 +156,10 @@ def api_orders_create():
     pat = db.execute('SELECT first_name, last_name FROM patients WHERE id = ?', (data['patient_id'],)).fetchone()
     pat_name = (pat['first_name'] + ' ' + pat['last_name']) if pat else 'Patient'
     mod_name = MODALITIES.get(data['modality'], data['modality'])
-    notify_role(db, 'lab_staff', 'New Radiology Order',
-                f'{pat_name} - {mod_name} ({data.get("body_part", "N/A")}) - {order_number}',
-                'info', '/radiology/orders')
+    for r in ('lab_staff', 'lab_supervisor', 'lab_tech', 'lab_care'):
+        notify_role(db, r, 'New Radiology Order',
+                    f'{pat_name} - {mod_name} ({data.get("body_part", "N/A")}) - {order_number}',
+                    'info', '/radiology/orders')
 
     log_audit(current_user['id'], current_user['username'], 'create', 'radiology_order', order_id,
               f'Created radiology order {order_number}', request.remote_addr)
@@ -227,7 +231,7 @@ def api_orders_status(id):
     current_user = get_jwt()
     data = request.json
     new_status = data.get('status')
-    if new_status not in ('ordered', 'in_progress', 'completed', 'cancelled'):
+    if new_status not in ('ordered', 'in_progress', 'completed', 'cancelled', 'referred'):
         return jsonify({'error': 'Invalid status'}), 400
     db = get_db()
     if new_status == 'completed':
@@ -240,6 +244,37 @@ def api_orders_status(id):
     db.commit()
     db.close()
     return jsonify({'message': 'Status updated'})
+
+
+# ─── API: Refer Out ───
+
+@radiology_bp.route('/api/orders/<int:id>/refer', methods=['POST'])
+@login_required
+def api_orders_refer(id):
+    current_user = get_jwt()
+    data = request.json
+    facility = data.get('facility', 'DR Sam Kampondeni Clinic')
+    notes = data.get('notes', '')
+
+    db = get_db()
+    db.execute(
+        'UPDATE radiology_orders SET status = ?, referred_to = ?, notes = COALESCE(notes || ?, ?) WHERE id = ?',
+        ('referred', facility, notes, f'\nReferred to: {facility} - {notes}', id))
+    db.commit()
+
+    from app.routes.notifications import notify_role
+    pat = db.execute(
+        '''SELECT p.first_name, p.last_name FROM radiology_orders r
+           JOIN patients p ON r.patient_id = p.id WHERE r.id = ?''', (id,)).fetchone()
+    pat_name = (pat['first_name'] + ' ' + pat['last_name']) if pat else 'Patient'
+    for r in ('lab_staff', 'lab_supervisor', 'lab_tech', 'lab_care'):
+        notify_role(db, r, 'Radiology Referred Out',
+                    f'{pat_name} sent to {facility} for imaging', 'info', '/radiology/orders')
+
+    log_audit(current_user['id'], current_user['username'], 'refer_out', 'radiology_order', id,
+              f'Referred to {facility}', request.remote_addr)
+    db.close()
+    return jsonify({'message': f'Referred to {facility}'})
 
 
 # ─── API: Results ───

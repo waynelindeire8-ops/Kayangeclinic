@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-truck"></i> Suppliers</h4>
+    <button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus-lg me-1"></i>Add Supplier</button>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 id="stat-total">0</h3><small class="text-muted">Total Suppliers</small>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-success" id="stat-active">0</h3><small class="text-muted">Active</small>
+        </div></div>
+    </div>
+    <div class="col-md-6">
+        <div class="card"><div class="card-body" id="stat-categories"><small class="text-muted">No categories</small></div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label">Search</label>
+                <input type="text" class="form-control" id="filter-search" placeholder="Name, contact, phone..." onkeyup="loadSuppliers()"></div>
+            <div class="col-md-3"><label class="form-label">Category</label>
+                <select class="form-select" id="filter-category" onchange="loadSuppliers()">
+                    <option value="">All</option><option value="pharmacy">Pharmacy</option>
+                    <option value="lab">Lab Supplies</option><option value="equipment">Equipment</option>
+                    <option value="general">General</option></select></div>
+            <div class="col-md-2"><label class="form-label">Status</label>
+                <select class="form-select" id="filter-active" onchange="loadSuppliers()">
+                    <option value="">All</option><option value="1">Active</option></select></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0" id="suppliers-table">
+                <thead><tr><th>Name</th><th>Contact Person</th><th>Phone</th><th>Email</th><th>Category</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="empty-msg" class="text-center text-muted py-5" style="display:none"><i class="bi bi-truck" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No suppliers found</div>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="supplierModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="modal-title">Add Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <input type="hidden" id="edit-id">
+        <div class="mb-3"><label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="sup-name" required placeholder="e.g. BD Medical"></div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6"><label class="form-label">Contact Person</label>
+                <input type="text" class="form-control" id="sup-contact" placeholder="e.g. John Smith"></div>
+            <div class="col-md-6"><label class="form-label">Category</label>
+                <select class="form-select" id="sup-category">
+                    <option value="general">General</option><option value="pharmacy">Pharmacy</option>
+                    <option value="lab">Lab Supplies</option><option value="equipment">Equipment</option></select></div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6"><label class="form-label">Phone</label>
+                <input type="text" class="form-control" id="sup-phone" placeholder="+265..."></div>
+            <div class="col-md-6"><label class="form-label">Email</label>
+                <input type="email" class="form-control" id="sup-email" placeholder="supplier@example.com"></div>
+        </div>
+        <div class="mb-3"><label class="form-label">Address</label>
+            <input type="text" class="form-control" id="sup-address" placeholder="City, Country"></div>
+        <div class="mb-3"><label class="form-label">Notes</label>
+            <textarea class="form-control" id="sup-notes" rows="2"></textarea></div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="sup-active" checked>
+            <label class="form-check-label">Active</label>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSupplier()"><i class="bi bi-check-lg me-1"></i>Save</button>
+    </div>
+</div></div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() { loadStats(); loadSuppliers(); });
+
+async function loadStats() {
+    const res = await fetchWithAuth('/suppliers/api/stats');
+    const d = await res.json();
+    document.getElementById('stat-total').textContent = d.total;
+    document.getElementById('stat-active').textContent = d.active;
+    const catEl = document.getElementById('stat-categories');
+    if (d.categories && d.categories.length) {
+        catEl.innerHTML = d.categories.map(c =>
+            '<span class="badge bg-secondary me-1">' + esc(c.category) + ': ' + c.c + '</span>'
+        ).join('');
+    }
+}
+
+async function loadSuppliers() {
+    let url = '/suppliers/api?';
+    const s = document.getElementById('filter-search').value;
+    const c = document.getElementById('filter-category').value;
+    const a = document.getElementById('filter-active').value;
+    if (s) url += 'search=' + encodeURIComponent(s) + '&';
+    if (c) url += 'category=' + c + '&';
+    if (a) url += 'active=' + a + '&';
+    const res = await fetchWithAuth(url);
+    const suppliers = await res.json();
+    const tbody = document.querySelector('#suppliers-table tbody');
+    tbody.innerHTML = '';
+    if (suppliers.length) {
+        document.getElementById('suppliers-table').style.display = '';
+        document.getElementById('empty-msg').style.display = 'none';
+        suppliers.forEach(s => {
+            tbody.innerHTML += '<tr><td><strong>' + esc(s.name) + '</strong></td>' +
+                '<td>' + esc(s.contact_person || '-') + '</td>' +
+                '<td>' + esc(s.phone || '-') + '</td>' +
+                '<td>' + esc(s.email || '-') + '</td>' +
+                '<td><span class="badge bg-secondary">' + esc(s.category) + '</span></td>' +
+                '<td><span class="badge bg-' + (s.is_active ? 'success' : 'secondary') + '">' + (s.is_active ? 'Active' : 'Inactive') + '</span></td>' +
+                '<td><div class="d-flex gap-1">' +
+                '<button class="btn btn-sm btn-outline-primary" onclick="editSupplier(' + s.id + ')"><i class="bi bi-pencil"></i></button>' +
+                '<button class="btn btn-sm btn-outline-danger" onclick="deleteSupplier(' + s.id + ')"><i class="bi bi-trash"></i></button>' +
+                '</div></td></tr>';
+        });
+    } else {
+        document.getElementById('suppliers-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+    }
+}
+
+function showCreateModal() {
+    document.getElementById('modal-title').textContent = 'Add Supplier';
+    document.getElementById('edit-id').value = '';
+    document.getElementById('sup-name').value = '';
+    document.getElementById('sup-contact').value = '';
+    document.getElementById('sup-phone').value = '';
+    document.getElementById('sup-email').value = '';
+    document.getElementById('sup-address').value = '';
+    document.getElementById('sup-notes').value = '';
+    document.getElementById('sup-category').value = 'general';
+    document.getElementById('sup-active').checked = true;
+    new bootstrap.Modal(document.getElementById('supplierModal')).show();
+}
+
+async function editSupplier(id) {
+    const res = await fetchWithAuth('/suppliers/api/' + id);
+    const s = await res.json();
+    if (s.error) { showToast(s.error, 'danger'); return; }
+    document.getElementById('modal-title').textContent = 'Edit Supplier';
+    document.getElementById('edit-id').value = s.id;
+    document.getElementById('sup-name').value = s.name;
+    document.getElementById('sup-contact').value = s.contact_person || '';
+    document.getElementById('sup-phone').value = s.phone || '';
+    document.getElementById('sup-email').value = s.email || '';
+    document.getElementById('sup-address').value = s.address || '';
+    document.getElementById('sup-notes').value = s.notes || '';
+    document.getElementById('sup-category').value = s.category || 'general';
+    document.getElementById('sup-active').checked = s.is_active;
+    new bootstrap.Modal(document.getElementById('supplierModal')).show();
+}
+
+async function saveSupplier() {
+    const id = document.getElementById('edit-id').value;
+    const name = document.getElementById('sup-name').value.trim();
+    if (!name) { showToast('Name is required', 'danger'); return; }
+    const body = {
+        name: name,
+        contact_person: document.getElementById('sup-contact').value.trim(),
+        phone: document.getElementById('sup-phone').value.trim(),
+        email: document.getElementById('sup-email').value.trim(),
+        address: document.getElementById('sup-address').value.trim(),
+        category: document.getElementById('sup-category').value,
+        notes: document.getElementById('sup-notes').value.trim(),
+        is_active: document.getElementById('sup-active').checked ? 1 : 0
+    };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? '/suppliers/api/' + id : '/suppliers/api';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+        loadSuppliers(); loadStats();
+        showToast(id ? 'Supplier updated' : 'Supplier added', 'success');
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed', 'danger');
+    }
+}
+
+async function deleteSupplier(id) {
+    if (!confirm('Delete this supplier?')) return;
+    const res = await fetchWithAuth('/suppliers/api/' + id, { method: 'DELETE' });
+    if (res.ok) { loadSuppliers(); loadStats(); showToast('Deleted', 'success'); }
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

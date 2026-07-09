@@ -71,6 +71,15 @@ def create_app():
     from app.routes.short_stay import short_stay_bp
     app.register_blueprint(short_stay_bp)
 
+    from app.routes.lab_invoices import lab_invoices_bp
+    app.register_blueprint(lab_invoices_bp)
+
+    from app.routes.suppliers import suppliers_bp
+    app.register_blueprint(suppliers_bp)
+
+    from app.routes.certificates import certificates_bp
+    app.register_blueprint(certificates_bp)
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

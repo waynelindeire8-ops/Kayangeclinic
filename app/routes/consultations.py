@@ -410,8 +410,29 @@ def api_ancillaries():
                 '''INSERT INTO referrals (patient_id, from_doctor_id, to_facility, reason, notes)
                    VALUES (?, ?, ?, ?, ?)''',
                 (data['patient_id'], current_user['id'], data['to_facility'], data.get('reason'), data.get('notes')))
+
+            from flask import current_app
+            call_out_fee = current_app.config.get('CALL_OUT_FEE', 20000)
+            last_inv = db.execute('SELECT invoice_number FROM billing ORDER BY id DESC LIMIT 1').fetchone()
+            if last_inv:
+                num = int(last_inv['invoice_number'].replace('INV-', '')) + 1
+            else:
+                num = 1001
+            invoice_number = f'INV-{num}'
+            db.execute(
+                '''INSERT INTO billing (patient_id, invoice_number, total_amount, amount_paid, balance,
+                   payment_method, payment_status, created_by)
+                   VALUES (?, ?, ?, 0, ?, 'cash', 'pending', ?)''',
+                (data['patient_id'], invoice_number, call_out_fee, call_out_fee, current_user['id']))
+            billing_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+            db.execute(
+                '''INSERT INTO billing_items (billing_id, item_name, item_type, quantity, unit_price, total_price)
+                   VALUES (?, 'Call Out Fee', 'consultation', 1, ?, ?)''',
+                (billing_id, call_out_fee, call_out_fee))
+
             log_audit(current_user['id'], current_user['username'], 'create', 'referral', cursor.lastrowid,
-                      f'Created referral for patient {data["patient_id"]}', request.remote_addr)
+                      f'Created referral for patient {data["patient_id"]} - Call Out Fee MWK {call_out_fee}',
+                      request.remote_addr)
 
         elif anc_type == 'diet':
             cursor = db.execute(

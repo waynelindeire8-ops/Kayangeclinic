@@ -48,7 +48,8 @@
                     <div class="mb-3"><label class="form-label">Generic Name</label><input type="text" class="form-control" id="generic_name"></div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6"><label class="form-label">Category</label><select class="form-select" id="category"><option value="">Select...</option><option value="Antibiotics">Antibiotics</option><option value="Analgesics">Analgesics</option><option value="Diabetes">Diabetes</option><option value="Respiratory">Respiratory</option><option value="GI">Gastrointestinal</option><option value="Antihistamines">Antihistamines</option><option value="Topical">Topical</option><option value="Supplements">Supplements</option><option value="Other">Other</option></select></div>
-                        <div class="col-md-6"><label class="form-label">Supplier</label><input type="text" class="form-control" id="supplier"></div>
+                        <div class="col-md-6"><label class="form-label">Supplier</label>
+                            <select class="form-select" id="supplier"><option value="">Select supplier...</option></select></div>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><label class="form-label">Stock Qty</label><input type="number" class="form-control" id="stock_quantity" value="0" min="0"></div>
@@ -71,8 +72,20 @@ let editingId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     loadTable();
+    loadSuppliers();
     document.getElementById('searchInput').addEventListener('keyup', function() { loadTable(this.value); });
 });
+
+async function loadSuppliers() {
+    const res = await fetchWithAuth('/suppliers/api?active=1');
+    const suppliers = await res.json();
+    const sel = document.getElementById('supplier');
+    sel.innerHTML = '<option value="">Select supplier...</option>';
+    suppliers.forEach(s => {
+        const o = document.createElement('option'); o.value = s.name; o.textContent = s.name;
+        sel.appendChild(o);
+    });
+}
 
 function loadTable(search) {
     const url = search ? '/pharmacy/api/inventory?search=' + search : '/pharmacy/api/inventory';

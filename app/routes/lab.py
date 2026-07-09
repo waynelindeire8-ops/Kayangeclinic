@@ -335,11 +335,11 @@ def api_catalog_create():
     db = get_db()
     default_params = data.get('parameters')
     cursor = db.execute(
-        '''INSERT INTO lab_test_catalog (test_name, category, sample_type, description, default_price, default_params, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        '''INSERT INTO lab_test_catalog (test_name, category, sample_type, classification, description, default_price, default_params, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
         (data['test_name'], data.get('category', 'general'),
-         data.get('sample_type', 'blood'), data.get('description'),
-         data.get('default_price', 0), default_params, 1)
+         data.get('sample_type', 'blood'), data.get('classification', 'standard'),
+         data.get('description'), data.get('default_price', 0), default_params, 1)
     )
     db.commit()
     log_audit(current_user['id'], current_user['username'], 'create', 'lab_catalog', cursor.lastrowid,
@@ -367,10 +367,10 @@ def api_catalog_update(id):
     db = get_db()
     default_params = data.get('parameters')
     db.execute(
-        '''UPDATE lab_test_catalog SET test_name=?, category=?, sample_type=?, description=?,
-           default_price=?, default_params=?, is_active=? WHERE id=?''',
+        '''UPDATE lab_test_catalog SET test_name=?, category=?, sample_type=?, classification=?,
+           description=?, default_price=?, default_params=?, is_active=? WHERE id=?''',
         (data['test_name'], data.get('category'), data.get('sample_type'),
-         data.get('description'), data.get('default_price', 0),
+         data.get('classification', 'standard'), data.get('description'), data.get('default_price', 0),
          default_params, data.get('is_active', 1), id)
     )
     db.commit()

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-receipt"></i> Lab Invoices</h4>
+    <a href="/lab/invoices/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Lab Invoice</a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon green"><i class="bi bi-cash-stack"></i></div>
+            <div class="stat-value" id="stat-today">0</div><div class="stat-label">Today's Revenue</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-graph-up"></i></div>
+            <div class="stat-value" id="stat-total">0</div><div class="stat-label">Total Revenue</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon yellow"><i class="bi bi-hourglass"></i></div>
+            <div class="stat-value" id="stat-pending">0</div><div class="stat-label">Pending</div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-receipt"></i></div>
+            <div class="stat-value" id="stat-count">0</div><div class="stat-label">Today's Invoices</div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2"><label class="form-label">Status</label>
+                <select class="form-select" id="filter-status"><option value="">All</option>
+                    <option value="pending">Pending</option><option value="partial">Partial</option>
+                    <option value="paid">Paid</option></select></div>
+            <div class="col-md-3"><label class="form-label">Patient</label>
+                <select class="form-select" id="filter-patient"><option value="">All</option></select></div>
+            <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="filter-from"></div>
+            <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="filter-to"></div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" onclick="loadInvoices()"><i class="bi bi-search"></i></button></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0" id="invoices-table">
+                <thead><tr><th>Invoice #</th><th>Patient</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="empty-msg" class="text-center text-muted py-5" style="display:none"><i class="bi bi-receipt" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No lab invoices found</div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5>Record Payment</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <p class="text-muted" id="pay-info"></p>
+        <div class="mb-3"><label class="form-label">Amount (MWK) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="pay-amount" min="1" required></div>
+        <div class="mb-3"><label class="form-label">Method</label>
+            <select class="form-select" id="pay-method">
+                <option value="cash">Cash</option><option value="card">Card</option>
+                <option value="mobile_money">Mobile Money</option><option value="insurance">Insurance</option></select></div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-primary" onclick="recordPayment()"><i class="bi bi-check-lg me-1"></i>Record</button>
+    </div>
+</div></div></div>
+
+<script>
+let payInvoiceId = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const pRes = await fetchWithAuth('/patients/api');
+    const patients = await pRes.json();
+    const pSel = document.getElementById('filter-patient');
+    patients.forEach(p => {
+        const o = document.createElement('option'); o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        pSel.appendChild(o);
+    });
+    loadDashboard();
+    loadInvoices();
+});
+
+async function loadDashboard() {
+    const res = await fetchWithAuth('/lab/invoices/api/dashboard');
+    const d = await res.json();
+    document.getElementById('stat-today').textContent = 'MWK ' + (d.today_revenue || 0).toLocaleString();
+    document.getElementById('stat-total').textContent = 'MWK ' + (d.total_revenue || 0).toLocaleString();
+    document.getElementById('stat-pending').textContent = 'MWK ' + (d.pending || 0).toLocaleString();
+    document.getElementById('stat-count').textContent = d.today_count || 0;
+}
+
+async function loadInvoices() {
+    let url = '/lab/invoices/api?';
+    const s = document.getElementById('filter-status').value;
+    const p = document.getElementById('filter-patient').value;
+    const f = document.getElementById('filter-from').value;
+    const t = document.getElementById('filter-to').value;
+    if (s) url += 'status=' + s + '&';
+    if (p) url += 'patient_id=' + p + '&';
+    if (f) url += 'date_from=' + f + '&';
+    if (t) url += 'date_to=' + t + '&';
+    const res = await fetchWithAuth(url);
+    const invoices = await res.json();
+    const tbody = document.querySelector('#invoices-table tbody');
+    tbody.innerHTML = '';
+    if (invoices.length) {
+        document.getElementById('invoices-table').style.display = '';
+        document.getElementById('empty-msg').style.display = 'none';
+        const sc = {pending:'warning',partial:'info',paid:'success'};
+        invoices.forEach(i => {
+            tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(i.invoice_number) + '</span></td>' +
+                '<td>' + esc(i.p_first || '') + ' ' + esc(i.p_last || '') + '<br><small class="text-muted">' + esc(i.p_patient_id || '') + '</small></td>' +
+                '<td>' + (i.created_at || '').split(' ')[0] + '</td>' +
+                '<td>MWK ' + Number(i.total_amount).toLocaleString() + '</td>' +
+                '<td>MWK ' + Number(i.amount_paid).toLocaleString() + '</td>' +
+                '<td>MWK ' + Number(i.balance).toLocaleString() + '</td>' +
+                '<td><span class="badge bg-' + (sc[i.payment_status] || 'secondary') + '">' + i.payment_status + '</span></td>' +
+                '<td><div class="d-flex gap-1">' +
+                '<a href="/lab/invoices/' + i.id + '" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>' +
+                (i.payment_status !== 'paid' ? '<button class="btn btn-sm btn-outline-success" onclick="showPayment(' + i.id + ', ' + i.balance + ')"><i class="bi bi-cash"></i></button>' : '') +
+                '</div></td></tr>';
+        });
+    } else {
+        document.getElementById('invoices-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+    }
+}
+
+function showPayment(id, balance) {
+    payInvoiceId = id;
+    document.getElementById('pay-amount').value = '';
+    document.getElementById('pay-amount').max = balance;
+    document.getElementById('pay-info').textContent = 'Balance: MWK ' + Number(balance).toLocaleString();
+    new bootstrap.Modal(document.getElementById('paymentModal')).show();
+}
+
+async function recordPayment() {
+    const amount = parseFloat(document.getElementById('pay-amount').value);
+    if (!amount || amount <= 0) { showToast('Enter valid amount', 'danger'); return; }
+    const res = await fetchWithAuth('/lab/invoices/api/' + payInvoiceId + '/payment', {
+        method: 'PATCH',
+        body: JSON.stringify({ amount, payment_method: document.getElementById('pay-method').value })
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+        loadInvoices(); loadDashboard();
+        showToast('Payment recorded', 'success');
+    }
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

@@ -55,13 +55,16 @@
                 <li class="nav-item" data-roles="admin,front_desk">
                     <a class="nav-link" href="/billing"><i class="bi bi-wallet2"></i>Billing</a>
                 </li>
-                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                <li class="nav-item" data-roles="admin,lab_staff,lab_supervisor,lab_tech,lab_care,doctor,locum_doctor">
                     <a class="nav-link" href="/pharmacy"><i class="bi bi-capsule"></i>Pharmacy</a>
                 </li>
-                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                <li class="nav-item" data-roles="admin,lab_staff,lab_supervisor,lab_tech,lab_care,doctor,locum_doctor">
                     <a class="nav-link" href="/lab"><i class="bi bi-flask"></i>Lab</a>
                 </li>
-                <li class="nav-item" data-roles="admin,lab_staff,doctor,locum_doctor">
+                <li class="nav-item" data-roles="admin,front_desk,lab_supervisor">
+                    <a class="nav-link" href="/lab/invoices"><i class="bi bi-receipt"></i>Lab Invoices</a>
+                </li>
+                <li class="nav-item" data-roles="admin,lab_staff,lab_supervisor,lab_tech,lab_care,doctor,locum_doctor">
                     <a class="nav-link" href="/radiology"><i class="bi bi-camera-reels"></i>Radiology</a>
                 </li>
                 <li class="nav-item" data-roles="doctor,locum_doctor,admin">
@@ -70,6 +73,7 @@
                 <li class="nav-item" data-roles="admin,doctor,locum_doctor,front_desk">
                     <a class="nav-link" href="/telemedicine"><i class="bi bi-camera-video"></i>Telemedicine</a>
                     <a class="nav-link" href="/short-stay"><i class="bi bi-hospital"></i>Short Stay</a>
+                    <a class="nav-link" href="/certificates"><i class="bi bi-file-earmark-medical"></i>Certificates</a>
                 </li>
             </ul>
 
@@ -96,6 +100,9 @@
                 </li>
                 <li class="nav-item" data-roles="admin">
                     <a class="nav-link" href="/staff"><i class="bi bi-gear"></i>Staff</a>
+                </li>
+                <li class="nav-item" data-roles="admin,front_desk">
+                    <a class="nav-link" href="/suppliers"><i class="bi bi-truck"></i>Suppliers</a>
                 </li>
             </ul>
 
@@ -216,6 +223,7 @@
                 '/doctors': 'Doctors',
                 '/departments': 'Departments',
                 '/staff': 'Staff',
+                '/suppliers': 'Suppliers',
                 '/reports': 'Reports',
                 '/messages': 'Messages',
                 '/lab': 'Lab',

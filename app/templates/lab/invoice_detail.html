@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-receipt"></i> <span id="inv-num"></span></h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" onclick="printInvoice()"><i class="bi bi-printer me-1"></i>Print</button>
+        <a href="/lab/invoices" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card" id="invoice-card">
+            <div class="card-body" id="invoice-info"><div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span></div></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6>Payment Summary</h6></div>
+            <div class="card-body" id="payment-summary"></div>
+        </div>
+        <div class="card mt-3" id="pay-card">
+            <div class="card-header"><h6>Record Payment</h6></div>
+            <div class="card-body">
+                <div class="mb-3"><label class="form-label">Amount (MWK)</label>
+                    <input type="number" class="form-control" id="pay-amount" min="1"></div>
+                <div class="mb-3"><label class="form-label">Method</label>
+                    <select class="form-select" id="pay-method">
+                        <option value="cash">Cash</option><option value="card">Card</option>
+                        <option value="mobile_money">Mobile Money</option><option value="insurance">Insurance</option></select></div>
+                <button class="btn btn-success w-100" onclick="recordPayment()"><i class="bi bi-cash me-1"></i>Record Payment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const invoiceId = {{ invoice_id }};
+let invoiceData = null;
+
+document.addEventListener('DOMContentLoaded', loadInvoice);
+
+async function loadInvoice() {
+    const res = await fetchWithAuth('/lab/invoices/api/' + invoiceId);
+    invoiceData = await res.json();
+    if (invoiceData.error) { document.getElementById('invoice-info').innerHTML = '<div class="alert alert-danger">' + invoiceData.error + '</div>'; return; }
+
+    document.getElementById('inv-num').textContent = invoiceData.invoice_number;
+
+    let itemsHtml = '<table class="table mb-0"><thead><tr><th>#</th><th>Item</th><th>Description</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>';
+    (invoiceData.items || []).forEach((item, i) => {
+        itemsHtml += '<tr><td>' + (i + 1) + '</td><td><strong>' + esc(item.item_name) + '</strong></td>' +
+            '<td>' + esc(item.description || '-') + '</td><td>' + item.quantity + '</td>' +
+            '<td>MWK ' + Number(item.unit_price).toLocaleString() + '</td>' +
+            '<td>MWK ' + Number(item.total_price).toLocaleString() + '</td></tr>';
+    });
+    itemsHtml += '</tbody></table>';
+
+    document.getElementById('invoice-info').innerHTML =
+        '<div class="row mb-3">' +
+        '<div class="col-md-6"><strong>Patient:</strong> ' + esc(invoiceData.p_first) + ' ' + esc(invoiceData.p_last) +
+        '<br><small class="text-muted">' + esc(invoiceData.p_patient_id || '') + ' | ' + esc(invoiceData.p_phone || '') + '</small></div>' +
+        '<div class="col-md-6 text-end"><strong>Invoice:</strong> ' + esc(invoiceData.invoice_number) +
+        '<br><small class="text-muted">' + (invoiceData.created_at || '') + '</small></div></div>' +
+        (invoiceData.notes ? '<div class="alert alert-light mb-3"><strong>Notes:</strong> ' + esc(invoiceData.notes) + '</div>' : '') +
+        '<div class="table-responsive">' + itemsHtml + '</div>';
+
+    const sc = {pending:'warning',partial:'info',paid:'success'};
+    const balance = invoiceData.total_amount - invoiceData.amount_paid;
+    document.getElementById('payment-summary').innerHTML =
+        '<div class="d-flex justify-content-between mb-2"><span>Total Amount:</span><strong>MWK ' + Number(invoiceData.total_amount).toLocaleString() + '</strong></div>' +
+        '<div class="d-flex justify-content-between mb-2"><span>Amount Paid:</span><strong class="text-success">MWK ' + Number(invoiceData.amount_paid).toLocaleString() + '</strong></div>' +
+        '<div class="d-flex justify-content-between mb-2"><span>Balance:</span><strong class="text-' + (balance > 0 ? 'danger' : 'success') + '">MWK ' + Number(balance).toLocaleString() + '</strong></div>' +
+        '<div class="d-flex justify-content-between"><span>Method:</span><span>' + (invoiceData.payment_method || '-') + '</span></div>' +
+        '<div class="d-flex justify-content-between"><span>Status:</span><span class="badge bg-' + (sc[invoiceData.payment_status] || 'secondary') + '">' + invoiceData.payment_status + '</span></div>';
+
+    document.getElementById('pay-amount').value = balance > 0 ? balance : '';
+    document.getElementById('pay-amount').max = balance;
+    if (invoiceData.payment_status === 'paid') {
+        document.getElementById('pay-card').style.display = 'none';
+    }
+}
+
+async function recordPayment() {
+    const amount = parseFloat(document.getElementById('pay-amount').value);
+    if (!amount || amount <= 0) { showToast('Enter valid amount', 'danger'); return; }
+    const res = await fetchWithAuth('/lab/invoices/api/' + invoiceId + '/payment', {
+        method: 'PATCH',
+        body: JSON.stringify({ amount, payment_method: document.getElementById('pay-method').value })
+    });
+    if (res.ok) { loadInvoice(); showToast('Payment recorded', 'success'); }
+}
+
+function printInvoice() {
+    const items = (invoiceData.items || []).map((item, i) =>
+        '<tr><td>' + (i + 1) + '</td><td>' + esc(item.item_name) + '</td><td>' + esc(item.description || '-') + '</td><td>' + item.quantity + '</td><td>MWK ' + Number(item.unit_price).toLocaleString() + '</td><td>MWK ' + Number(item.total_price).toLocaleString() + '</td></tr>'
+    ).join('');
+    const win = window.open('', '_blank');
+    win.document.write('<html><head><title>Lab Invoice</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5}.header{text-align:center;margin-bottom:20px}.total{text-align:right;font-weight:bold}.footer{margin-top:20px;text-align:center;font-size:10px;color:#666}</style></head><body>' +
+        '<div class="header"><h2>Kayange Clinic</h2><p>Lab Invoice</p></div>' +
+        '<p><strong>Invoice:</strong> ' + esc(invoiceData.invoice_number) + ' | <strong>Date:</strong> ' + (invoiceData.created_at || '') + '</p>' +
+        '<p><strong>Patient:</strong> ' + esc(invoiceData.p_first) + ' ' + esc(invoiceData.p_last) + ' (' + esc(invoiceData.p_patient_id || '') + ')</p>' +
+        '<table><thead><tr><th>#</th><th>Item</th><th>Description</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>' + items + '</tbody></table>' +
+        '<div class="total"><p>Total: MWK ' + Number(invoiceData.total_amount).toLocaleString() + '</p><p>Paid: MWK ' + Number(invoiceData.amount_paid).toLocaleString() + '</p><p>Balance: MWK ' + (invoiceData.total_amount - invoiceData.amount_paid).toLocaleString() + '</p></div>' +
+        '<div class="footer">Kayange Clinic | Lab Services</div></body></html>');
+    win.document.close(); win.print();
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

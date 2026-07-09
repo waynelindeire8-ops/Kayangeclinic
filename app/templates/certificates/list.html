@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-file-earmark-medical"></i> Certificates</h4>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card"><div class="card-body text-center">
+            <h3 id="stat-total">0</h3><small class="text-muted">Total</small>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-warning" id="stat-yellow">0</h3><small class="text-muted">Yellow Book</small>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-info" id="stat-stamp">0</h3><small class="text-muted">Foreign Stamp</small>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card"><div class="card-body text-center">
+            <h3 id="stat-sick">0</h3><small class="text-muted">Sick Notes</small>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-success" id="stat-month">0</h3><small class="text-muted">This Month</small>
+        </div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3"><label class="form-label">Certificate Type</label>
+                <select class="form-select" id="filter-type" onchange="loadCerts()">
+                    <option value="">All</option><option value="sick_note">Sick Note</option>
+                    <option value="tep">TEP</option><option value="insurance">Insurance</option>
+                    <option value="police">Police Medical</option>
+                    <option value="yellow_book">Yellow Book</option><option value="foreign_stamp">Foreign Stamp</option></select></div>
+            <div class="col-md-3"><label class="form-label">Patient</label>
+                <select class="form-select" id="filter-patient"><option value="">All</option></select></div>
+            <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="filter-from"></div>
+            <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="filter-to"></div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" onclick="loadCerts()"><i class="bi bi-search"></i></button></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0" id="certs-table">
+                <thead><tr><th>Patient</th><th>Type</th><th>Issue Date</th><th>Valid Until</th><th>Doctor</th><th>Notes</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="empty-msg" class="text-center text-muted py-5" style="display:none"><i class="bi bi-file-earmark-medical" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No certificates found</div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 id="detail-title">Certificate Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer">
+        <button class="btn btn-outline-primary" onclick="printCert()"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+    </div>
+</div></div></div>
+
+<script>
+let certData = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const pRes = await fetchWithAuth('/patients/api');
+    const patients = await pRes.json();
+    const pSel = document.getElementById('filter-patient');
+    patients.forEach(p => {
+        const o = document.createElement('option'); o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        pSel.appendChild(o);
+    });
+    loadStats(); loadCerts();
+});
+
+async function loadStats() {
+    const res = await fetchWithAuth('/certificates/api/stats');
+    const d = await res.json();
+    document.getElementById('stat-total').textContent = d.total;
+    document.getElementById('stat-yellow').textContent = d.yellow_book;
+    document.getElementById('stat-stamp').textContent = d.foreign_stamp;
+    document.getElementById('stat-sick').textContent = d.sick_notes;
+    document.getElementById('stat-month').textContent = d.this_month;
+}
+
+async function loadCerts() {
+    let url = '/certificates/api?';
+    const t = document.getElementById('filter-type').value;
+    const p = document.getElementById('filter-patient').value;
+    const f = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    if (t) url += 'type=' + t + '&';
+    if (p) url += 'patient_id=' + p + '&';
+    if (f) url += 'date_from=' + f + '&';
+    if (to) url += 'date_to=' + to + '&';
+    const res = await fetchWithAuth(url);
+    const certs = await res.json();
+    const tbody = document.querySelector('#certs-table tbody');
+    tbody.innerHTML = '';
+    if (certs.length) {
+        document.getElementById('certs-table').style.display = '';
+        document.getElementById('empty-msg').style.display = 'none';
+        const typeLabels = {sick_note:'Sick Note',tep:'TEP',insurance:'Insurance',police:'Police Medical',yellow_book:'Yellow Book',foreign_stamp:'Foreign Stamp'};
+        const typeColors = {sick_note:'secondary',tep:'info',insurance:'primary',police:'dark',yellow_book:'warning',foreign_stamp:'info'};
+        certs.forEach(c => {
+            tbody.innerHTML += '<tr><td><a href="/patients/' + c.patient_id + '" class="fw-semibold text-decoration-none" style="color:#0f172a">' + esc(c.p_first) + ' ' + esc(c.p_last) + '</a><br><small class="text-muted">' + esc(c.p_patient_id || '') + '</small></td>' +
+                '<td><span class="badge bg-' + (typeColors[c.certificate_type] || 'secondary') + '">' + (typeLabels[c.certificate_type] || c.certificate_type) + '</span></td>' +
+                '<td>' + (c.issue_date || '-') + '</td>' +
+                '<td>' + (c.valid_until || '-') + '</td>' +
+                '<td>Dr. ' + esc(c.d_first || '') + ' ' + esc(c.d_last || '') + '</td>' +
+                '<td><small>' + esc((c.notes || '').substring(0, 50)) + '</small></td>' +
+                '<td><button class="btn btn-sm btn-outline-primary" onclick="showDetail(' + c.id + ')"><i class="bi bi-eye"></i></button></td></tr>';
+        });
+    } else {
+        document.getElementById('certs-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+    }
+}
+
+async function showDetail(id) {
+    const res = await fetchWithAuth('/certificates/api/' + id);
+    certData = await res.json();
+    if (certData.error) { showToast(certData.error, 'danger'); return; }
+    const typeLabels = {sick_note:'Sick Note',tep:'Temporary Employment Permit (TEP)',insurance:'Insurance',police:'Police Medical',yellow_book:'Yellow Book (Vaccination Certificate)',foreign_stamp:'Foreign Stamp'};
+    document.getElementById('detail-title').textContent = typeLabels[certData.certificate_type] || certData.certificate_type;
+    document.getElementById('detail-body').innerHTML =
+        '<div class="row mb-3">' +
+        '<div class="col-md-6"><strong>Patient:</strong> ' + esc(certData.p_first) + ' ' + esc(certData.p_last) +
+        '<br><small class="text-muted">' + esc(certData.p_patient_id || '') + ' | ' + esc(certData.p_phone || '') + '</small></div>' +
+        '<div class="col-md-6"><strong>Doctor:</strong> Dr. ' + esc(certData.d_first) + ' ' + esc(certData.d_last) + '</div></div>' +
+        '<table class="table"><tr><td><strong>Issue Date</strong></td><td>' + (certData.issue_date || '-') + '</td></tr>' +
+        '<tr><td><strong>Valid Until</strong></td><td>' + (certData.valid_until || '-') + '</td></tr>' +
+        '<tr><td><strong>Notes</strong></td><td>' + esc(certData.notes || '-') + '</td></tr></table>';
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+function printCert() {
+    if (!certData) return;
+    const typeLabels = {sick_note:'Sick Note',tep:'Temporary Employment Permit (TEP)',insurance:'Insurance',police:'Police Medical',yellow_book:'Yellow Book (Vaccination Certificate)',foreign_stamp:'Foreign Stamp'};
+    const win = window.open('', '_blank');
+    win.document.write('<html><head><title>Certificate</title><style>body{font-family:Arial,sans-serif;padding:30px;text-align:center}.header{margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:8px 12px;border-bottom:1px solid #eee;text-align:left}.footer{margin-top:40px;font-size:11px;color:#666}.stamp{border:2px solid #16a34a;padding:10px 20px;display:inline-block;margin:20px 0;font-weight:bold;color:#16a34a}</style></head><body>' +
+        '<div class="header"><h2>Kayange Clinic</h2><p>' + (typeLabels[certData.certificate_type] || '') + '</p></div>' +
+        '<p><strong>Patient:</strong> ' + esc(certData.p_first) + ' ' + esc(certData.p_last) + ' (' + esc(certData.p_patient_id || '') + ')</p>' +
+        '<table><tr><td><strong>Issue Date:</strong></td><td>' + (certData.issue_date || '') + '</td></tr>' +
+        '<tr><td><strong>Valid Until:</strong></td><td>' + (certData.valid_until || '') + '</td></tr>' +
+        '<tr><td><strong>Notes:</strong></td><td>' + esc(certData.notes || '') + '</td></tr></table>' +
+        '<div class="stamp">CERTIFIED</div>' +
+        '<div class="footer"><p>Dr. ' + esc(certData.d_first) + ' ' + esc(certData.d_last) + '</p>' +
+        '<p>Kayange Clinic | ' + new Date().toLocaleDateString() + '</p></div></body></html>');
+    win.document.close(); win.print();
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

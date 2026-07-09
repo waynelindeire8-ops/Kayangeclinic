@@ -14,4 +14,5 @@ class Config:
     JWT_COOKIE_SAMESITE = 'Lax'
     DATABASE = os.path.join(BASE_DIR, 'kayange.db')
     DEBUG = True
+    CALL_OUT_FEE = 20000
                                                                                                                                                                                                                                                

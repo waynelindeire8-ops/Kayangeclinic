@@ -9,6 +9,7 @@
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-patients">Patients</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-appointments">Appointments</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-procedures">Procedures</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-lab-revenue">Lab Revenue</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-inventory">Inventory</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-audit">Audit Logs</button></li>
 </ul>
@@ -184,6 +185,53 @@
         </div>
     </div>
 
+    <div class="tab-pane fade" id="tab-lab-revenue">
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card"><div class="card-body text-center">
+                    <h3 class="text-success" id="lab-rev-total">MK 0</h3><small class="text-muted">Total Lab Revenue</small>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card"><div class="card-body text-center">
+                    <h3 id="lab-rev-today">MK 0</h3><small class="text-muted">Today</small>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card"><div class="card-body text-center">
+                    <h3 class="text-danger" id="lab-rev-pending">MK 0</h3><small class="text-muted">Pending</small>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card"><div class="card-body text-center">
+                    <h3 id="lab-rev-count">0</h3><small class="text-muted">Total Invoices</small>
+                </div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Lab Revenue by Day</h6>
+                <div class="d-flex gap-2">
+                    <input type="date" class="form-control form-control-sm" id="lab-rev-from" style="width:auto">
+                    <input type="date" class="form-control form-control-sm" id="lab-rev-to" style="width:auto">
+                    <button class="btn btn-sm btn-primary" onclick="loadLabRevenue()"><i class="bi bi-search"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="labRevenueChart" height="250"></canvas>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Recent Lab Invoices</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0"><thead><tr><th>Invoice</th><th>Patient</th><th>Date</th><th>Total</th><th>Paid</th><th>Status</th></tr></thead>
+                    <tbody id="lab-rev-table"></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="tab-pane fade" id="tab-inventory">
         <div class="row g-3">
             <div class="col-md-3">
@@ -242,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPatientStats();
     loadAppointmentStats();
     loadProcedureStats();
+    loadLabRevenue();
     loadInventoryStats();
     loadAuditLogs(1);
 
@@ -249,6 +298,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('rev-end').value = today.toISOString().split('T')[0];
     const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
     document.getElementById('rev-start').value = monthAgo.toISOString().split('T')[0];
+    document.getElementById('lab-rev-to').value = today.toISOString().split('T')[0];
+    document.getElementById('lab-rev-from').value = monthAgo.toISOString().split('T')[0];
 });
 
 async function loadRevenue() {
@@ -279,6 +330,59 @@ async function loadRevenue() {
             datasets: [
                 { label: 'Billed', data: data.map(d => d.total_billed), backgroundColor: '#16a34a', borderRadius: 4 },
                 { label: 'Paid', data: data.map(d => d.total_paid), backgroundColor: '#22c55e', borderRadius: 4 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }
+    });
+}
+
+async function loadLabRevenue() {
+    const from = document.getElementById('lab-rev-from').value;
+    const to = document.getElementById('lab-rev-to').value;
+    let url = '/lab/invoices/api?';
+    if (from) url += 'date_from=' + from + '&';
+    if (to) url += 'date_to=' + to + '&';
+    const res = await fetchWithAuth(url);
+    const invoices = await res.json();
+
+    let totalRevenue = 0, todayRevenue = 0, pending = 0, totalCount = invoices.length;
+    const today = new Date().toISOString().split('T')[0];
+    const dailyData = {};
+    const tbody = document.getElementById('lab-rev-table');
+    tbody.innerHTML = '';
+
+    invoices.forEach(i => {
+        totalRevenue += i.amount_paid;
+        if (i.created_at && i.created_at.startsWith(today)) todayRevenue += i.amount_paid;
+        if (i.payment_status !== 'paid') pending += i.balance;
+        const day = (i.created_at || '').split(' ')[0];
+        if (!dailyData[day]) dailyData[day] = { billed: 0, paid: 0 };
+        dailyData[day].billed += i.total_amount;
+        dailyData[day].paid += i.amount_paid;
+        const sc = {pending:'warning',partial:'info',paid:'success'};
+        tbody.innerHTML += '<tr><td><span class="fw-semibold">' + esc(i.invoice_number) + '</span></td>' +
+            '<td>' + esc(i.p_first || '') + ' ' + esc(i.p_last || '') + '</td>' +
+            '<td>' + (i.created_at || '').split(' ')[0] + '</td>' +
+            '<td>MWK ' + Number(i.total_amount).toLocaleString() + '</td>' +
+            '<td>MWK ' + Number(i.amount_paid).toLocaleString() + '</td>' +
+            '<td><span class="badge bg-' + (sc[i.payment_status] || 'secondary') + '">' + i.payment_status + '</span></td></tr>';
+    });
+
+    document.getElementById('lab-rev-total').textContent = 'MK ' + totalRevenue.toLocaleString();
+    document.getElementById('lab-rev-today').textContent = 'MK ' + todayRevenue.toLocaleString();
+    document.getElementById('lab-rev-pending').textContent = 'MK ' + pending.toLocaleString();
+    document.getElementById('lab-rev-count').textContent = totalCount;
+
+    const labels = Object.keys(dailyData).sort();
+    const ctx = document.getElementById('labRevenueChart').getContext('2d');
+    if (window._labRevChart) window._labRevChart.destroy();
+    window._labRevChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Billed', data: labels.map(l => dailyData[l].billed), backgroundColor: '#3b82f6', borderRadius: 4 },
+                { label: 'Paid', data: labels.map(l => dailyData[l].paid), backgroundColor: '#22c55e', borderRadius: 4 }
             ]
         },
         options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } } } }

@@ -66,6 +66,15 @@
                             <option value="ultrasound">Ultrasound</option>
                             <option value="cardiac">Cardiac</option>
                             <option value="microbiology">Microbiology</option>
+                            <option value="radiology">Radiology</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Classification</label>
+                        <select class="form-select" id="qc-classification">
+                            <option value="standard">Standard</option>
+                            <option value="rapid">Rapid</option>
+                            <option value="reusable">Reusable</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -104,9 +113,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     activeItems.forEach(c => {
         const o = document.createElement('option');
         o.value = c.id;
-        o.textContent = c.test_name + ' (' + c.category + ')';
+        const cls = c.classification ? ' [' + c.classification + ']' : '';
+        o.textContent = c.test_name + ' (' + c.category + ')' + cls;
         o.dataset.name = c.test_name;
         o.dataset.category = c.category;
+        o.dataset.classification = c.classification || '';
         cSel.appendChild(o);
     });
 
@@ -129,6 +140,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             body: JSON.stringify({
                 test_name: name,
                 category: document.getElementById('qc-category').value,
+                classification: document.getElementById('qc-classification').value,
                 description: document.getElementById('qc-desc').value.trim(),
                 parameters: '[]'
             })
@@ -139,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             bootstrap.Modal.getInstance(document.getElementById('addCatalogModal')).hide();
             document.getElementById('qc-name').value = '';
             document.getElementById('qc-desc').value = '';
-            catalog.push({ id: data.id, test_name: name, category: document.getElementById('qc-category').value, is_active: 1 });
+            catalog.push({ id: data.id, test_name: name, category: document.getElementById('qc-category').value, classification: document.getElementById('qc-classification').value, is_active: 1 });
             const o = document.createElement('option');
             o.value = data.id;
             o.textContent = name + ' (' + document.getElementById('qc-category').value + ')';
