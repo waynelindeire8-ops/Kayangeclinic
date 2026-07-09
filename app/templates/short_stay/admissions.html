@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-clock-history"></i> Admission History</h4>
+    <div>
+        <select class="form-select d-inline-block w-auto" id="filter-status" onchange="loadAdmissions()">
+            <option value="active">Active Only</option>
+            <option value="all">All Admissions</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="admissions-table">
+                <thead><tr><th>#</th><th>Patient</th><th>Resource</th><th>Diagnosis</th><th>Admitted</th><th>Discharged</th><th>Duration</th><th>Type</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="empty-msg" class="text-center text-muted py-4" style="display:none"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No admissions found</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadAdmissions);
+
+async function loadAdmissions() {
+    const status = document.getElementById('filter-status').value;
+    const res = await fetchWithAuth('/short-stay/api/admissions?status=' + status);
+    const data = await res.json();
+    const tbody = document.querySelector('#admissions-table tbody');
+    tbody.innerHTML = '';
+    if (!data.length) {
+        document.getElementById('admissions-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+        return;
+    }
+    document.getElementById('admissions-table').style.display = '';
+    document.getElementById('empty-msg').style.display = 'none';
+    data.forEach((a, i) => {
+        const resource = a.bed_id ? 'Bed #' + a.bed_id : (a.drip_station_id ? 'Station #' + a.drip_station_id : '-');
+        const duration = a.admitted_at ? getDuration(a.admitted_at, a.discharged_at) : '-';
+        tbody.innerHTML += '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td><a href="/patients/' + a.patient_id + '" class="fw-semibold text-decoration-none" style="color:#0f172a">' + (a.p_first || '') + ' ' + (a.p_last || '') + '</a><br><small class="text-muted">' + (a.p_patient_id || '') + '</small></td>' +
+            '<td>' + resource + '</td>' +
+            '<td>' + (a.diagnosis || '-') + '</td>' +
+            '<td>' + (a.admitted_at || '-') + '</td>' +
+            '<td>' + (a.discharged_at || '<span class="badge bg-warning">Active</span>') + '</td>' +
+            '<td>' + duration + '</td>' +
+            '<td>' + (a.discharge_type || '-') + '</td>' +
+            '</tr>';
+    });
+}
+
+function getDuration(start, end) {
+    const s = new Date(start);
+    const e = end ? new Date(end) : new Date();
+    const diff = Math.floor((e - s) / 60000);
+    if (diff < 60) return diff + ' min';
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return h + 'h ' + m + 'm';
+}
+</script>
+{% endblock %}

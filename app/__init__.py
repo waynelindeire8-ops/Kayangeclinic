@@ -68,6 +68,9 @@ def create_app():
     from app.routes.telemedicine import telemedicine_bp
     app.register_blueprint(telemedicine_bp)
 
+    from app.routes.short_stay import short_stay_bp
+    app.register_blueprint(short_stay_bp)
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

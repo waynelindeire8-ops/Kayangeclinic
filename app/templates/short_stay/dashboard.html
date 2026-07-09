@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-hospital"></i> Short Stay Unit</h4>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#admitModal"><i class="bi bi-plus-lg me-1"></i>Admit Patient</button>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><h6>Beds</h6></div>
+            <div class="card-body">
+                <div class="row g-2" id="beds-grid"></div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Drip Stations</h6></div>
+            <div class="card-body">
+                <div class="row g-2" id="stations-grid"></div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Currently Occupied</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0" id="occupied-table">
+                        <thead><tr><th>Patient</th><th>Resource</th><th>Diagnosis</th><th>Admitted</th><th>Duration</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="occupied-empty" class="text-center text-muted py-4" style="display:none"><i class="bi bi-hospital" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No patients currently admitted</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6>Quick Stats</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3"><span class="text-muted">Beds Available:</span><strong id="stat-beds-avail">0</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span class="text-muted">Beds Occupied:</span><strong id="stat-beds-occ">0</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span class="text-muted">Stations Available:</span><strong id="stat-stations-avail">0</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span class="text-muted">Stations Occupied:</span><strong id="stat-stations-occ">0</strong></div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header"><h6>Recent Activity</h6></div>
+            <div class="card-body p-0" id="recent-activity">
+                <div class="text-center text-muted py-3" style="font-size:0.875rem">No recent activity</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admit Modal -->
+<div class="modal fade" id="admitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5>Admit Patient</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <form id="admit-form">
+            <div class="mb-3"><label class="form-label">Patient <span class="text-danger">*</span></label>
+                <select class="form-select" id="admit-patient" required><option value="">Select patient...</option></select></div>
+            <div class="mb-3"><label class="form-label">Resource Type</label>
+                <select class="form-select" id="admit-type" onchange="toggleResourceSelect()">
+                    <option value="bed">Bed</option><option value="drip">Drip Station</option></select></div>
+            <div class="mb-3" id="bed-select-container"><label class="form-label">Bed <span class="text-danger">*</span></label>
+                <select class="form-select" id="admit-bed" required></select></div>
+            <div class="mb-3" id="station-select-container" style="display:none"><label class="form-label">Drip Station <span class="text-danger">*</span></label>
+                <select class="form-select" id="admit-station" required></select></div>
+            <div class="mb-3"><label class="form-label">Diagnosis / Reason</label>
+                <input type="text" class="form-control" id="admit-diagnosis" placeholder="e.g. Malaria, Dehydration"></div>
+            <div class="mb-3"><label class="form-label">Notes</label>
+                <textarea class="form-control" id="admit-notes" rows="2"></textarea></div>
+        </form>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-primary" onclick="admitPatient()"><i class="bi bi-plus-circle me-1"></i>Admit</button>
+    </div>
+</div></div></div>
+
+<!-- Discharge Confirm -->
+<div class="modal fade" id="dischargeModal" tabindex="-1"><div class="modal-dialog modal-sm"><div class="modal-content">
+    <div class="modal-header"><h5>Discharge Patient</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <p>Discharge this patient from short stay?</p>
+        <select class="form-select" id="discharge-type">
+            <option value="discharged">Discharged</option><option value="transferred">Transferred</option>
+            <option value="admitted">Admitted to Ward</option><option value="absconded">Absconded</option></select>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-danger" id="btn-discharge" onclick="dischargePatient()"><i class="bi bi-box-arrow-right me-1"></i>Discharge</button>
+    </div>
+</div></div></div>
+
+<script>
+let dischargeId = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const pRes = await fetchWithAuth('/patients/api');
+    const patients = await pRes.json();
+    const sel = document.getElementById('admit-patient');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
+        sel.appendChild(o);
+    });
+    loadOccupancy();
+});
+
+function toggleResourceSelect() {
+    const type = document.getElementById('admit-type').value;
+    document.getElementById('bed-select-container').style.display = type === 'bed' ? '' : 'none';
+    document.getElementById('station-select-container').style.display = type === 'drip' ? '' : 'none';
+}
+
+async function loadOccupancy() {
+    const res = await fetchWithAuth('/short-stay/api/occupancy');
+    const data = await res.json();
+
+    const bedsGrid = document.getElementById('beds-grid');
+    bedsGrid.innerHTML = '';
+    data.beds.forEach(b => {
+        const occ = data.occupied_beds.find(o => o.bed_id === b.id);
+        const isOcc = b.status === 'occupied';
+        bedsGrid.innerHTML +=
+            '<div class="col-md-3"><div class="bed-card ' + b.status + '" style="cursor:pointer" onclick="selectBed(' + b.id + ')">' +
+            '<div class="bed-number">' + b.label + '</div>' +
+            '<div class="bed-status"><span class="badge bg-' + (isOcc ? 'danger' : 'success') + '">' + b.status + '</span></div>' +
+            (occ ? '<div class="bed-patient mt-1"><small>' + occ.p_first + ' ' + occ.p_last + '</small></div>' : '') +
+            '</div></div>';
+    });
+
+    const statGrid = document.getElementById('stations-grid');
+    statGrid.innerHTML = '';
+    data.stations.forEach(s => {
+        const occ = data.occupied_stations.find(o => o.drip_station_id === s.id);
+        const isOcc = s.status === 'occupied';
+        statGrid.innerHTML +=
+            '<div class="col-md-4"><div class="bed-card ' + s.status + '" style="cursor:pointer" onclick="selectStation(' + s.id + ')">' +
+            '<div class="bed-number">' + s.label + '</div>' +
+            '<div class="bed-status"><span class="badge bg-' + (isOcc ? 'danger' : 'success') + '">' + s.status + '</span></div>' +
+            (occ ? '<div class="bed-patient mt-1"><small>' + occ.p_first + ' ' + occ.p_last + '</small></div>' : '') +
+            '</div></div>';
+    });
+
+    const bedAvail = data.beds.filter(b => b.status === 'available').length;
+    const bedOcc = data.beds.filter(b => b.status === 'occupied').length;
+    const staAvail = data.stations.filter(s => s.status === 'available').length;
+    const staOcc = data.stations.filter(s => s.status === 'occupied').length;
+    document.getElementById('stat-beds-avail').textContent = bedAvail;
+    document.getElementById('stat-beds-occ').textContent = bedOcc;
+    document.getElementById('stat-stations-avail').textContent = staAvail;
+    document.getElementById('stat-stations-occ').textContent = staOcc;
+
+    // Fill resource selects
+    const bedSel = document.getElementById('admit-bed');
+    bedSel.innerHTML = '';
+    data.beds.filter(b => b.status === 'available').forEach(b => {
+        const o = document.createElement('option'); o.value = b.id; o.textContent = b.label; bedSel.appendChild(o);
+    });
+    if (!bedSel.options.length) bedSel.innerHTML = '<option value="">No beds available</option>';
+
+    const staSel = document.getElementById('admit-station');
+    staSel.innerHTML = '';
+    data.stations.filter(s => s.status === 'available').forEach(s => {
+        const o = document.createElement('option'); o.value = s.id; o.textContent = s.label; staSel.appendChild(o);
+    });
+    if (!staSel.options.length) staSel.innerHTML = '<option value="">No stations available</option>';
+
+    // Occupied table
+    const tbody = document.querySelector('#occupied-table tbody');
+    tbody.innerHTML = '';
+    const allOcc = [...data.occupied_beds, ...data.occupied_stations];
+    if (allOcc.length) {
+        document.getElementById('occupied-empty').style.display = 'none';
+        allOcc.forEach(o => {
+            const resource = o.bed_id ? ('Bed #' + o.bed_id) : ('Station #' + o.drip_station_id);
+            const duration = getDuration(o.admitted_at);
+            tbody.innerHTML += '<tr><td><a href="/patients/' + o.patient_id + '" class="fw-semibold text-decoration-none" style="color:#0f172a">' + (o.p_first || '') + ' ' + (o.p_last || '') + '</a><br><small class="text-muted">' + (o.p_patient_id || '') + '</small></td>' +
+                '<td>' + resource + '</td><td>' + (o.diagnosis || '-') + '</td>' +
+                '<td>' + (o.admitted_at || '') + '</td><td><span class="badge bg-warning">' + duration + '</span></td>' +
+                '<td><button class="btn btn-sm btn-outline-danger" onclick="showDischarge(' + o.id + ')">Discharge</button></td></tr>';
+        });
+    } else { document.getElementById('occupied-table').style.display = 'none'; document.getElementById('occupied-empty').style.display = ''; }
+
+    // Recent activity
+    const activity = document.getElementById('recent-activity');
+    if (data.recent && data.recent.length) {
+        activity.innerHTML = '';
+        data.recent.forEach(r => {
+            const admitted = !r.discharged_at;
+            activity.innerHTML +=
+                '<div class="d-flex align-items-center p-2 border-bottom" style="font-size:0.85rem">' +
+                '<span class="badge bg-' + (admitted ? 'success' : 'secondary') + ' me-2" style="font-size:0.6rem">' + (admitted ? 'IN' : 'OUT') + '</span>' +
+                '<div><div class="fw-semibold">' + (r.p_first || '') + ' ' + (r.p_last || '') + '</div>' +
+                '<small class="text-muted">' + (admitted ? 'Admitted' : 'Discharged') + ' ' + (r.admitted_at || '') + '</small></div></div>';
+        });
+    }
+}
+
+function getDuration(admittedAt) {
+    if (!admittedAt) return '-';
+    const start = new Date(admittedAt);
+    const now = new Date();
+    const diff = Math.floor((now - start) / 60000);
+    if (diff < 60) return diff + ' min';
+    const hours = Math.floor(diff / 60);
+    const mins = diff % 60;
+    return hours + 'h ' + mins + 'm';
+}
+
+function selectBed(id) {
+    document.getElementById('admit-type').value = 'bed';
+    toggleResourceSelect();
+    document.getElementById('admit-bed').value = id;
+    new bootstrap.Modal(document.getElementById('admitModal')).show();
+}
+
+function selectStation(id) {
+    document.getElementById('admit-type').value = 'drip';
+    toggleResourceSelect();
+    document.getElementById('admit-station').value = id;
+    new bootstrap.Modal(document.getElementById('admitModal')).show();
+}
+
+async function admitPatient() {
+    const patientId = document.getElementById('admit-patient').value;
+    const type = document.getElementById('admit-type').value;
+    const resourceId = type === 'bed'
+        ? parseInt(document.getElementById('admit-bed').value)
+        : parseInt(document.getElementById('admit-station').value);
+
+    if (!patientId || !resourceId) { showToast('Select patient and resource', 'danger'); return; }
+
+    const body = {
+        patient_id: parseInt(patientId),
+        resource_type: type,
+        resource_id: resourceId,
+        diagnosis: document.getElementById('admit-diagnosis').value.trim(),
+        notes: document.getElementById('admit-notes').value.trim()
+    };
+    const res = await fetchWithAuth('/short-stay/api/admit', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('admitModal')).hide();
+        loadOccupancy();
+        showToast('Patient admitted', 'success');
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed', 'danger');
+    }
+}
+
+function showDischarge(id) {
+    dischargeId = id;
+    new bootstrap.Modal(document.getElementById('dischargeModal')).show();
+}
+
+async function dischargePatient() {
+    if (!dischargeId) return;
+    const type = document.getElementById('discharge-type').value;
+    const res = await fetchWithAuth('/short-stay/api/discharge/' + dischargeId, {
+        method: 'POST', body: JSON.stringify({ discharge_type: type })
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('dischargeModal')).hide();
+        loadOccupancy();
+        showToast('Patient discharged', 'success');
+    }
+}
+</script>
+
+<style>
+.bed-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center; transition: all 0.2s; }
+.bed-card:hover { border-color: #16a34a; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.bed-card.occupied { border-color: #dc2626; background: #fef2f2; }
+.bed-card.cleaning { border-color: #f59e0b; background: #fffbeb; }
+.bed-card.reserved { border-color: #3b82f6; background: #eff6ff; }
+.bed-number { font-weight: 700; font-size: 1.1rem; color: #0f172a; }
+.bed-status { margin-top: 0.25rem; }
+.bed-patient { font-weight: 500; font-size: 0.8rem; color: #475569; }
+</style>
+{% endblock %}

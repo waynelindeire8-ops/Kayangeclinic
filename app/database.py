@@ -159,7 +159,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             patient_id INTEGER NOT NULL,
             performed_by INTEGER,
-            procedure_type TEXT CHECK(procedure_type IN ('short_stay','nebulisation','burn_wound','other')),
+            procedure_type TEXT CHECK(procedure_type IN ('short_stay','nebulisation','burn_wound','ecg','other')),
             notes TEXT,
             start_time TIMESTAMP,
             end_time TIMESTAMP,
@@ -630,6 +630,40 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(provider_id) REFERENCES insurance_providers(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS short_stay_beds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bed_number INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            status TEXT DEFAULT 'available' CHECK(status IN ('available','occupied','reserved','cleaning')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS short_stay_drip_stations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_number INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            status TEXT DEFAULT 'available' CHECK(status IN ('available','occupied','reserved')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS short_stay_admissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            bed_id INTEGER,
+            drip_station_id INTEGER,
+            admitted_by INTEGER NOT NULL,
+            admitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            discharge_type TEXT,
+            discharged_at TIMESTAMP,
+            diagnosis TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(bed_id) REFERENCES short_stay_beds(id),
+            FOREIGN KEY(drip_station_id) REFERENCES short_stay_drip_stations(id),
+            FOREIGN KEY(admitted_by) REFERENCES users(id)
+        );
     ''')
 
     conn.commit()
@@ -643,6 +677,8 @@ def init_db():
     _seed_radiology_catalog(conn)
     _migrate_telemedicine(conn)
     _seed_auth_rules(conn)
+    _seed_short_stay(conn)
+    _migrate_procedures_ecg(conn)
     conn.close()
 
 
@@ -869,3 +905,42 @@ def _seed_auth_rules(conn):
             'INSERT INTO insurance_authorization_rules (provider_id, item_type, item_name, requires_auth) VALUES (?, ?, ?, ?)',
             (provider_id, item_type, item_name, requires_auth))
     conn.commit()
+
+
+def _seed_short_stay(conn):
+    bed_count = conn.execute('SELECT COUNT(*) as c FROM short_stay_beds').fetchone()['c']
+    if bed_count == 0:
+        for i in range(1, 5):
+            conn.execute('INSERT INTO short_stay_beds (bed_number, label) VALUES (?, ?)',
+                         (i, f'Bed {i}'))
+    station_count = conn.execute('SELECT COUNT(*) as c FROM short_stay_drip_stations').fetchone()['c']
+    if station_count == 0:
+        for i in range(1, 4):
+            conn.execute('INSERT INTO short_stay_drip_stations (station_number, label) VALUES (?, ?)',
+                         (i, f'Drip Station {i}'))
+    conn.commit()
+
+
+def _migrate_procedures_ecg(conn):
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='procedures'"
+    ).fetchone()
+    if schema and 'ecg' not in schema['sql']:
+        conn.executescript('''
+            CREATE TABLE procedures_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL,
+                performed_by INTEGER,
+                procedure_type TEXT CHECK(procedure_type IN ('short_stay','nebulisation','burn_wound','ecg','other')),
+                notes TEXT,
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(patient_id) REFERENCES patients(id),
+                FOREIGN KEY(performed_by) REFERENCES users(id)
+            );
+            INSERT INTO procedures_new SELECT * FROM procedures;
+            DROP TABLE procedures;
+            ALTER TABLE procedures_new RENAME TO procedures;
+        ''')
+        conn.commit()
