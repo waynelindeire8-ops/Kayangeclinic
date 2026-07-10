@@ -65,8 +65,14 @@ def api_init_tables():
     current_user = get_jwt()
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
-    success = init_supabase_tables()
-    return jsonify({'message': 'Tables initialized' if success else 'Failed to initialize'})
+    try:
+        success = init_supabase_tables()
+        if success:
+            return jsonify({'message': 'Tables initialized successfully'})
+        else:
+            return jsonify({'error': 'Failed to initialize tables. Check Supabase connection settings.'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Connection failed: {str(e)}'}), 500
 
 
 @backup_bp.route('/status', methods=['GET'])

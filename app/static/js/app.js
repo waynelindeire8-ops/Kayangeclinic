@@ -14,14 +14,14 @@ function getUser() {
 
 async function fetchWithAuth(url, options = {}) {
     const token = getToken();
+    const isFormData = options.body instanceof FormData;
     const headers = {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         ...options.headers
     };
 
-    if (!options.body) {
-        delete headers['Content-Type'];
+    if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
     }
 
     const res = await fetch(url, {

@@ -23,7 +23,11 @@ class Config:
 
     SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://xozdmkpkxholhukblfuv.supabase.co')
     SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_publishable_V2HZQ5gjJ0Nb7qmh9Pxziw__cR1DpWB')
-    SUPABASE_DB_URL = os.environ.get(
-        'SUPABASE_DB_URL',
-        'postgresql://postgres:[himjim@1234@]@db.xozdmkpkxholhukblfuv.supabase.co:5432/postgres'
+
+    SUPABASE_DB_URL = os.environ.get('SUPABASE_DB_URL',
+        'postgresql://postgres.xozdmkpkxholhukblfuv:himjim%401234%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require'
     )
+    SUPABASE_DB_HOST = os.environ.get('SUPABASE_DB_HOST', 'aws-0-eu-central-1.pooler.supabase.com')
+    SUPABASE_DB_PORT = os.environ.get('SUPABASE_DB_PORT', '6543')
+    SUPABASE_DB_USER = os.environ.get('SUPABASE_DB_USER', 'postgres.xozdmkpkxholhukblfuv')
+    SUPABASE_DB_PASSWORD = os.environ.get('SUPABASE_DB_PASSWORD', 'himjim@1234@')

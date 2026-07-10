@@ -1,4 +1,5 @@
 import sqlite3
+import re
 import json
 import logging
 from datetime import datetime, date
@@ -14,20 +15,23 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 SUPABASE_TABLES = [
-    'users', 'patients', 'patient_allergies', 'patient_medical_history',
-    'patient_medications', 'departments', 'appointments', 'consultations',
-    'vital_signs', 'medical_examinations', 'diagnoses', 'prescriptions',
-    'prescription_orders', 'prescription_refills', 'pharmacy_inventory',
-    'pharmacy_dispensing', 'lab_test_catalog', 'lab_tests', 'lab_test_results',
-    'billing', 'billing_items', 'insurance_providers', 'patient_insurance',
+    'system_config', 'audit_logs',
+    'users', 'departments', 'insurance_providers',
+    'patients', 'patient_allergies', 'patient_medical_history', 'patient_medications',
+    'patient_insurance',
+    'appointments', 'consultations', 'vital_signs', 'medical_examinations', 'diagnoses',
+    'prescription_orders', 'prescriptions', 'prescription_refills',
+    'pharmacy_inventory', 'pharmacy_dispensing',
+    'lab_test_catalog', 'lab_tests', 'lab_test_results',
+    'billing', 'billing_items',
     'insurance_claims', 'claim_items', 'claim_status_history',
-    'insurance_authorization_rules', 'medical_certificates', 'packages',
-    'package_services', 'procedures', 'referrals', 'messages',
-    'notifications', 'system_config', 'audit_logs', 'radiology_orders',
-    'radiology_results', 'telemedicine_sessions', 'telemedicine_messages',
-    'telemedicine_payments', 'telemedicine_recordings', 'short_stay_beds',
-    'short_stay_drip_stations', 'short_stay_admissions', 'drug_scheme_prices',
-    'lab_invoices', 'lab_invoice_items', 'suppliers',
+    'insurance_authorization_rules', 'medical_certificates',
+    'packages', 'package_services',
+    'procedures', 'referrals', 'messages', 'notifications',
+    'radiology_orders', 'radiology_results',
+    'telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments', 'telemedicine_recordings',
+    'short_stay_beds', 'short_stay_drip_stations', 'short_stay_admissions',
+    'drug_scheme_prices', 'lab_invoices', 'lab_invoice_items', 'suppliers',
 ]
 
 
@@ -56,7 +60,17 @@ def _get_pg_type(col_type):
 def _get_pg_conn():
     if not HAS_PG:
         raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
-    return psycopg2.connect(Config.SUPABASE_DB_URL)
+    try:
+        return psycopg2.connect(Config.SUPABASE_DB_URL)
+    except Exception:
+        return psycopg2.connect(
+            host=Config.SUPABASE_DB_HOST,
+            port=Config.SUPABASE_DB_PORT,
+            dbname='postgres',
+            user=Config.SUPABASE_DB_USER,
+            password=Config.SUPABASE_DB_PASSWORD,
+            sslmode='require'
+        )
 
 
 def _adapt_value(val):
@@ -98,28 +112,24 @@ def init_supabase_tables():
                     continue
 
                 create_sql = schema['sql']
-                create_sql = create_sql.replace('AUTOINCREMENT', 'SERIAL')
-                create_sql = create_sql.replace('AUTO_INCREMENT', 'SERIAL')
 
-                for keyword in ['IF NOT EXISTS', 'PRIMARY KEY', 'NOT NULL', 'DEFAULT', 'CHECK', 'UNIQUE']:
-                    pass
+                create_sql = re.sub(
+                    r'\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b',
+                    'SERIAL PRIMARY KEY', create_sql, flags=re.IGNORECASE
+                )
+                create_sql = re.sub(
+                    r'\bINTEGER\s+PRIMARY\s+KEY\b',
+                    'SERIAL PRIMARY KEY', create_sql, flags=re.IGNORECASE
+                )
+                create_sql = re.sub(r'\bAUTOINCREMENT\b', '', create_sql, flags=re.IGNORECASE)
+                create_sql = re.sub(r'\bAUTO_INCREMENT\b', '', create_sql, flags=re.IGNORECASE)
 
-                create_sql = create_sql.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
-                create_sql = create_sql.replace('INTEGER PRIMARY KEY', 'SERIAL PRIMARY KEY')
+                create_sql = re.sub(r'(?<!\w)INTEGER(?!\s+PRIMARY)', 'BIGINT', create_sql)
+                create_sql = re.sub(r'(?<!\w)REAL(?!\w)', 'DOUBLE PRECISION', create_sql)
+                create_sql = re.sub(r'(?<!\w)BLOB(?!\w)', 'BYTEA', create_sql)
 
-                pg_type_map = {
-                    'INTEGER': 'BIGINT',
-                    'REAL': 'DOUBLE PRECISION',
-                    'TEXT': 'TEXT',
-                    'BLOB': 'BYTEA',
-                    'BOOLEAN': 'BOOLEAN',
-                    'DATE': 'DATE',
-                    'TIMESTAMP': 'TIMESTAMP',
-                    'NUMERIC': 'NUMERIC',
-                }
-
-                for sqlite_type, pg_type in pg_type_map.items():
-                    create_sql = create_sql.replace(sqlite_type, pg_type)
+                create_sql = re.sub(r',\s*FOREIGN KEY[^,)]*\([^)]*\)\s*REFERENCES[^,)]*\([^)]*\)(?:\s*ON DELETE[^,)]*)?', '', create_sql, flags=re.IGNORECASE)
+                create_sql = re.sub(r'\bREFERENCES\s+\w+\s*\([^)]*\)(?:\s*ON DELETE[^,)]*)?', '', create_sql, flags=re.IGNORECASE)
 
                 cur.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE")
                 cur.execute(create_sql)
@@ -128,6 +138,8 @@ def init_supabase_tables():
             except Exception as e:
                 logger.warning(f"Error creating table {table_name}: {e}")
                 pg.rollback()
+                pg = _get_pg_conn()
+                cur = pg.cursor()
                 continue
 
         pg.commit()
