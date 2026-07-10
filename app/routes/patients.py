@@ -211,7 +211,10 @@ def api_history(id):
 @patients_bp.route('/import', strict_slashes=False)
 @login_required
 def import_page():
-    return render_template('patients/import.html')
+    db = get_db()
+    providers = db.execute('SELECT id, name FROM insurance_providers ORDER BY name').fetchall()
+    db.close()
+    return render_template('patients/import.html', providers=providers)
 
 
 @patients_bp.route('/api/import', methods=['POST'])
