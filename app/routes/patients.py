@@ -217,17 +217,21 @@ def import_page():
 @patients_bp.route('/api/import', methods=['POST'])
 @login_required
 def api_import():
+    try:
+        return _api_import()
+    except Exception as e:
+        return jsonify({'error': f'Import error: {str(e)}'}), 500
+
+
+def _api_import():
     current_user = get_jwt()
     file = request.files.get('file')
     if not file or not file.filename.endswith(('.xlsx', '.xls')):
         return jsonify({'error': 'Please upload an Excel file (.xlsx or .xls)'}), 400
 
-    try:
-        import openpyxl
-        wb = openpyxl.load_workbook(file)
-        ws = wb.active
-    except Exception as e:
-        return jsonify({'error': f'Failed to read Excel file: {str(e)}'}), 400
+    import openpyxl
+    wb = openpyxl.load_workbook(file)
+    ws = wb.active
 
     headers = [str(cell.value).strip().lower() if cell.value else '' for cell in ws[1]]
 
@@ -315,11 +319,9 @@ def api_import():
         scheme_id_val = None
         if scheme_provider_val:
             key = scheme_provider_val.strip().lower()
-            # exact match first
             if key in provider_map:
                 scheme_id_val = provider_map[key]
             else:
-                # prefix match: find provider whose name starts with key (or vice versa)
                 matches = []
                 for pname, pid in provider_map.items():
                     if pname.startswith(key) or key.startswith(pname):

@@ -127,15 +127,31 @@ document.getElementById('import-form').addEventListener('submit', async function
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    const res = await fetchWithAuth('/patients/api/import', {
-        method: 'POST',
-        body: formData
-    });
+    let res;
+    try {
+        res = await fetchWithAuth('/patients/api/import', {
+            method: 'POST',
+            body: formData
+        });
+    } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload me-1"></i>Import Patients';
+        document.getElementById('import-result').style.display = 'block';
+        document.getElementById('import-result').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i>Network error: ' + err.message + '</div>';
+        return;
+    }
 
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-upload me-1"></i>Import Patients';
 
-    const result = await res.json();
+    let result;
+    try {
+        result = await res.json();
+    } catch (err) {
+        document.getElementById('import-result').style.display = 'block';
+        document.getElementById('import-result').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i>Server returned an invalid response (status ' + res.status + '). Check console for details.</div>';
+        return;
+    }
     const div = document.getElementById('import-result');
     div.style.display = 'block';
 
