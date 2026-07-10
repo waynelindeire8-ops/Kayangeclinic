@@ -309,8 +309,8 @@ def api_import():
                 '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
                    emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_number)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (patient_id, first_name, last_name, dob, gender,
-                 get_val('phone'), get_val('email'), get_val('address'),
+                (patient_id, first_name, last_name, dob or None, gender,
+                 get_val('phone') or None, get_val('email'), get_val('address'),
                  get_val('emergency_contact_name'), get_val('emergency_contact_phone'),
                  get_val('blood_group'), get_val('scheme_provider'), get_val('scheme_type'),
                  get_val('scheme_number'))

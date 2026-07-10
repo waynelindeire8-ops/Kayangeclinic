@@ -74,9 +74,9 @@ def init_db():
             patient_id TEXT UNIQUE NOT NULL,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
-            dob DATE NOT NULL,
+            dob DATE,
             gender TEXT CHECK(gender IN ('Male','Female','Other')),
-            phone TEXT NOT NULL,
+            phone TEXT,
             email TEXT,
             address TEXT,
             emergency_contact_name TEXT,
@@ -755,6 +755,7 @@ def init_db():
     _migrate_certificates_yellow_book(conn)
     _seed_lab_catalog(conn)
     _migrate_dispensing_unit_price(conn)
+    _migrate_patients_nullable(conn)
     _seed_admin_user(conn)
     conn.close()
 
@@ -1245,3 +1246,48 @@ def _seed_admin_user(conn):
         )
         conn.commit()
         print('Default admin user created: admin / admin123')
+
+
+def _migrate_patients_nullable(conn):
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(patients)").fetchall()]
+        if 'dob' in cols:
+            dob_info = conn.execute("PRAGMA table_info(patients)").fetchone()
+            for r in conn.execute("PRAGMA table_info(patients)").fetchall():
+                if r[1] == 'dob' and r[3] == 1:
+                    _recreate_patients_table(conn)
+                    return
+    except sqlite3.OperationalError:
+        pass
+
+
+def _recreate_patients_table(conn):
+    conn.execute("ALTER TABLE patients RENAME TO patients_old")
+    conn.execute('''CREATE TABLE patients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id TEXT UNIQUE NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        dob DATE,
+        gender TEXT CHECK(gender IN ('Male','Female','Other')),
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        emergency_contact_name TEXT,
+        emergency_contact_phone TEXT,
+        blood_group TEXT,
+        scheme_provider TEXT,
+        scheme_type TEXT,
+        scheme_id INTEGER,
+        scheme_number TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.execute('''INSERT INTO patients
+        SELECT id, patient_id, first_name, last_name, dob, gender, phone, email, address,
+               emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider,
+               scheme_type, scheme_id, scheme_number, created_at, updated_at
+        FROM patients_old''')
+    conn.execute("DROP TABLE patients_old")
+    conn.commit()
+    print('Migrated patients table: dob and phone now nullable')
