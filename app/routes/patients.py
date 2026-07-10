@@ -258,6 +258,13 @@ def api_import():
         return jsonify({'error': 'Excel must have "First Name" and "Last Name" columns. Found: ' + ', '.join(headers)}), 400
 
     db = get_db()
+
+    # Build insurance provider lookup (name -> id, case-insensitive)
+    providers_raw = db.execute('SELECT id, name FROM insurance_providers').fetchall()
+    provider_map = {}
+    for p in providers_raw:
+        provider_map[p['name'].strip().lower()] = p['id']
+
     last = db.execute('SELECT patient_id FROM patients ORDER BY id DESC LIMIT 1').fetchone()
     if last:
         num = int(last['patient_id'].replace('KMC-', ''))
@@ -304,16 +311,32 @@ def api_import():
             if gender not in ('Male', 'Female', 'Other'):
                 gender = None
 
+        scheme_provider_val = get_val('scheme_provider')
+        scheme_id_val = None
+        if scheme_provider_val:
+            key = scheme_provider_val.strip().lower()
+            # exact match first
+            if key in provider_map:
+                scheme_id_val = provider_map[key]
+            else:
+                # prefix match: find provider whose name starts with key (or vice versa)
+                matches = []
+                for pname, pid in provider_map.items():
+                    if pname.startswith(key) or key.startswith(pname):
+                        matches.append((pname, pid))
+                if len(matches) == 1:
+                    scheme_id_val = matches[0][1]
+
         try:
             cursor = db.execute(
                 '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
-                   emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_number)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (patient_id, first_name, last_name, dob or None, gender,
                  get_val('phone') or None, get_val('email'), get_val('address'),
                  get_val('emergency_contact_name'), get_val('emergency_contact_phone'),
-                 get_val('blood_group'), get_val('scheme_provider'), get_val('scheme_type'),
-                 get_val('scheme_number'))
+                 get_val('blood_group'), scheme_provider_val, get_val('scheme_type'),
+                 scheme_id_val, get_val('scheme_number'))
             )
             created += 1
         except Exception as e:
