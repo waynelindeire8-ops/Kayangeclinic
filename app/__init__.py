@@ -83,6 +83,9 @@ def create_app():
     from app.routes.backup import backup_bp
     app.register_blueprint(backup_bp)
 
+    from app.routes.users import users_bp
+    app.register_blueprint(users_bp)
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

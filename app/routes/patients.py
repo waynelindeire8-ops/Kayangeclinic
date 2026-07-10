@@ -1,6 +1,7 @@
 from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template
 from flask_jwt_extended import get_jwt
+from werkzeug.datastructures import FileStorage
 from app.database import get_db
 from app.auth import login_required, log_audit
 
@@ -204,4 +205,129 @@ def api_history(id):
         'lab_tests': [dict(l) for l in lab_tests],
         'procedures': [dict(p) for p in procedures],
         'billing': [dict(b) for b in billing]
+    })
+
+
+@patients_bp.route('/import', strict_slashes=False)
+@login_required
+def import_page():
+    return render_template('patients/import.html')
+
+
+@patients_bp.route('/api/import', methods=['POST'])
+@login_required
+def api_import():
+    current_user = get_jwt()
+    file = request.files.get('file')
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        return jsonify({'error': 'Please upload an Excel file (.xlsx or .xls)'}), 400
+
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(file)
+        ws = wb.active
+    except Exception as e:
+        return jsonify({'error': f'Failed to read Excel file: {str(e)}'}), 400
+
+    headers = [str(cell.value).strip().lower() if cell.value else '' for cell in ws[1]]
+
+    field_map = {
+        'first_name': ['first name', 'first_name', 'firstname', 'given name', 'fname'],
+        'last_name': ['last name', 'last_name', 'lastname', 'surname', 'family name', 'lname'],
+        'dob': ['dob', 'date of birth', 'birth date', 'birthdate', 'birthday'],
+        'gender': ['gender', 'sex'],
+        'phone': ['phone', 'phone number', 'mobile', 'cell', 'telephone'],
+        'email': ['email', 'email address'],
+        'address': ['address', 'home address', 'street address'],
+        'emergency_contact_name': ['emergency contact', 'emergency contact name', 'next of kin', 'emergency name'],
+        'emergency_contact_phone': ['emergency phone', 'emergency contact phone', 'next of kin phone', 'emergency phone number'],
+        'blood_group': ['blood group', 'blood type', 'bloodgroup'],
+        'scheme_provider': ['insurance', 'scheme provider', 'insurance provider', 'provider', 'scheme'],
+        'scheme_type': ['scheme type', 'plan', 'insurance type', 'cover type', 'scheme'],
+        'scheme_number': ['scheme number', 'policy number', 'member number', 'insurance number', 'policy no'],
+    }
+
+    col_mapping = {}
+    for field, aliases in field_map.items():
+        for i, header in enumerate(headers):
+            if header in aliases:
+                col_mapping[field] = i
+                break
+
+    if 'first_name' not in col_mapping or 'last_name' not in col_mapping:
+        return jsonify({'error': 'Excel must have "First Name" and "Last Name" columns. Found: ' + ', '.join(headers)}), 400
+
+    db = get_db()
+    last = db.execute('SELECT patient_id FROM patients ORDER BY id DESC LIMIT 1').fetchone()
+    if last:
+        num = int(last['patient_id'].replace('KMC-', ''))
+    else:
+        num = 1000
+
+    created = 0
+    skipped = 0
+    errors = []
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        first_name = str(row[col_mapping['first_name']] or '').strip()
+        last_name = str(row[col_mapping['last_name']] or '').strip()
+        if not first_name or not last_name:
+            skipped += 1
+            continue
+
+        num += 1
+        patient_id = f'KMC-{num}'
+
+        def get_val(field):
+            if field in col_mapping:
+                val = row[col_mapping[field]]
+                if val is None:
+                    return None
+                if hasattr(val, 'strftime'):
+                    return val.strftime('%Y-%m-%d')
+                return str(val).strip()
+            return None
+
+        dob = get_val('dob')
+        if dob and len(dob) == 10 and dob[4] == '-' and dob[7] == '-':
+            pass
+        elif dob and '/' in dob:
+            parts = dob.split('/')
+            if len(parts) == 3:
+                dob = f'{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}'
+        else:
+            dob = None
+
+        gender = get_val('gender')
+        if gender:
+            gender = gender.capitalize()
+            if gender not in ('Male', 'Female', 'Other'):
+                gender = None
+
+        try:
+            cursor = db.execute(
+                '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
+                   emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_number)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                (patient_id, first_name, last_name, dob, gender,
+                 get_val('phone'), get_val('email'), get_val('address'),
+                 get_val('emergency_contact_name'), get_val('emergency_contact_phone'),
+                 get_val('blood_group'), get_val('scheme_provider'), get_val('scheme_type'),
+                 get_val('scheme_number'))
+            )
+            created += 1
+        except Exception as e:
+            errors.append(f'Row {row_idx}: {str(e)}')
+            skipped += 1
+
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'import', 'patients', None,
+              f'Imported {created} patients from Excel', request.remote_addr)
+    db.close()
+
+    return jsonify({
+        'message': f'Import complete: {created} created, {skipped} skipped',
+        'created': created,
+        'skipped': skipped,
+        'errors': errors[:20]
     })

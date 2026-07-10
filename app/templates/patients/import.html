@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-file-earmark-spreadsheet"></i> Import Patients from Excel</h4>
+    <a href="/patients" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Patients</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">Upload File</h6></div>
+            <div class="card-body">
+                <form id="import-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Select Excel File (.xlsx) *</label>
+                        <input type="file" class="form-control" id="import-file" accept=".xlsx,.xls" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="import-btn">
+                        <i class="bi bi-upload me-1"></i>Import Patients
+                    </button>
+                </form>
+                <div id="import-result" class="mt-3" style="display:none"></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header"><h6 class="mb-0">Required Columns</h6></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>Column</th><th>Required</th><th>Description</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>First Name</code></td><td><span class="badge bg-danger">Required</span></td><td>Patient first name</td></tr>
+                            <tr><td><code>Last Name</code></td><td><span class="badge bg-danger">Required</span></td><td>Patient last name / surname</td></tr>
+                            <tr><td><code>DOB</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Date of birth (YYYY-MM-DD or DD/MM/YYYY)</td></tr>
+                            <tr><td><code>Gender</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Male / Female / Other</td></tr>
+                            <tr><td><code>Phone</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Phone number</td></tr>
+                            <tr><td><code>Email</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Email address</td></tr>
+                            <tr><td><code>Address</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Home address</td></tr>
+                            <tr><td><code>Emergency Contact</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Emergency contact name</td></tr>
+                            <tr><td><code>Emergency Phone</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Emergency contact phone</td></tr>
+                            <tr><td><code>Blood Group</code></td><td><span class="badge bg-secondary">Optional</span></td><td>A+, A-, B+, B-, AB+, AB-, O+, O-</td></tr>
+                            <tr><td><code>Insurance</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Insurance provider name</td></tr>
+                            <tr><td><code>Scheme Type</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Insurance plan type</td></tr>
+                            <tr><td><code>Policy Number</code></td><td><span class="badge bg-secondary">Optional</span></td><td>Insurance policy/member number</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white"><h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>Excel Format Guide</h6></div>
+            <div class="card-body">
+                <h6>How to Create Your Excel File</h6>
+                <ol class="small">
+                    <li>Open Microsoft Excel or Google Sheets</li>
+                    <li>Create a new spreadsheet</li>
+                    <li>Add column headers in the <strong>first row</strong></li>
+                    <li>Add patient data starting from <strong>row 2</strong></li>
+                    <li>Save as <code>.xlsx</code> format</li>
+                </ol>
+
+                <h6 class="mt-3">Example Layout</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm small">
+                        <thead class="table-light">
+                            <tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr class="table-info fw-bold"><td>First Name</td><td>Last Name</td><td>DOB</td><td>Gender</td><td>Phone</td><td>Email</td><td>Blood Group</td></tr>
+                            <tr><td>John</td><td>Smith</td><td>1990-05-15</td><td>Male</td><td>0712345678</td><td>john@email.com</td><td>A+</td></tr>
+                            <tr><td>Jane</td><td>Doe</td><td>15/03/1985</td><td>Female</td><td>0723456789</td><td>jane@email.com</td><td>O-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h6 class="mt-3">Accepted Column Names</h6>
+                <div class="small text-muted">
+                    <p class="mb-1"><strong>First Name:</strong> First Name, FirstName, Given Name, Fname</p>
+                    <p class="mb-1"><strong>Last Name:</strong> Last Name, LastName, Surname, Family Name, Lname</p>
+                    <p class="mb-1"><strong>DOB:</strong> DOB, Date of Birth, Birth Date, Birthday</p>
+                    <p class="mb-1"><strong>Gender:</strong> Gender, Sex</p>
+                    <p class="mb-1"><strong>Phone:</strong> Phone, Phone Number, Mobile, Cell, Telephone</p>
+                    <p class="mb-1"><strong>Email:</strong> Email, Email Address</p>
+                    <p class="mb-1"><strong>Address:</strong> Address, Home Address, Street Address</p>
+                    <p class="mb-1"><strong>Emergency Contact:</strong> Emergency Contact, Next of Kin</p>
+                    <p class="mb-1"><strong>Emergency Phone:</strong> Emergency Phone, Next of Kin Phone</p>
+                    <p class="mb-1"><strong>Blood Group:</strong> Blood Group, Blood Type</p>
+                    <p class="mb-1"><strong>Insurance:</strong> Insurance, Scheme Provider, Provider, Scheme</p>
+                    <p class="mb-1"><strong>Scheme Type:</strong> Scheme Type, Plan, Insurance Type</p>
+                    <p class="mb-1"><strong>Policy Number:</strong> Policy Number, Member Number, Insurance Number</p>
+                </div>
+
+                <div class="alert alert-warning small mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Patient IDs are auto-generated (KMC-XXXX). Do not include an ID column.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('import-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('import-file');
+    if (!fileInput.files.length) { alert('Select a file'); return; }
+
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importing...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const res = await fetchWithAuth('/patients/api/import', {
+        method: 'POST',
+        body: formData
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>Import Patients';
+
+    const result = await res.json();
+    const div = document.getElementById('import-result');
+    div.style.display = 'block';
+
+    if (res.ok) {
+        div.innerHTML = `
+            <div class="alert alert-success">
+                <h6><i class="bi bi-check-circle me-1"></i>${result.message}</h6>
+                <div class="small">
+                    <strong>Created:</strong> ${result.created} patients<br>
+                    <strong>Skipped:</strong> ${result.skipped} rows
+                </div>
+                ${result.errors.length ? '<div class="mt-2 small"><strong>Errors:</strong><ul class="mb-0">' + result.errors.map(e => '<li>' + e + '</li>').join('') + '</ul></div>' : ''}
+            </div>
+            <a href="/patients" class="btn btn-primary"><i class="bi bi-people me-1"></i>View Patients</a>
+        `;
+    } else {
+        div.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i>' + (result.error || 'Import failed') + '</div>';
+    }
+});
+</script>
+{% endblock %}

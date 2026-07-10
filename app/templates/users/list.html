@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-people"></i> Users</h4>
+    <button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus-lg me-1"></i>Add User</button>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <div class="text-primary fw-bold" style="font-size:1.8rem" id="stat-total">0</div>
+                <div class="text-muted small">Total Users</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <div class="text-success fw-bold" style="font-size:1.8rem" id="stat-active">0</div>
+                <div class="text-muted small">Active</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-secondary">
+            <div class="card-body text-center">
+                <div class="text-secondary fw-bold" style="font-size:1.8rem" id="stat-inactive">0</div>
+                <div class="text-muted small">Inactive</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <div class="text-warning fw-bold" style="font-size:1.8rem" id="stat-admins">0</div>
+                <div class="text-muted small">Admins</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table" id="users-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-shield-lock me-1"></i>Role Hierarchy</h6></div>
+            <div class="card-body p-0">
+                <div id="role-hierarchy"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <input type="hidden" id="edit-id">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" id="first_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" id="last_name" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Username *</label>
+                        <input type="text" class="form-control" id="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role *</label>
+                        <select class="form-select" id="role" required>
+                            <option value="">Select role...</option>
+                            <option value="admin">Admin</option>
+                            <option value="doctor">Doctor</option>
+                            <option value="locum_doctor">Locum Doctor</option>
+                            <option value="nurse">Nurse</option>
+                            <option value="locum_nurse">Locum Nurse</option>
+                            <option value="lab_supervisor">Lab Supervisor</option>
+                            <option value="lab_staff">Lab Staff</option>
+                            <option value="lab_tech">Lab Tech</option>
+                            <option value="lab_care">Lab Care</option>
+                            <option value="front_desk">Front Desk</option>
+                            <option value="file_manager">File Manager</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" id="password-label">Password *</label>
+                        <input type="password" class="form-control" id="password">
+                        <div class="form-text" id="password-hint">Default: changeme123</div>
+                    </div>
+                    <div class="mb-3 form-check" id="active-check" style="display:none">
+                        <input type="checkbox" class="form-check-input" id="is_active" checked>
+                        <label class="form-check-label">Active Account</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveUser()"><i class="bi bi-check-lg me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reset Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Reset password for <strong id="reset-username"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label">New Password *</label>
+                    <input type="password" class="form-control" id="new-password" value="changeme123">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="confirmResetPassword()">Reset Password</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allUsers = [];
+let resetUserId = null;
+
+const roleColors = {
+    admin: 'danger', doctor: 'primary', locum_doctor: 'info',
+    nurse: 'success', locum_nurse: 'success', lab_supervisor: 'warning',
+    lab_staff: 'secondary', lab_tech: 'secondary', lab_care: 'secondary',
+    front_desk: 'primary', file_manager: 'secondary'
+};
+
+const roleLabels = {
+    admin: 'Admin', doctor: 'Doctor', locum_doctor: 'Locum Doctor',
+    nurse: 'Nurse', locum_nurse: 'Locum Nurse', lab_supervisor: 'Lab Supervisor',
+    lab_staff: 'Lab Staff', lab_tech: 'Lab Tech', lab_care: 'Lab Care',
+    front_desk: 'Front Desk', file_manager: 'File Manager'
+};
+
+const roleHierarchy = {
+    admin: 100, doctor: 80, locum_doctor: 70, nurse: 60,
+    locum_nurse: 50, lab_supervisor: 55, lab_staff: 50,
+    lab_tech: 50, lab_care: 45, front_desk: 40, file_manager: 30
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadUsers();
+    loadRoleHierarchy();
+});
+
+async function loadUsers() {
+    const res = await fetchWithAuth('/users/api');
+    allUsers = await res.json();
+    renderTable();
+    updateStats();
+}
+
+function renderTable() {
+    const tbody = document.querySelector('#users-table tbody');
+    tbody.innerHTML = allUsers.map(u => {
+        const color = roleColors[u.role] || 'secondary';
+        const label = roleLabels[u.role] || u.role;
+        const statusBadge = u.is_active
+            ? '<span class="badge bg-success">Active</span>'
+            : '<span class="badge bg-secondary">Inactive</span>';
+        const toggleBtn = u.username === 'admin' ? '' :
+            `<button class="btn btn-sm ${u.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="toggleUser(${u.id})" title="${u.is_active ? 'Deactivate' : 'Activate'}">
+                <i class="bi ${u.is_active ? 'bi-pause' : 'bi-play'}"></i>
+            </button>`;
+        return `<tr>
+            <td><div class="patient-cell"><div class="patient-avatar" style="background:var(--bs-${color})">${(u.first_name||'').charAt(0)}${(u.last_name||'').charAt(0)}</div><div><div class="fw-semibold">${u.first_name} ${u.last_name}</div><div class="text-muted small">${u.email || ''}</div></div></div></td>
+            <td><code>${u.username}</code></td>
+            <td><span class="badge bg-${color}">${label}</span></td>
+            <td>${statusBadge}</td>
+            <td>
+                <div class="d-flex gap-1">
+                    <button class="btn-action edit" onclick="editUser(${u.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn-action" onclick="showResetPassword(${u.id}, '${u.username}')" title="Reset Password"><i class="bi bi-key"></i></button>
+                    ${toggleBtn}
+                    ${u.username !== 'admin' ? `<button class="btn-action delete" onclick="deleteUser(${u.id})" title="Delete"><i class="bi bi-trash"></i></button>` : ''}
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function updateStats() {
+    document.getElementById('stat-total').textContent = allUsers.length;
+    document.getElementById('stat-active').textContent = allUsers.filter(u => u.is_active).length;
+    document.getElementById('stat-inactive').textContent = allUsers.filter(u => !u.is_active).length;
+    document.getElementById('stat-admins').textContent = allUsers.filter(u => u.role === 'admin').length;
+}
+
+async function loadRoleHierarchy() {
+    const container = document.getElementById('role-hierarchy');
+    const sorted = Object.entries(roleHierarchy).sort((a, b) => b[1] - a[1]);
+    container.innerHTML = sorted.map(([role, level]) => {
+        const color = roleColors[role] || 'secondary';
+        const count = allUsers.filter(u => u.role === role).length;
+        return `<div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+            <div><span class="badge bg-${color} me-2">${level}</span>${roleLabels[role] || role}</div>
+            <span class="badge bg-light text-dark">${count}</span>
+        </div>`;
+    }).join('');
+}
+
+function showCreateModal() {
+    document.getElementById('modalTitle').textContent = 'Add User';
+    document.getElementById('edit-id').value = '';
+    document.getElementById('user-form').reset();
+    document.getElementById('username').readOnly = false;
+    document.getElementById('password-label').textContent = 'Password *';
+    document.getElementById('password-hint').textContent = 'Default: changeme123';
+    document.getElementById('password').required = true;
+    document.getElementById('active-check').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+async function editUser(id) {
+    const res = await fetchWithAuth('/users/api/' + id);
+    const u = await res.json();
+    document.getElementById('modalTitle').textContent = 'Edit User';
+    document.getElementById('edit-id').value = u.id;
+    document.getElementById('first_name').value = u.first_name;
+    document.getElementById('last_name').value = u.last_name;
+    document.getElementById('username').value = u.username;
+    document.getElementById('username').readOnly = true;
+    document.getElementById('role').value = u.role;
+    document.getElementById('email').value = u.email || '';
+    document.getElementById('phone').value = u.phone || '';
+    document.getElementById('password').value = '';
+    document.getElementById('password').required = false;
+    document.getElementById('password-label').textContent = 'New Password (leave blank to keep current)';
+    document.getElementById('password-hint').textContent = '';
+    document.getElementById('is_active').checked = u.is_active === 1;
+    document.getElementById('active-check').style.display = 'block';
+    new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+async function saveUser() {
+    const id = document.getElementById('edit-id').value;
+    const data = {
+        first_name: document.getElementById('first_name').value,
+        last_name: document.getElementById('last_name').value,
+        username: document.getElementById('username').value,
+        role: document.getElementById('role').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+    };
+    if (!data.first_name || !data.last_name || !data.username || !data.role) {
+        alert('Fill all required fields'); return;
+    }
+    const password = document.getElementById('password').value;
+    if (password) data.password = password;
+    if (id) data.is_active = document.getElementById('is_active').checked ? 1 : 0;
+
+    const url = id ? '/users/api/' + id : '/users/api';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+        loadUsers();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving user');
+    }
+}
+
+async function toggleUser(id) {
+    const res = await fetchWithAuth('/users/api/' + id + '/toggle', { method: 'POST' });
+    if (res.ok) loadUsers();
+}
+
+function showResetPassword(id, username) {
+    resetUserId = id;
+    document.getElementById('reset-username').textContent = username;
+    document.getElementById('new-password').value = 'changeme123';
+    new bootstrap.Modal(document.getElementById('passwordModal')).show();
+}
+
+async function confirmResetPassword() {
+    const password = document.getElementById('new-password').value;
+    if (!password) { alert('Enter a password'); return; }
+    await fetchWithAuth('/users/api/' + resetUserId + '/reset-password', {
+        method: 'POST', body: JSON.stringify({ password })
+    });
+    bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
+    alert('Password reset successfully');
+}
+
+async function deleteUser(id) {
+    if (!confirm('Delete this user? This cannot be undone.')) return;
+    const res = await fetchWithAuth('/users/api/' + id, { method: 'DELETE' });
+    if (res.ok) loadUsers();
+    else {
+        const err = await res.json();
+        alert(err.error || 'Error deleting user');
+    }
+}
+</script>
+{% endblock %}

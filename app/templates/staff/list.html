@@ -44,11 +44,22 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 'email', render: d => d || '-' },
             { data: 'phone', render: d => d || '-' },
             { data: null, render: d => d.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' },
-            { data: null, render: d => '<a href="/staff/' + d.id + '/edit" class="btn-action edit"><i class="bi bi-pencil"></i></a>' }
+            { data: null, render: d => '<div class="d-flex gap-1"><a href="/staff/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a>' + (d.username !== 'admin' ? '<button class="btn-action delete" onclick="deleteStaff(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button>' : '') + '</div>' }
         ],
         order: [[2, 'asc']],
         pageLength: 20
     });
 });
+
+async function deleteStaff(id) {
+    if (!confirm('Delete this staff member? This cannot be undone.')) return;
+    const res = await fetchWithAuth('/staff/api/' + id, { method: 'DELETE' });
+    if (res.ok) {
+        $('#staff-table').DataTable().ajax.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error deleting staff');
+    }
+}
 </script>
 {% endblock %}

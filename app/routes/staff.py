@@ -117,3 +117,23 @@ def api_update(id):
 def api_role_hierarchy():
     from app.auth import ROLE_HIERARCHY
     return jsonify(ROLE_HIERARCHY)
+
+
+@staff_bp.route('/api/<int:id>', methods=['DELETE'])
+@role_required('admin')
+def api_delete(id):
+    current_user = get_jwt()
+    db = get_db()
+    user = db.execute('SELECT id, username FROM users WHERE id = ?', (id,)).fetchone()
+    if not user:
+        db.close()
+        return jsonify({'error': 'Staff not found'}), 404
+    if user['username'] == 'admin':
+        db.close()
+        return jsonify({'error': 'Cannot delete the main admin user'}), 400
+    db.execute('DELETE FROM users WHERE id = ?', (id,))
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'delete', 'user', id,
+              f'Deleted staff {user["username"]}', request.remote_addr)
+    db.close()
+    return jsonify({'message': f'Staff {user["username"]} deleted'})
