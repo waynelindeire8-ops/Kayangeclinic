@@ -260,6 +260,28 @@ def api_orders_refer(id):
     db.execute(
         'UPDATE radiology_orders SET status = ?, referred_to = ?, notes = COALESCE(notes || ?, ?) WHERE id = ?',
         ('referred', facility, notes, f'\nReferred to: {facility} - {notes}', id))
+
+    from flask import current_app
+    call_out_fee = current_app.config.get('CALL_OUT_FEE', 20000)
+    order = db.execute('SELECT patient_id FROM radiology_orders WHERE id = ?', (id,)).fetchone()
+    if order:
+        last_inv = db.execute('SELECT invoice_number FROM billing ORDER BY id DESC LIMIT 1').fetchone()
+        if last_inv:
+            num = int(last_inv['invoice_number'].replace('INV-', '')) + 1
+        else:
+            num = 1001
+        invoice_number = f'INV-{num}'
+        db.execute(
+            '''INSERT INTO billing (patient_id, invoice_number, total_amount, amount_paid, balance,
+               payment_method, payment_status, created_by)
+               VALUES (?, ?, ?, 0, ?, 'cash', 'pending', ?)''',
+            (order['patient_id'], invoice_number, call_out_fee, call_out_fee, current_user['id']))
+        billing_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        db.execute(
+            '''INSERT INTO billing_items (billing_id, item_name, item_type, quantity, unit_price, total_price)
+               VALUES (?, 'Call Out Fee', 'consultation', 1, ?, ?)''',
+            (billing_id, call_out_fee, call_out_fee))
+
     db.commit()
 
     from app.routes.notifications import notify_role

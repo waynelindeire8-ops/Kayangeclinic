@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from config import Config
 
@@ -41,7 +42,15 @@ def _migrate_appointments_type(conn):
 
 
 def init_db():
+    db_exists = os.path.exists(Config.DATABASE)
     conn = get_db()
+
+    if db_exists:
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        if len(tables) > 5:
+            conn.close()
+            return
+
     cursor = conn.cursor()
 
     cursor.executescript('''
@@ -300,6 +309,18 @@ def init_db():
             FOREIGN KEY(patient_id) REFERENCES patients(id),
             FOREIGN KEY(inventory_id) REFERENCES pharmacy_inventory(id),
             FOREIGN KEY(dispensed_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS drug_scheme_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_id INTEGER NOT NULL,
+            provider_id INTEGER NOT NULL,
+            scheme_price REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(inventory_id) REFERENCES pharmacy_inventory(id) ON DELETE CASCADE,
+            FOREIGN KEY(provider_id) REFERENCES insurance_providers(id) ON DELETE CASCADE,
+            UNIQUE(inventory_id, provider_id)
         );
 
         CREATE TABLE IF NOT EXISTS referrals (
@@ -731,6 +752,8 @@ def init_db():
     _seed_inventory(conn)
     _migrate_catalog_classification(conn)
     _migrate_certificates_yellow_book(conn)
+    _seed_lab_catalog(conn)
+    _migrate_dispensing_unit_price(conn)
     conn.close()
 
 
@@ -1112,3 +1135,100 @@ def _migrate_certificates_yellow_book(conn):
             ALTER TABLE medical_certificates_new RENAME TO medical_certificates;
         ''')
         conn.commit()
+
+
+def _seed_lab_catalog(conn):
+    existing = conn.execute("SELECT COUNT(*) as c FROM lab_test_catalog WHERE category != 'radiology'").fetchone()['c']
+    if existing > 10:
+        return
+    tests = [
+        # Haematology
+        ('CBC/FBC', 'haematology', 'blood', 'standard', 'Complete Blood Count / Full Blood Count'),
+        ('MPS', 'haematology', 'blood', 'standard', 'Malaria Parasite Stain'),
+        ('Malaria Antigens', 'haematology', 'blood', 'rapid', 'Malaria Rapid Diagnostic Test'),
+        ('ESR', 'haematology', 'blood', 'standard', 'Erythrocyte Sedimentation Rate'),
+        # Parasitology
+        ('Stool Analysis', 'parasitology', 'stool', 'standard', 'Macroscopic and microscopic stool examination'),
+        ('Occult Blood', 'parasitology', 'stool', 'rapid', 'Faecal Occult Blood Test'),
+        ('Urine Analysis', 'parasitology', 'urine', 'standard', 'Urinalysis - physical, chemical and microscopic'),
+        ('Pregnancy Test', 'parasitology', 'urine', 'rapid', 'Urine Pregnancy Test (hCG)'),
+        # Microbiology
+        ('Gram Stain', 'microbiology', 'specimen', 'standard', 'Gram staining for bacterial identification'),
+        ('ZN Stain', 'microbiology', 'specimen', 'standard', 'Ziehl-Neelsen staining for AFB'),
+        ('Viral Load', 'microbiology', 'blood', 'standard', 'HIV Viral Load'),
+        # Chemistry
+        ('FBS', 'chemistry', 'blood', 'standard', 'Fasting Blood Sugar'),
+        ('RBS', 'chemistry', 'blood', 'rapid', 'Random Blood Sugar'),
+        ('Glycosylated Haemoglobin (HbA1c)', 'chemistry', 'blood', 'standard', 'Haemoglobin A1c'),
+        ('LFT', 'chemistry', 'blood', 'standard', 'Liver Function Test'),
+        ('SGOT (AST)', 'chemistry', 'blood', 'standard', 'Aspartate Aminotransferase'),
+        ('SGPT (ALT)', 'chemistry', 'blood', 'standard', 'Alanine Aminotransferase'),
+        ('GGT', 'chemistry', 'blood', 'standard', 'Gamma Glutamyl Transferase'),
+        ('LDH', 'chemistry', 'blood', 'standard', 'Lactate Dehydrogenase'),
+        ('ALP', 'chemistry', 'blood', 'standard', 'Alkaline Phosphatase'),
+        ('Bilirubin - Total and Direct', 'chemistry', 'blood', 'standard', 'Total and Direct Bilirubin'),
+        ('Protein - Total and Albumin', 'chemistry', 'blood', 'standard', 'Total Protein and Albumin'),
+        # Lipogram
+        ('Total Cholesterol', 'lipogram', 'blood', 'standard', 'Total Cholesterol'),
+        ('HDL Cholesterol', 'lipogram', 'blood', 'standard', 'High Density Lipoprotein Cholesterol'),
+        ('LDL Cholesterol', 'lipogram', 'blood', 'standard', 'Low Density Lipoprotein Cholesterol'),
+        ('Triglycerides', 'lipogram', 'blood', 'standard', 'Triglycerides'),
+        # U&E
+        ('BUN', 'u_and_e', 'blood', 'standard', 'Blood Urea Nitrogen'),
+        ('Creatinine', 'u_and_e', 'blood', 'standard', 'Serum Creatinine'),
+        ('Sodium', 'u_and_e', 'blood', 'standard', 'Serum Sodium'),
+        ('Potassium', 'u_and_e', 'blood', 'standard', 'Serum Potassium'),
+        ('Ammonia', 'u_and_e', 'blood', 'standard', 'Blood Ammonia'),
+        ('Calcium', 'u_and_e', 'blood', 'standard', 'Serum Calcium'),
+        ('Phosphorus', 'u_and_e', 'blood', 'standard', 'Serum Phosphorus'),
+        ('Chloride', 'u_and_e', 'blood', 'standard', 'Serum Chloride'),
+        # Cardiac Enzymes
+        ('CK', 'cardiac', 'blood', 'standard', 'Creatine Kinase'),
+        ('CK BB', 'cardiac', 'blood', 'standard', 'CK Brain Band'),
+        ('CK MB', 'cardiac', 'blood', 'standard', 'CK Myocardial Band'),
+        ('CK MM', 'cardiac', 'blood', 'standard', 'CK Muscle Band'),
+        # Other Chemistries
+        ('Amylase', 'chemistry', 'blood', 'standard', 'Serum Amylase'),
+        ('Lactate', 'chemistry', 'blood', 'standard', 'Blood Lactate'),
+        ('Uric Acid', 'chemistry', 'blood', 'standard', 'Serum Uric Acid'),
+        # Serology
+        ('CRP', 'serology', 'blood', 'rapid', 'C-Reactive Protein'),
+        ('HIV', 'serology', 'blood', 'rapid', 'HIV Test'),
+        ('RF', 'serology', 'blood', 'standard', 'Rheumatoid Factor'),
+        ('VDRL', 'serology', 'blood', 'standard', 'Venereal Disease Research Laboratory'),
+        ('HCV', 'serology', 'blood', 'standard', 'Hepatitis C Virus Antibody'),
+        ('ASOT', 'serology', 'blood', 'standard', 'Anti-Streptolysin O Titre'),
+        ('Brucella IgG and IgM', 'serology', 'blood', 'standard', 'Brucella IgG and IgM Antibodies'),
+        ('Hepatitis B Surface Antigen', 'serology', 'blood', 'rapid', 'HBsAg'),
+        # Tumour Markers
+        ('CEA', 'tumour_markers', 'blood', 'standard', 'Carcinoembryonic Antigen'),
+        ('PSA', 'tumour_markers', 'blood', 'standard', 'Prostate Specific Antigen'),
+        ('AFP', 'tumour_markers', 'blood', 'standard', 'Alpha Fetoprotein'),
+        # Endocrinology
+        ('Thyroid Hormone T3', 'endocrinology', 'blood', 'standard', 'Triiodothyronine'),
+        ('Thyroid Hormone T4', 'endocrinology', 'blood', 'standard', 'Thyroxine'),
+        ('TSH', 'endocrinology', 'blood', 'standard', 'Thyroid Stimulating Hormone'),
+        # Fertility and Steroids
+        ('Sperm Count', 'fertility', 'semen', 'standard', 'Semen Analysis - Sperm Count'),
+        ('Prolactin', 'fertility', 'blood', 'standard', 'Serum Prolactin'),
+        ('HCG', 'fertility', 'blood', 'standard', 'Human Chorionic Gonadotropin'),
+        ('LH', 'fertility', 'blood', 'standard', 'Luteinizing Hormone'),
+        ('FSH', 'fertility', 'blood', 'standard', 'Follicle Stimulating Hormone'),
+        ('Testosterone', 'fertility', 'blood', 'standard', 'Serum Testosterone'),
+        ('Estradiol', 'fertility', 'blood', 'standard', 'Serum Estradiol'),
+        ('Cortisol', 'fertility', 'blood', 'standard', 'Serum Cortisol'),
+        ('Progesterone', 'fertility', 'blood', 'standard', 'Serum Progesterone'),
+    ]
+    for name, cat, sample, classification, desc in tests:
+        conn.execute(
+            'INSERT INTO lab_test_catalog (test_name, category, sample_type, classification, description, is_active) VALUES (?,?,?,?,?,1)',
+            (name, cat, sample, classification, desc))
+    conn.commit()
+
+
+def _migrate_dispensing_unit_price(conn):
+    try:
+        conn.execute("ALTER TABLE pharmacy_dispensing ADD COLUMN unit_price REAL DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass

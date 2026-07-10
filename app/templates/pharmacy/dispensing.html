@@ -10,7 +10,7 @@
         <div class="table-responsive">
             <table class="table" id="dispensing-table">
                 <thead>
-                    <tr><th>Date</th><th>Patient</th><th>Drug</th><th>Qty</th><th>Dispensed By</th><th>Notes</th></tr>
+                    <tr><th>Date</th><th>Patient</th><th>Drug</th><th>Qty</th><th>Price</th><th>Total</th><th>Dispensed By</th><th>Notes</th></tr>
                 </thead>
                 <tbody></tbody>
             </table>
@@ -39,6 +39,17 @@
                     <label class="form-label">Quantity *</label>
                     <input type="number" class="form-control" id="disp-qty" min="1" value="1">
                 </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Unit Price (MK) *</label>
+                        <input type="number" class="form-control" id="disp-price" step="0.01" min="0">
+                        <div class="form-text" id="price-hint"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Total</label>
+                        <input type="text" class="form-control" id="disp-total" readonly>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <label class="form-label">Prescription Notes</label>
                     <textarea class="form-control" id="disp-notes" rows="2"></textarea>
@@ -61,6 +72,8 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: null, render: d => `${d.p_first} ${d.p_last}` },
             { data: 'drug_name' },
             { data: 'quantity' },
+            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
+            { data: null, render: d => 'MK ' + ((d.unit_price || 0) * (d.quantity || 0)).toLocaleString() },
             { data: null, render: d => `${d.disp_first || ''} ${d.disp_last || ''}` },
             { data: 'prescription_notes', render: d => d || '-' }
         ],
@@ -83,15 +96,46 @@ document.addEventListener('DOMContentLoaded', function() {
             if (d.stock_quantity > 0) {
                 const opt = document.createElement('option');
                 opt.value = d.id;
-                opt.textContent = `${d.drug_name} (Stock: ${d.stock_quantity}) - MK ${d.unit_price}`;
+                opt.textContent = `${d.drug_name} (Stock: ${d.stock_quantity})`;
                 opt.dataset.stock = d.stock_quantity;
+                opt.dataset.price = d.unit_price;
                 dSel.appendChild(opt);
             }
         });
     });
+
+    document.getElementById('disp-patient').addEventListener('change', lookupPrice);
+    document.getElementById('disp-drug').addEventListener('change', lookupPrice);
+    document.getElementById('disp-qty').addEventListener('input', updateTotal);
+    document.getElementById('disp-price').addEventListener('input', updateTotal);
 });
 
+async function lookupPrice() {
+    const patientId = document.getElementById('disp-patient').value;
+    const drugOpt = document.getElementById('disp-drug').selectedOptions[0];
+    if (!patientId || !drugOpt || !drugOpt.value) return;
+
+    const res = await fetchWithAuth('/pharmacy/api/price-for-patient?inventory_id=' + drugOpt.value + '&patient_id=' + patientId);
+    const data = await res.json();
+    document.getElementById('disp-price').value = data.price;
+    if (data.is_scheme_price) {
+        document.getElementById('price-hint').innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Scheme price applied (Default: MK ' + data.default_price.toLocaleString() + ')</span>';
+    } else {
+        document.getElementById('price-hint').innerHTML = '<span class="text-muted">Default/cash price</span>';
+    }
+    updateTotal();
+}
+
+function updateTotal() {
+    const price = parseFloat(document.getElementById('disp-price').value) || 0;
+    const qty = parseInt(document.getElementById('disp-qty').value) || 0;
+    document.getElementById('disp-total').value = 'MK ' + (price * qty).toLocaleString();
+}
+
 function showDispenseModal() {
+    document.getElementById('disp-price').value = '';
+    document.getElementById('disp-total').value = '';
+    document.getElementById('price-hint').innerHTML = '';
     new bootstrap.Modal(document.getElementById('dispenseModal')).show();
 }
 
@@ -99,6 +143,7 @@ async function saveDispense() {
     const patient_id = document.getElementById('disp-patient').value;
     const inventory_id = document.getElementById('disp-drug').value;
     const qty = parseInt(document.getElementById('disp-qty').value);
+    const price = parseFloat(document.getElementById('disp-price').value);
     const notes = document.getElementById('disp-notes').value;
 
     if (!patient_id || !inventory_id || !qty) { alert('Fill all required fields'); return; }
@@ -111,7 +156,7 @@ async function saveDispense() {
 
     const res = await fetchWithAuth('/pharmacy/api/dispensing', {
         method: 'POST',
-        body: JSON.stringify({ patient_id: parseInt(patient_id), inventory_id: parseInt(inventory_id), quantity: qty, prescription_notes: notes })
+        body: JSON.stringify({ patient_id: parseInt(patient_id), inventory_id: parseInt(inventory_id), quantity: qty, unit_price: price, prescription_notes: notes })
     });
     if (res.ok) {
         bootstrap.Modal.getInstance(document.getElementById('dispenseModal')).hide();

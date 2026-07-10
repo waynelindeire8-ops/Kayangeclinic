@@ -150,9 +150,10 @@ def api_dispense():
         return jsonify({'error': 'Insufficient stock'}), 400
 
     cursor = db.execute(
-        '''INSERT INTO pharmacy_dispensing (patient_id, inventory_id, quantity, prescription_notes, dispensed_by)
-           VALUES (?, ?, ?, ?, ?)''',
+        '''INSERT INTO pharmacy_dispensing (patient_id, inventory_id, quantity, unit_price, prescription_notes, dispensed_by)
+           VALUES (?, ?, ?, ?, ?, ?)''',
         (data['patient_id'], data['inventory_id'], data['quantity'],
+         data.get('unit_price', inventory['unit_price']),
          data.get('prescription_notes'), current_user['id'])
     )
     new_qty = inventory['stock_quantity'] - data['quantity']
@@ -164,3 +165,81 @@ def api_dispense():
               request.remote_addr)
     db.close()
     return jsonify({'id': cursor.lastrowid}), 201
+
+
+# ─── API: Drug Scheme Prices ───
+
+@pharmacy_bp.route('/api/inventory/<int:id>/scheme-prices', methods=['GET'])
+@login_required
+def api_scheme_prices(id):
+    db = get_db()
+    prices = db.execute(
+        '''SELECT dsp.*, ip.name as provider_name, ip.code as provider_code
+           FROM drug_scheme_prices dsp
+           LEFT JOIN insurance_providers ip ON dsp.provider_id = ip.id
+           WHERE dsp.inventory_id = ?
+           ORDER BY ip.name''', (id,)).fetchall()
+    db.close()
+    return jsonify([dict(p) for p in prices])
+
+
+@pharmacy_bp.route('/api/inventory/<int:id>/scheme-prices', methods=['POST'])
+@login_required
+def api_scheme_price_create(id):
+    current_user = get_jwt()
+    data = request.json
+    db = get_db()
+    existing = db.execute(
+        'SELECT id FROM drug_scheme_prices WHERE inventory_id = ? AND provider_id = ?',
+        (id, data['provider_id'])).fetchone()
+    if existing:
+        db.execute(
+            'UPDATE drug_scheme_prices SET scheme_price=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (data['scheme_price'], existing['id']))
+    else:
+        db.execute(
+            'INSERT INTO drug_scheme_prices (inventory_id, provider_id, scheme_price) VALUES (?, ?, ?)',
+            (id, data['provider_id'], data['scheme_price']))
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'update', 'drug_scheme_price', id,
+              f'Updated scheme price for inventory #{id}', request.remote_addr)
+    db.close()
+    return jsonify({'message': 'Price updated'}), 201
+
+
+@pharmacy_bp.route('/api/inventory/<int:id>/scheme-prices/<int:price_id>', methods=['DELETE'])
+@login_required
+def api_scheme_price_delete(id, price_id):
+    current_user = get_jwt()
+    db = get_db()
+    db.execute('DELETE FROM drug_scheme_prices WHERE id = ?', (price_id,))
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'delete', 'drug_scheme_price', price_id,
+              f'Deleted scheme price for inventory #{id}', request.remote_addr)
+    db.close()
+    return jsonify({'message': 'Deleted'})
+
+
+@pharmacy_bp.route('/api/price-for-patient', methods=['GET'])
+@login_required
+def api_price_for_patient():
+    inventory_id = request.args.get('inventory_id')
+    patient_id = request.args.get('patient_id')
+    if not inventory_id or not patient_id:
+        return jsonify({'error': 'inventory_id and patient_id required'}), 400
+
+    db = get_db()
+    inv = db.execute('SELECT unit_price FROM pharmacy_inventory WHERE id = ?', (inventory_id,)).fetchone()
+    default_price = inv['unit_price'] if inv else 0
+
+    patient = db.execute('SELECT scheme_id FROM patients WHERE id = ?', (patient_id,)).fetchone()
+    if patient and patient['scheme_id']:
+        scheme_price = db.execute(
+            'SELECT scheme_price FROM drug_scheme_prices WHERE inventory_id = ? AND provider_id = ?',
+            (inventory_id, patient['scheme_id'])).fetchone()
+        if scheme_price:
+            db.close()
+            return jsonify({'price': scheme_price['scheme_price'], 'is_scheme_price': True, 'default_price': default_price})
+
+    db.close()
+    return jsonify({'price': default_price, 'is_scheme_price': False, 'default_price': default_price})

@@ -80,6 +80,9 @@ def create_app():
     from app.routes.certificates import certificates_bp
     app.register_blueprint(certificates_bp)
 
+    from app.routes.backup import backup_bp
+    app.register_blueprint(backup_bp)
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

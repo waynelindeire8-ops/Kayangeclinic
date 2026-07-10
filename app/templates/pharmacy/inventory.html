@@ -100,7 +100,7 @@ function loadTable(search) {
             { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
             { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); return exp < new Date() ? '<span class="badge bg-danger">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
             { data: 'reorder_level' },
-            { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
+            { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action" onclick="showSchemePrices(' + d.id + ', \'' + d.drug_name.replace(/'/g, "\\'") + '\')" title="Scheme Prices"><i class="bi bi-tag"></i></button><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
         ],
         order: [[0, 'asc']],
         pageLength: 15
@@ -154,5 +154,80 @@ async function deleteItem(id) {
     await fetchWithAuth('/pharmacy/api/inventory/' + id, { method: 'DELETE' });
     loadTable();
 }
+
+let currentSchemeDrugId = null;
+
+async function showSchemePrices(drugId, drugName) {
+    currentSchemeDrugId = drugId;
+    document.getElementById('scheme-drug-name').textContent = drugName;
+    const res = await fetchWithAuth('/pharmacy/api/inventory/' + drugId + '/scheme-prices');
+    const prices = await res.json();
+    const body = document.getElementById('scheme-prices-body');
+    if (prices.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No scheme prices set</td></tr>';
+    } else {
+        body.innerHTML = prices.map(p =>
+            '<tr><td>' + p.provider_name + '</td><td>MK ' + p.scheme_price.toLocaleString() + '</td><td>' + (p.provider_code || '') + '</td><td><button class="btn-action delete" onclick="deleteSchemePrice(' + p.id + ')" title="Remove"><i class="bi bi-trash"></i></button></td></tr>'
+        ).join('');
+    }
+    await loadProvidersForSelect();
+    new bootstrap.Modal(document.getElementById('schemePricesModal')).show();
+}
+
+async function loadProvidersForSelect() {
+    const res = await fetchWithAuth('/insurance/api/providers');
+    const providers = await res.json();
+    const sel = document.getElementById('sp-provider');
+    sel.innerHTML = '<option value="">Select scheme...</option>';
+    providers.forEach(p => {
+        const o = document.createElement('option'); o.value = p.id; o.textContent = p.name;
+        sel.appendChild(o);
+    });
+}
+
+async function saveSchemePrice() {
+    const providerId = document.getElementById('sp-provider').value;
+    const price = document.getElementById('sp-price').value;
+    if (!providerId || !price) { alert('Select a scheme and enter a price'); return; }
+    await fetchWithAuth('/pharmacy/api/inventory/' + currentSchemeDrugId + '/scheme-prices', {
+        method: 'POST',
+        body: JSON.stringify({ provider_id: parseInt(providerId), scheme_price: parseFloat(price) })
+    });
+    showSchemePrices(currentSchemeDrugId, document.getElementById('scheme-drug-name').textContent);
+}
+
+async function deleteSchemePrice(priceId) {
+    if (!confirm('Remove this scheme price?')) return;
+    await fetchWithAuth('/pharmacy/api/inventory/' + currentSchemeDrugId + '/scheme-prices/' + priceId, { method: 'DELETE' });
+    showSchemePrices(currentSchemeDrugId, document.getElementById('scheme-drug-name').textContent);
+}
 </script>
+
+<div class="modal fade" id="schemePricesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tag me-1"></i>Scheme Prices - <span id="scheme-drug-name"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm">
+                        <thead><tr><th>Scheme</th><th>Price (MK)</th><th>Code</th><th></th></tr></thead>
+                        <tbody id="scheme-prices-body"></tbody>
+                    </table>
+                </div>
+                <div class="card bg-light">
+                    <div class="card-body py-2">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"><select class="form-select form-select-sm" id="sp-provider"></select></div>
+                            <div class="col-md-4"><input type="number" class="form-control form-control-sm" id="sp-price" placeholder="Price (MK)" step="0.01"></div>
+                            <div class="col-md-3"><button class="btn btn-primary btn-sm w-100" onclick="saveSchemePrice()"><i class="bi bi-plus me-1"></i>Add</button></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -12,7 +12,18 @@ class Config:
     JWT_ACCESS_COOKIE_NAME = 'access_token'
     JWT_COOKIE_SECURE = False
     JWT_COOKIE_SAMESITE = 'Lax'
-    DATABASE = os.path.join(BASE_DIR, 'kayange.db')
-    DEBUG = True
     CALL_OUT_FEE = 20000
-                                                                                                                                                                                                                                               
+
+    if os.environ.get('VERCEL'):
+        DATABASE = '/tmp/kayange.db'
+    else:
+        DATABASE = os.path.join(BASE_DIR, 'kayange.db')
+
+    DEBUG = not bool(os.environ.get('VERCEL'))
+
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://xozdmkpkxholhukblfuv.supabase.co')
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_publishable_V2HZQ5gjJ0Nb7qmh9Pxziw__cR1DpWB')
+    SUPABASE_DB_URL = os.environ.get(
+        'SUPABASE_DB_URL',
+        'postgresql://postgres:[himjim@1234@]@db.xozdmkpkxholhukblfuv.supabase.co:5432/postgres'
+    )

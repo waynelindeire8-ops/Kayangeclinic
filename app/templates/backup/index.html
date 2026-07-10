@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-cloud-arrow-up"></i> Backup to Supabase</h4>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-arrow-up-circle text-primary" style="font-size:2rem"></i>
+                <h6 class="mt-2">Sync to Cloud</h6>
+                <p class="text-muted small">Push local data to Supabase</p>
+                <button class="btn btn-primary" onclick="syncAll()"><i class="bi bi-cloud-upload me-1"></i>Sync All</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-arrow-down-circle text-success" style="font-size:2rem"></i>
+                <h6 class="mt-2">Restore from Cloud</h6>
+                <p class="text-muted small">Pull cloud data to local</p>
+                <button class="btn btn-success" onclick="restoreAll()"><i class="bi bi-cloud-download me-1"></i>Restore All</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-database text-warning" style="font-size:2rem"></i>
+                <h6 class="mt-2">Init Tables</h6>
+                <p class="text-muted small">Create tables in Supabase</p>
+                <button class="btn btn-warning" onclick="initTables()"><i class="bi bi-gear me-1"></i>Init</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Sync Individual Tables</h6></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm" id="tables-table">
+                <thead><tr><th>Table</th><th width="150">Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Sync History</h6>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadStatus()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Table</th><th>Operation</th><th>Time</th></tr></thead>
+                <tbody id="sync-log-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="backupToast" class="toast" role="alert">
+        <div class="toast-header"><strong class="me-auto">Backup</strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div>
+        <div class="toast-body" id="backup-toast-body"></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadTables();
+    loadStatus();
+});
+
+async function loadTables() {
+    const res = await fetchWithAuth('/backup/tables');
+    const tables = await res.json();
+    const tbody = document.querySelector('#tables-table tbody');
+    tbody.innerHTML = tables.map(t =>
+        '<tr><td><code>' + t + '</code></td><td>' +
+        '<div class="d-flex gap-1">' +
+        '<button class="btn btn-outline-primary btn-sm" onclick="syncTable(\'' + t + '\')"><i class="bi bi-arrow-up"></i></button>' +
+        '<button class="btn btn-outline-success btn-sm" onclick="restoreTable(\'' + t + '\')"><i class="bi bi-arrow-down"></i></button>' +
+        '</div></td></tr>'
+    ).join('');
+}
+
+async function loadStatus() {
+    const res = await fetchWithAuth('/backup/status');
+    const logs = await res.json();
+    const tbody = document.getElementById('sync-log-body');
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No sync history</td></tr>';
+    } else {
+        tbody.innerHTML = logs.map(l =>
+            '<tr><td><code>' + l.table_name + '</code></td><td>' + l.operation + '</td><td>' + new Date(l.synced_at).toLocaleString() + '</td></tr>'
+        ).join('');
+    }
+}
+
+function showToast(msg) {
+    document.getElementById('backup-toast-body').textContent = msg;
+    new bootstrap.Toast(document.getElementById('backupToast')).show();
+}
+
+async function syncAll() {
+    if (!confirm('Sync all tables to Supabase?')) return;
+    showToast('Syncing...');
+    const res = await fetchWithAuth('/backup/sync', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+    loadStatus();
+}
+
+async function restoreAll() {
+    if (!confirm('Restore all tables from Supabase? This will overwrite local data!')) return;
+    showToast('Restoring...');
+    const res = await fetchWithAuth('/backup/restore', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+    loadStatus();
+}
+
+async function initTables() {
+    if (!confirm('Initialize tables in Supabase?')) return;
+    showToast('Initializing...');
+    const res = await fetchWithAuth('/backup/init', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+}
+
+async function syncTable(name) {
+    showToast('Syncing ' + name + '...');
+    const res = await fetchWithAuth('/backup/sync/' + name, { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+    loadStatus();
+}
+
+async function restoreTable(name) {
+    if (!confirm('Restore ' + name + '? This will overwrite local data for this table!')) return;
+    showToast('Restoring ' + name + '...');
+    const res = await fetchWithAuth('/backup/restore/' + name, { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+    loadStatus();
+}
+</script>
+{% endblock %}
