@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from werkzeug.security import generate_password_hash
 from config import Config
 
 
@@ -754,6 +755,7 @@ def init_db():
     _migrate_certificates_yellow_book(conn)
     _seed_lab_catalog(conn)
     _migrate_dispensing_unit_price(conn)
+    _seed_admin_user(conn)
     conn.close()
 
 
@@ -1232,3 +1234,14 @@ def _migrate_dispensing_unit_price(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass
+
+
+def _seed_admin_user(conn):
+    count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    if count == 0:
+        conn.execute(
+            'INSERT INTO users (username, password_hash, role, first_name, last_name, email, phone) VALUES (?,?,?,?,?,?,?)',
+            ('admin', generate_password_hash('admin123'), 'admin', 'System', 'Admin', 'admin@kayange.com', '0700000000')
+        )
+        conn.commit()
+        print('Default admin user created: admin / admin123')
