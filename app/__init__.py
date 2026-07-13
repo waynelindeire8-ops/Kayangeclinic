@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request
+from flask import Flask, render_template, redirect
 from flask_jwt_extended import JWTManager
 from config import Config
 import os, logging
@@ -16,16 +16,11 @@ def create_app():
     from app.database import init_db
     init_db()
 
-    # On Vercel: sync any local changes to Supabase first, then restore on cold start
+    # On Vercel: restore data from Supabase on cold start (local SQLite is ephemeral)
     if os.environ.get('VERCEL'):
         try:
-            from app.backup import sync_all, restore_all, HAS_PG
+            from app.backup import restore_all, HAS_PG
             if HAS_PG:
-                logger.info("Vercel: Pushing local changes to Supabase...")
-                sync_results = sync_all()
-                pushed = sum(v for v in sync_results.values() if v > 0)
-                logger.info(f"Vercel: Synced {pushed} rows to Supabase")
-
                 logger.info("Vercel: Restoring data from Supabase...")
                 results = restore_all()
                 total = sum(v for v in results.values() if v > 0)
@@ -117,20 +112,6 @@ def create_app():
         start_auto_sync(app)
     except Exception as e:
         logger.warning(f"Auto-sync failed to start: {e}")
-
-    # On Vercel, sync to Supabase immediately after any write request
-    if os.environ.get('VERCEL'):
-        @app.after_request
-        def sync_after_write(response):
-            if response.status_code in (200, 201, 204) and request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
-                try:
-                    from app.backup import sync_all, HAS_PG
-                    if HAS_PG:
-                        import threading
-                        threading.Thread(target=sync_all, daemon=True).start()
-                except Exception:
-                    pass
-            return response
 
     @app.route('/help')
     def help_page():

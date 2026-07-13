@@ -831,7 +831,25 @@ def init_db():
     _seed_vaccines(conn)
     _migrate_patient_documents(conn)
     _seed_admin_user(conn)
+    _create_indexes(conn)
     conn.close()
+
+
+def _create_indexes(conn):
+    indexes = [
+        'CREATE INDEX IF NOT EXISTS idx_patients_patient_id ON patients(patient_id)',
+        'CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(created_at)',
+        'CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date)',
+        'CREATE INDEX IF NOT EXISTS idx_billing_created ON billing(created_at)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_stock ON pharmacy_inventory(stock_quantity, reorder_level)',
+        'CREATE INDEX IF NOT EXISTS idx_users_active_role ON users(is_active, role)',
+    ]
+    for sql in indexes:
+        try:
+            conn.execute(sql)
+        except Exception:
+            pass
+    conn.commit()
 
 
 def _migrate_lab_catalog_params(conn):
