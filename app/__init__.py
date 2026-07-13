@@ -16,11 +16,13 @@ def create_app():
     from app.database import init_db
     init_db()
 
-    # On Vercel: restore data from Supabase on cold start (local SQLite is ephemeral)
+    # On Vercel: ensure Supabase tables exist, then restore data on cold start
     if os.environ.get('VERCEL'):
         try:
-            from app.backup import restore_all, HAS_PG
+            from app.backup import init_supabase_tables, restore_all, HAS_PG
             if HAS_PG:
+                logger.info("Vercel: Initializing Supabase tables...")
+                init_supabase_tables()
                 logger.info("Vercel: Restoring data from Supabase...")
                 results = restore_all()
                 total = sum(v for v in results.values() if v > 0)

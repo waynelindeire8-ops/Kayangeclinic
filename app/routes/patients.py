@@ -1,4 +1,4 @@
-import json, os, uuid
+import json, os, uuid, logging
 from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
 from flask_jwt_extended import get_jwt
@@ -7,6 +7,8 @@ from werkzeug.utils import secure_filename
 from config import Config
 from app.database import get_db
 from app.auth import login_required, log_audit
+
+logger = logging.getLogger(__name__)
 
 patients_bp = Blueprint('patients', __name__, url_prefix='/patients')
 
@@ -46,19 +48,23 @@ def edit_page(id):
 @patients_bp.route('/api', methods=['GET'])
 @login_required
 def api_list():
-    db = get_db()
-    search = request.args.get('search', '')
-    if search:
-        patients = db.execute(
-            '''SELECT * FROM patients
-               WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id LIKE ? OR phone LIKE ?
-               ORDER BY created_at DESC''',
-            (f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%')
-        ).fetchall()
-    else:
-        patients = db.execute('SELECT * FROM patients ORDER BY created_at DESC').fetchall()
-    db.close()
-    return jsonify([dict(p) for p in patients])
+    try:
+        db = get_db()
+        search = request.args.get('search', '')
+        if search:
+            patients = db.execute(
+                '''SELECT * FROM patients
+                   WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id LIKE ? OR phone LIKE ?
+                   ORDER BY created_at DESC''',
+                (f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%')
+            ).fetchall()
+        else:
+            patients = db.execute('SELECT * FROM patients ORDER BY created_at DESC').fetchall()
+        db.close()
+        return jsonify([dict(p) for p in patients])
+    except Exception as e:
+        logger.error(f"Patients API list error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @patients_bp.route('/api/<int:id>', methods=['GET'])
