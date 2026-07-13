@@ -19,6 +19,7 @@
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#history">Visit History</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#medical">Medical</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#billing-tab">Billing</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#documents-tab"><i class="bi bi-file-earmark me-1"></i>Documents</button></li>
 </ul>
 
 <div class="tab-content">
@@ -105,18 +106,47 @@
             </div>
         </div>
     </div>
+
+    <div class="tab-pane fade" id="documents-tab">
+        <div class="row g-3">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-upload me-1"></i>Upload Document</h6></div>
+                    <div class="card-body">
+                        <form id="doc-upload-form">
+                            <div class="mb-3">
+                                <label class="form-label">File (PDF, JPEG, PNG, GIF, WEBP)</label>
+                                <input type="file" class="form-control" id="doc-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Notes (optional)</label>
+                                <textarea class="form-control" id="doc-notes" rows="2" placeholder="e.g. Old physical file scan, page 1-5"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="doc-upload-btn">
+                                <i class="bi bi-upload me-1"></i>Upload
+                            </button>
+                        </form>
+                        <div id="doc-upload-result" class="mt-2" style="display:none"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark me-1"></i>Scanned Documents</h6></div>
+                    <div class="card-body" id="documents-list">
+                        <p class="text-muted mb-0">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
 const patientId = {{ patient_id }};
+const INSURANCE_PROVIDERS = {{ providers_json | safe }};
 
-// Load insurance providers first
-let insuranceProviders = {};
-fetchWithAuth('/insurance/api/providers').then(r => r.json()).then(providers => {
-    providers.forEach(p => { insuranceProviders[p.id] = p.name; });
-    // Then load patient data
-    return fetchWithAuth(`/patients/api/${patientId}`);
-}).then(r => r.json()).then(data => {
+fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
     document.getElementById('patient-name').textContent = `${data.first_name} ${data.last_name}`;
     document.getElementById('patient-id-display').textContent = data.patient_id;
     document.getElementById('patient-dob-age').textContent = data.dob ? `${data.dob} (${new Date().getFullYear() - new Date(data.dob).getFullYear()} yrs)` : '';
@@ -128,18 +158,18 @@ fetchWithAuth('/insurance/api/providers').then(r => r.json()).then(providers => 
     document.getElementById('p-emergency-name').textContent = data.emergency_contact_name || '-';
     document.getElementById('p-emergency-phone').textContent = data.emergency_contact_phone || '-';
     document.getElementById('p-blood').textContent = data.blood_group || '-';
-    document.getElementById('p-scheme-id').textContent = (data.scheme_id && insuranceProviders[data.scheme_id]) ? insuranceProviders[data.scheme_id] : 'None';
+    document.getElementById('p-scheme-id').textContent = (data.scheme_id && INSURANCE_PROVIDERS[data.scheme_id]) ? INSURANCE_PROVIDERS[data.scheme_id] : 'None';
     document.getElementById('p-scheme-number').textContent = data.scheme_number || '-';
     document.getElementById('p-scheme-type').textContent = data.scheme_type || '-';
 
     // Check authorization requirements
-    if (data.scheme_id && insuranceProviders[data.scheme_id] && insuranceProviders[data.scheme_id].toLowerCase().includes('medhealth')) {
+    if (data.scheme_id && INSURANCE_PROVIDERS[data.scheme_id] && INSURANCE_PROVIDERS[data.scheme_id].toLowerCase().includes('medhealth')) {
         fetchWithAuth('/insurance/api/authorization-rules?provider_id=' + data.scheme_id).then(r => r.json()).then(rules => {
             if (rules.length) {
                 const itemsList = rules.map(r => '<strong>' + r.item_name + '</strong>').join(', ');
                 const banner = document.createElement('div');
                 banner.className = 'alert alert-warning d-flex align-items-center mt-3';
-                banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i><div><strong>Prior Authorization Required</strong> — This patient needs pre-authorization for: ' + itemsList + ' under ' + insuranceProviders[data.scheme_id] + '.</div>';
+                banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i><div><strong>Prior Authorization Required</strong> — This patient needs pre-authorization for: ' + itemsList + ' under ' + INSURANCE_PROVIDERS[data.scheme_id] + '.</div>';
                 document.getElementById('info-tab-card').prepend(banner);
             }
         });
@@ -208,5 +238,78 @@ fetchWithAuth(`/patients/api/${patientId}/history`).then(r => r.json()).then(dat
         billingBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No billing records</td></tr>';
     }
 });
+
+// ===== Documents =====
+function loadDocuments() {
+    fetchWithAuth(`/patients/api/${patientId}/documents`).then(r => r.json()).then(docs => {
+        const div = document.getElementById('documents-list');
+        if (!docs.length) {
+            div.innerHTML = '<p class="text-muted mb-0">No documents uploaded yet.</p>';
+            return;
+        }
+        div.innerHTML = docs.map(d => `
+            <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-2">
+                <div>
+                    <a href="/patients/api/documents/${d.id}/download" class="fw-semibold text-decoration-none" target="_blank">
+                        <i class="bi bi-file-earmark-${d.mime_type && d.mime_type.includes('pdf') ? 'pdf' : 'image'} me-1"></i>${d.original_filename}
+                    </a>
+                    ${d.notes ? '<br><small class="text-muted">' + d.notes + '</small>' : ''}
+                    <br><small class="text-muted">${(d.file_size / 1024).toFixed(1)} KB · ${new Date(d.created_at).toLocaleDateString()}${d.uploaded_by_name ? ' by ' + d.uploaded_by_name : ''}</small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteDocument(${d.id})" title="Delete"><i class="bi bi-trash"></i></button>
+            </div>
+        `).join('');
+    }).catch(() => {
+        document.getElementById('documents-list').innerHTML = '<p class="text-danger mb-0">Failed to load documents.</p>';
+    });
+}
+
+window.deleteDocument = function(id) {
+    if (!confirm('Delete this document?')) return;
+    fetchWithAuth(`/patients/api/documents/${id}`, { method: 'DELETE' }).then(r => {
+        if (r.ok) loadDocuments();
+        else r.json().then(e => alert(e.error || 'Delete failed'));
+    });
+};
+
+document.getElementById('doc-upload-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('doc-file');
+    if (!fileInput.files.length) { alert('Select a file'); return; }
+
+    const btn = document.getElementById('doc-upload-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('notes', document.getElementById('doc-notes').value);
+
+    try {
+        const res = await fetchWithAuth(`/patients/api/${patientId}/documents`, { method: 'POST', body: formData });
+        const result = await res.json();
+        const div = document.getElementById('doc-upload-result');
+        div.style.display = 'block';
+        if (res.ok) {
+            div.className = 'alert alert-success py-2';
+            div.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + (result.message || 'Uploaded');
+            document.getElementById('doc-file').value = '';
+            document.getElementById('doc-notes').value = '';
+            loadDocuments();
+        } else {
+            div.className = 'alert alert-danger py-2';
+            div.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>' + (result.error || 'Upload failed');
+        }
+    } catch (err) {
+        document.getElementById('doc-upload-result').style.display = 'block';
+        document.getElementById('doc-upload-result').className = 'alert alert-danger py-2';
+        document.getElementById('doc-upload-result').innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Network error';
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload';
+});
+
+loadDocuments();
 </script>
 {% endblock %}

@@ -86,6 +86,10 @@ def create_app():
     from app.routes.users import users_bp
     app.register_blueprint(users_bp)
 
+    @app.route('/help')
+    def help_page():
+        return render_template('help.html')
+
     @app.route('/')
     def index():
         return redirect('/dashboard')

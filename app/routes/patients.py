@@ -1,7 +1,10 @@
+import json, os, uuid
 from sqlite3 import IntegrityError
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, send_from_directory
 from flask_jwt_extended import get_jwt
 from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
+from config import Config
 from app.database import get_db
 from app.auth import login_required, log_audit
 
@@ -11,7 +14,11 @@ patients_bp = Blueprint('patients', __name__, url_prefix='/patients')
 @patients_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
-    return render_template('patients/list.html')
+    db = get_db()
+    providers = db.execute('SELECT id, name FROM insurance_providers ORDER BY name').fetchall()
+    db.close()
+    providers_json = json.dumps({p['id']: p['name'] for p in providers})
+    return render_template('patients/list.html', providers_json=providers_json)
 
 
 @patients_bp.route('/new', strict_slashes=False)
@@ -23,7 +30,11 @@ def new_page():
 @patients_bp.route('/<int:id>', strict_slashes=False)
 @login_required
 def detail_page(id):
-    return render_template('patients/detail.html', patient_id=id)
+    db = get_db()
+    providers = db.execute('SELECT id, name FROM insurance_providers ORDER BY name').fetchall()
+    db.close()
+    providers_json = json.dumps({p['id']: p['name'] for p in providers})
+    return render_template('patients/detail.html', patient_id=id, providers_json=providers_json)
 
 
 @patients_bp.route('/<int:id>/edit', strict_slashes=False)
@@ -359,3 +370,92 @@ def _api_import():
         'skipped': skipped,
         'errors': errors[:20]
     })
+
+
+ALLOWED_MIMETYPES = {'application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+
+
+@patients_bp.route('/api/<int:patient_id>/documents', methods=['GET'])
+@login_required
+def api_documents_list(patient_id):
+    db = get_db()
+    docs = db.execute(
+        '''SELECT pd.*, u.first_name || ' ' || u.last_name as uploaded_by_name
+           FROM patient_documents pd
+           LEFT JOIN users u ON pd.uploaded_by = u.id
+           WHERE pd.patient_id = ?
+           ORDER BY pd.created_at DESC''', (patient_id,)
+    ).fetchall()
+    db.close()
+    return jsonify([dict(d) for d in docs])
+
+
+@patients_bp.route('/api/<int:patient_id>/documents', methods=['POST'])
+@login_required
+def api_documents_upload(patient_id):
+    current_user = get_jwt()
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ('.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp'):
+        return jsonify({'error': 'Allowed: PDF, JPEG, PNG, GIF, WEBP'}), 400
+
+    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+    unique_name = f'{uuid.uuid4().hex}{ext}'
+    filepath = os.path.join(Config.UPLOAD_FOLDER, unique_name)
+    file.save(filepath)
+    file_size = os.path.getsize(filepath)
+    mime_type = file.content_type or 'application/octet-stream'
+    notes = request.form.get('notes', '')
+
+    db = get_db()
+    cursor = db.execute(
+        '''INSERT INTO patient_documents (patient_id, filename, original_filename, file_size, mime_type, notes, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        (patient_id, unique_name, file.filename, file_size, mime_type, notes, current_user['id'])
+    )
+    doc_id = cursor.lastrowid
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'upload', 'patient_document', doc_id,
+              f'Uploaded {file.filename} for patient {patient_id}', request.remote_addr)
+    db.close()
+    return jsonify({'id': doc_id, 'message': 'File uploaded'}), 201
+
+
+@patients_bp.route('/api/documents/<int:doc_id>/download')
+@login_required
+def api_documents_download(doc_id):
+    db = get_db()
+    doc = db.execute('SELECT * FROM patient_documents WHERE id = ?', (doc_id,)).fetchone()
+    db.close()
+    if not doc:
+        return jsonify({'error': 'Document not found'}), 404
+    return send_from_directory(Config.UPLOAD_FOLDER, doc['filename'],
+                               download_name=doc['original_filename'])
+
+
+@patients_bp.route('/api/documents/<int:doc_id>', methods=['DELETE'])
+@login_required
+def api_documents_delete(doc_id):
+    current_user = get_jwt()
+    db = get_db()
+    doc = db.execute('SELECT * FROM patient_documents WHERE id = ?', (doc_id,)).fetchone()
+    if not doc:
+        db.close()
+        return jsonify({'error': 'Document not found'}), 404
+    filepath = os.path.join(Config.UPLOAD_FOLDER, doc['filename'])
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except OSError:
+        pass
+    db.execute('DELETE FROM patient_documents WHERE id = ?', (doc_id,))
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'delete', 'patient_document', doc_id,
+              f'Deleted document {doc["original_filename"]}', request.remote_addr)
+    db.close()
+    return jsonify({'message': 'Document deleted'})

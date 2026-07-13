@@ -49,6 +49,20 @@ def init_db():
     if db_exists:
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         if len(tables) > 5:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS patient_documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    filename TEXT NOT NULL,
+                    original_filename TEXT NOT NULL,
+                    file_size INTEGER,
+                    mime_type TEXT,
+                    notes TEXT,
+                    uploaded_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+                )''')
+            conn.commit()
             conn.close()
             return
 
@@ -756,6 +770,7 @@ def init_db():
     _seed_lab_catalog(conn)
     _migrate_dispensing_unit_price(conn)
     _migrate_patients_nullable(conn)
+    _migrate_patient_documents(conn)
     _seed_admin_user(conn)
     conn.close()
 
@@ -1291,3 +1306,20 @@ def _recreate_patients_table(conn):
     conn.execute("DROP TABLE patients_old")
     conn.commit()
     print('Migrated patients table: dob and phone now nullable')
+
+
+def _migrate_patient_documents(conn):
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS patient_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            file_size INTEGER,
+            mime_type TEXT,
+            notes TEXT,
+            uploaded_by INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )''')
+    conn.commit()

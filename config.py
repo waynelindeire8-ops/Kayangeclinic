@@ -13,6 +13,8 @@ class Config:
     JWT_COOKIE_SECURE = False
     JWT_COOKIE_SAMESITE = 'Lax'
     CALL_OUT_FEE = 20000
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads/patient_documents')
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024
 
     if os.environ.get('VERCEL'):
         DATABASE = '/tmp/kayange.db'

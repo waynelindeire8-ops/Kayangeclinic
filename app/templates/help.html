@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.help-section { margin-bottom: 2rem; }
+.help-section h5 { color: var(--bs-primary); margin-top: 1.5rem; border-bottom: 2px solid var(--bs-primary); padding-bottom: 0.5rem; }
+.help-section h6 { margin-top: 1rem; color: #334155; }
+.help-card { border-left: 4px solid var(--bs-primary); }
+.help-card.info { border-left-color: #0ea5e9; }
+.help-card.warning { border-left-color: #f59e0b; }
+.help-card.success { border-left-color: #16a34a; }
+.step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--bs-primary); color: white; font-weight: 700; font-size: 14px; margin-right: 8px; flex-shrink: 0; }
+.toc-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
+.toc-item a { text-decoration: none; color: #334155; }
+.toc-item a:hover { color: var(--bs-primary); }
+</style>
+
+<div class="page-header">
+    <h4><i class="bi bi-book me-2"></i>User Manual</h4>
+    <span class="text-muted">Kayange Clinic Management System</span>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-3">
+        <div class="card position-sticky" style="top:20px">
+            <div class="card-header"><h6 class="mb-0">Contents</h6></div>
+            <div class="card-body py-2" id="toc"></div>
+        </div>
+    </div>
+    <div class="col-lg-9">
+
+<!-- 1. GETTING STARTED -->
+<div class="help-section" id="sec-getting-started">
+<h5>1. Getting Started</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>System Access</h6>
+    <p>Open your web browser and navigate to your clinic's system URL. You will see the login page.</p>
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Default Login:</strong> Username: <code>admin</code> | Password: <code>admin123</code>
+    </div>
+    <div class="help-card warning card p-2 mb-2 small bg-light">
+        <i class="bi bi-exclamation-triangle me-1"></i> Change your password immediately after first login via Settings &gt; Profile.
+    </div>
+
+    <h6 class="mt-3">Login Steps</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Enter your username</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Enter your password</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Click <strong>Login</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>You will be redirected to the Dashboard</span></div>
+
+    <h6 class="mt-3">Navigation</h6>
+    <p>The sidebar menu on the left gives you access to all modules. The menu items shown depend on your user role. Click the toggle button (top-left) to collapse/expand the sidebar.</p>
+    <ul>
+        <li><strong>Dashboard</strong> — Overview of key metrics</li>
+        <li><strong>Patients</strong> — Patient records and document management</li>
+        <li><strong>Appointments</strong> — Scheduling and walk-in queue</li>
+        <li>Additional modules as per your role</li>
+    </ul>
+</div>
+</div>
+
+<!-- 2. PATIENT MANAGEMENT -->
+<div class="help-section" id="sec-patients">
+<h5>2. Patient Management</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Adding a New Patient</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Patients</strong> in the sidebar</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click <strong>New Patient</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Fill in required fields (First Name, Last Name are mandatory)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Optional: DOB (DD/MM/YYYY or YYYY-MM-DD), Gender, Phone, Email</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Select Insurance Scheme from dropdown</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">6</span><span>Add allergies, medical history, and current medications as needed</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">7</span><span>Click <strong>Save</strong></span></div>
+    <p class="mt-2 small text-muted">The system auto-generates a Patient ID (e.g., KMC-1001).</p>
+
+    <h6 class="mt-3">Viewing & Editing Patients</h6>
+    <p>The patients list shows all registered patients. Use the search bar to filter by name, ID, or phone. Click the <i class="bi bi-eye"></i> icon to view full details, or <i class="bi bi-pencil"></i> to edit.</p>
+
+    <h6 class="mt-3">Bulk Import from Excel</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Patients</strong> &gt; <strong>Import</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click <strong>Choose File</strong> and select your .xlsx file</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Click <strong>Import Patients</strong></span></div>
+    <p class="mt-2 small">Your Excel must have at least <strong>First Name</strong> and <strong>Last Name</strong> columns. Other supported column names include: DOB, Gender, Phone, Email, Address, Insurance, Scheme Type, Policy Number, Blood Group, Emergency Contact, Emergency Phone.</p>
+    <div class="help-card info card p-2 small bg-light">
+        <i class="bi bi-info-circle me-1"></i> Available insurance providers shown on the import page. Use exact names to auto-link scheme.
+    </div>
+
+    <h6 class="mt-3">Uploading Scanned Documents</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Open a patient's detail page</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click the <strong>Documents</strong> tab</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Select a file (PDF, JPEG, PNG, GIF, WEBP — max 50MB)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Add optional notes (e.g., "Old physical file page 1-5")</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Click <strong>Upload</strong></span></div>
+    <p class="mt-2 small text-muted">Documents can be viewed/downloaded or deleted from the patient's Documents tab.</p>
+</div>
+</div>
+
+<!-- 3. APPOINTMENTS -->
+<div class="help-section" id="sec-appointments">
+<h5>3. Appointments & Scheduling</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Creating an Appointment</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Appointments</strong> &gt; <strong>New Appointment</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select the patient (start typing name to search)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Choose appointment type: Phone, Online, or Walk-in</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Select date, time, and doctor</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Add reason for visit (optional)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">6</span><span>Click <strong>Save</strong></span></div>
+
+    <h6 class="mt-3">Calendar View</h6>
+    <p>The calendar view shows all appointments. You can switch between day, week, and month views. Click any appointment to view or edit details.</p>
+
+    <h6 class="mt-3">Walk-in Queue</h6>
+    <p>From the dashboard, use the queue panel to register walk-in patients. Their status automatically updates as they move through waiting, in-progress, and completed states.</p>
+</div>
+</div>
+
+<!-- 4. CONSULTATIONS -->
+<div class="help-section" id="sec-consultations">
+<h5>4. Clinical Consultations</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Starting a Consultation</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Consultations</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click <strong>New Consultation</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Select the patient</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Choose consultation type and link to appointment (optional)</span></div>
+
+    <h6 class="mt-3">Recording Vital Signs</h6>
+    <p>In the consultation form, enter: Blood Pressure (systolic/diastolic), Heart Rate, Temperature, O2 Saturation, Weight, Height. <strong>BMI is calculated automatically.</strong></p>
+
+    <h6 class="mt-3">Examinations</h6>
+    <p>Record physical exam findings by body system: General, Cardiovascular, CNS, Respiratory, Abdomen, Musculoskeletal, Skin, and Others.</p>
+
+    <h6 class="mt-3">Diagnoses</h6>
+    <p>Add primary, secondary, or complication diagnoses. Each can include an ICD code and notes.</p>
+
+    <h6 class="mt-3">Prescribing Medications</h6>
+    <p>Within a consultation, click the Prescriptions section. Select drugs from the pharmacy inventory, set dosage, frequency, and duration. The system checks insurance authorization rules automatically.</p>
+
+    <h6 class="mt-3">Ancillary Services</h6>
+    <p>From the consultation, you can order: Lab Tests, Procedures, Medical Certificates, Referrals (auto-adds MWK 20,000 call-out fee), or Diet Support. Each is recorded and linked to the patient's record.</p>
+</div>
+</div>
+
+<!-- 5. LABORATORY -->
+<div class="help-section" id="sec-lab">
+<h5>5. Laboratory</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Ordering Lab Tests</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Lab</strong> &gt; <strong>New Order</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select the patient</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Choose tests from the catalog (80+ tests in 12 categories)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Click <strong>Save</strong></span></div>
+
+    <h6 class="mt-3">Entering Results</h6>
+    <p>Lab staff can enter results for each parameter. Reference ranges are shown, and the system auto-flags results as NORMAL, HIGH, or LOW based on the patient's gender and age (where configured).</p>
+
+    <h6 class="mt-3">Lab Invoicing</h6>
+    <p>Lab tests can be billed separately via the Lab Invoices module. Invoices use LAB-XXXX numbering format.</p>
+
+    <div class="help-card info card p-2 small bg-light mt-2">
+        <i class="bi bi-info-circle me-1"></i> The lab catalog includes categories: Haematology, Parasitology, Microbiology, Chemistry, Lipogram, U&E, Cardiac, Serology, Tumour Markers, Endocrinology, Fertility & Steroids, and Radiology.
+    </div>
+</div>
+</div>
+
+<!-- 6. RADIOLOGY -->
+<div class="help-section" id="sec-radiology">
+<h5>6. Radiology / Imaging</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Ordering Radiology Exams</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Radiology</strong> &gt; <strong>New Order</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select patient and modality (X-ray, Ultrasound, CT, MRI, ECG, Echo, Mammogram, Fluoroscopy, Other)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Set priority: Routine, Urgent, or STAT</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Enter clinical history and indication</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Click <strong>Save</strong></span></div>
+
+    <h6 class="mt-3">External Referrals</h6>
+    <p>If the clinic cannot perform the exam, select "Refer Out". The system will automatically add the MWK 20,000 call-out fee to the patient's billing.</p>
+</div>
+</div>
+
+<!-- 7. PHARMACY -->
+<div class="help-section" id="sec-pharmacy">
+<h5>7. Pharmacy</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Managing Inventory</h6>
+    <p>Go to <strong>Pharmacy</strong> &gt; <strong>Inventory</strong> to view, add, edit, or adjust stock. Low-stock items are highlighted. You can filter to show only low-stock items.</p>
+
+    <h6 class="mt-3">Dispensing Drugs</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Pharmacy</strong> &gt; <strong>Dispensing</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select the patient — their insurance scheme auto-loads</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Select a drug — stock level and scheme price auto-display</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Enter quantity — total auto-calculated</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Click <strong>Dispense</strong> — stock deducted automatically</span></div>
+
+    <h6 class="mt-3">Insurance Scheme Pricing</h6>
+    <p>You can set different prices per drug per insurance provider. Go to Inventory, click the <i class="bi bi-cash-coin"></i> icon on any drug to configure scheme prices. At dispensing, the correct price is loaded based on the patient's scheme.</p>
+</div>
+</div>
+
+<!-- 8. BILLING -->
+<div class="help-section" id="sec-billing">
+<h5>8. Billing & Invoicing</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Creating an Invoice</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Billing</strong> &gt; <strong>New Invoice</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select the patient</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Add line items: select service type (Consultation, Lab, Procedure, Pharmacy, Certificate, Package)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Enter amounts and click Add Item</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Record payment (full or partial)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">6</span><span>Click <strong>Save</strong></span></div>
+    <p class="mt-2 small text-muted">Invoice numbers are auto-generated (INV-XXXX). Unbilled services from consultations can be found using the "Unbilled" feature.</p>
+
+    <h6 class="mt-3">Service Packages</h6>
+    <p>The system supports pre-defined packages: Annual Checkup, Maternity, Diabetes Management, and Executive Wellness. Select a package to auto-populate its services.</p>
+</div>
+</div>
+
+<!-- 9. INSURANCE -->
+<div class="help-section" id="sec-insurance">
+<h5>9. Insurance Module</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Managing Providers</h6>
+    <p>Go to <strong>Insurance</strong> &gt; <strong>Providers</strong> to view, add, edit, or deactivate insurance companies. 17+ providers are pre-seeded.</p>
+
+    <h6 class="mt-3">Patient Policies</h6>
+    <p>Assign policies to patients with scheme type, policy number, start/end dates. The system checks eligibility status (Active, Expired, Not Yet Effective).</p>
+
+    <h6 class="mt-3">Claims Processing</h6>
+    <p>Full claims lifecycle with 10 statuses:</p>
+    <p><small>Draft → Submitted → In Review → Additional Info Requested → Approved / Partially Approved / Denied → Appealed → Paid / Cancelled</small></p>
+    <p>Add claim items with amounts, supporting documents, and track status changes with full audit history.</p>
+
+    <h6 class="mt-3">Authorization Rules</h6>
+    <p>Configure rules that require pre-authorization for specific items (e.g., MedHealth requires prior auth for drips/IV fluids). The system alerts you during prescribing if authorization is needed.</p>
+</div>
+</div>
+
+<!-- 10. TELEMEDICINE -->
+<div class="help-section" id="sec-telemedicine">
+<h5>10. Telemedicine</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Starting a Session</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Telemedicine</strong> &gt; <strong>New Session</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Select patient, doctor, session type (Video/Audio/Chat)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Set scheduled date and time</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Click <strong>Save</strong></span></div>
+
+    <h6 class="mt-3">Conducting a Session</h6>
+    <p>Patients and doctors receive secure tokens to join the session. Use the waiting room before starting. During the session, you can chat in real-time, issue e-prescriptions, and process payments.</p>
+</div>
+</div>
+
+<!-- 11. SHORT STAY -->
+<div class="help-section" id="sec-shortstay">
+<h5>11. Short-Stay Unit</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Admitting a Patient</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Short Stay</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click <strong>New Admission</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Select patient and resource type (Bed or Drip Station)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Select an available resource (status shown)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Click <strong>Admit</strong></span></div>
+    <p class="mt-2 small">On discharge, the bed/drip station is automatically marked as Available (or Cleaning if needed).</p>
+</div>
+</div>
+
+<!-- 12. CERTIFICATES -->
+<div class="help-section" id="sec-certificates">
+<h5>12. Medical Certificates</h5>
+<div class="help-card card p-3 mb-3">
+    <p>Go to <strong>Certificates</strong> to view statistics and manage certificates. Six types available:</p>
+    <ul>
+        <li><strong>Sick Note</strong> — Medical leave certification</li>
+        <li><strong>TEP</strong> — Travel/Exit Permit</li>
+        <li><strong>Insurance</strong> — Insurance medical report</li>
+        <li><strong>Police</strong> — Police medical examination form</li>
+        <li><strong>Yellow Book</strong> — International vaccination certificate</li>
+        <li><strong>Foreign Stamp</strong> — Foreign medical stamp</li>
+    </ul>
+</div>
+</div>
+
+<!-- 13. MESSAGES & NOTIFICATIONS -->
+<div class="help-section" id="sec-messages">
+<h5>13. Messages & Notifications</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Internal Messaging</h6>
+    <p>Communicate with other staff members. Go to <strong>Messages</strong> to view Inbox, Sent messages, or compose a new message. Messages support read receipts and soft-deletion.</p>
+
+    <h6 class="mt-3">Notifications</h6>
+    <p>The bell icon <i class="bi bi-bell"></i> in the top bar shows unread notifications. The system sends notifications automatically for:</p>
+    <ul>
+        <li>New lab/radiology orders</li>
+        <li>Appointment assignments</li>
+        <li>Message received</li>
+        <li>Low stock alerts</li>
+        <li>Claim status changes</li>
+    </ul>
+</div>
+</div>
+
+<!-- 14. REPORTS -->
+<div class="help-section" id="sec-reports">
+<h5>14. Reports & Analytics</h5>
+<div class="help-card card p-3 mb-3">
+    <p>The <strong>Reports</strong> page provides analytics including:</p>
+    <ul>
+        <li><strong>Patient Demographics</strong> — Gender distribution, insurance coverage stats</li>
+        <li><strong>Revenue Reports</strong> — Filterable by date range, with totals and charts</li>
+        <li><strong>Appointment Statistics</strong> — By status and type</li>
+        <li><strong>Inventory Report</strong> — Total stock value, expiring items</li>
+        <li><strong>Consultation Stats</strong> — Consultation counts, types, doctor workload</li>
+        <li><strong>Procedure Stats</strong> — Procedure frequency and types</li>
+        <li><strong>Audit Logs</strong> — All user actions with timestamps and IP addresses</li>
+    </ul>
+    <p>The <strong>Dashboard</strong> shows a real-time snapshot: total patients, today's appointments, today's revenue, low-stock items, staff counts, and a 7-day revenue trend chart.</p>
+</div>
+</div>
+
+<!-- 15. ADMINISTRATION -->
+<div class="help-section" id="sec-admin">
+<h5>15. Administration</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>User Management</h6>
+    <p>Admin users can manage all system users: create, edit, delete, toggle active/inactive, and reset passwords. Roles available:</p>
+    <p><small>Admin, Doctor, Locum Doctor, Nurse, Locum Nurse, Lab Supervisor, Lab Staff, Lab Tech, Lab Care, Front Desk, File Manager</small></p>
+
+    <h6 class="mt-3">System Settings</h6>
+    <p>Go to <strong>Settings</strong> &gt; <strong>System</strong> to configure:</p>
+    <ul>
+        <li>Clinic name, address, phone, email</li>
+        <li>Timezone (default: Africa/Blantyre)</li>
+        <li>Date format (default: DD/MM/YYYY)</li>
+        <li>Currency (default: MWK)</li>
+        <li>Low stock threshold</li>
+        <li>Appointment slot duration</li>
+    </ul>
+
+    <h6 class="mt-3">Cloud Backup</h6>
+    <p>Visit <strong>/backup</strong> (admin-only) to sync your local database to Supabase PostgreSQL cloud. You can:</p>
+    <ul>
+        <li>Sync all tables at once</li>
+        <li>Sync individual tables</li>
+        <li>Restore from cloud to local</li>
+        <li>Initialize/update Supabase table schemas</li>
+    </ul>
+    <div class="help-card warning card p-2 small bg-light">
+        <i class="bi bi-exclamation-triangle me-1"></i> Perform backups regularly to prevent data loss.
+    </div>
+</div>
+</div>
+
+<!-- 16. TROUBLESHOOTING -->
+<div class="help-section" id="sec-troubleshooting">
+<h5>16. Troubleshooting</h5>
+<div class="help-card card p-3 mb-3">
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Q: I can't log in.</strong>
+        <br>Ensure your caps lock is off. Passwords are case-sensitive. Contact your admin to reset your password.
+    </div>
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Q: Patient not appearing in list after adding.</strong>
+        <br>Click the refresh icon or reload the page (Ctrl+Shift+R). Check your search filter — it may be filtering results.
+    </div>
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Q: Excel import failed.</strong>
+        <br>Ensure your file is .xlsx format (not .csv renamed). Check that "First Name" and "Last Name" columns exist. DOB must be in YYYY-MM-DD or DD/MM/YYYY format.
+    </div>
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Q: Document upload stuck.</strong>
+        <br>File must be under 50MB. Allowed types: PDF, JPEG, PNG, GIF, WEBP. Check your internet connection.
+    </div>
+    <div class="help-card info card p-2 mb-2 small bg-light">
+        <strong>Q: Page looks broken or buttons not working.</strong>
+        <br>Try a hard refresh (Ctrl+Shift+R). If the issue persists, clear your browser cache and reload.
+    </div>
+    <div class="help-card info card p-2 small bg-light">
+        <strong>Q: System is slow.</strong>
+        <br>Try refreshing the page. Check your internet connection. If on Vercel, the first request after inactivity may be slow (cold start).
+    </div>
+</div>
+</div>
+
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toc = document.getElementById('toc');
+    const sections = document.querySelectorAll('.help-section');
+    sections.forEach(sec => {
+        const id = sec.id;
+        const title = sec.querySelector('h5').textContent;
+        const div = document.createElement('div');
+        div.className = 'toc-item';
+        const a = document.createElement('a');
+        a.href = '#' + id;
+        a.textContent = title;
+        div.appendChild(a);
+        toc.appendChild(div);
+    });
+});
+</script>
+{% endblock %}
