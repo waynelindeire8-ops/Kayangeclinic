@@ -46,7 +46,9 @@ def role_required(min_role):
         def wrapper(*args, **kwargs):
             claims = get_jwt()
             if ROLE_HIERARCHY.get(claims.get('role', ''), 0) < ROLE_HIERARCHY.get(min_role, 0):
-                return jsonify({'error': 'Insufficient permissions'}), 403
+                if '/api/' in request.path:
+                    return jsonify({'error': 'Insufficient permissions'}), 403
+                return render_template('error.html', code=403, message='You do not have permission to access this page.'), 403
             return f(*args, **kwargs)
         return wrapper
     return decorator

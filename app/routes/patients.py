@@ -5,7 +5,7 @@ from flask_jwt_extended import get_jwt
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 from config import Config
-from app.database import get_db
+from app.database import get_db, _recreate_patients_table
 from app.auth import login_required, log_audit
 
 patients_bp = Blueprint('patients', __name__, url_prefix='/patients')
@@ -276,6 +276,13 @@ def _api_import():
         return jsonify({'error': 'Excel must have "First Name" and "Last Name" columns. Found: ' + ', '.join(headers)}), 400
 
     db = get_db()
+    db.execute("PRAGMA foreign_keys = OFF")
+
+    # Ensure dob and phone are nullable
+    for r in db.execute("PRAGMA table_info(patients)").fetchall():
+        if r[1] in ('dob', 'phone') and r[3] == 1:
+            _recreate_patients_table(db)
+            break
 
     # Build insurance provider lookup (name -> id, case-insensitive)
     providers_raw = db.execute('SELECT id, name FROM insurance_providers').fetchall()
@@ -360,6 +367,7 @@ def _api_import():
             skipped += 1
 
     db.commit()
+    db.execute("PRAGMA foreign_keys = ON")
     log_audit(current_user['id'], current_user['username'], 'import', 'patients', None,
               f'Imported {created} patients from Excel', request.remote_addr)
     db.close()

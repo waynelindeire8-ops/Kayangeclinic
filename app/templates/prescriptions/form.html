@@ -88,7 +88,7 @@ function addItem(data) {
         '<option value="' + i.id + '" ' + (d.inventory_id == i.id ? 'selected' : '') + '>' + escHtml(i.drug_name) + ' (stock: ' + i.stock_quantity + ')</option>'
     ).join('');
     div.innerHTML = `<div class="row g-2 align-items-end">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <label class="form-label small">Drug</label>
             <select class="form-select form-select-sm inv-select" onchange="onDrugSelect(this)">
                 <option value="">-- Select from inventory --</option>
@@ -111,7 +111,7 @@ function addItem(data) {
                 ).join('')}
             </select>
         </div>
-        <div class="col-md-1">
+        <div class="col-md-2">
             <label class="form-label small">Route</label>
             <select class="form-select form-select-sm" name="route">
                 <option value="">Select</option>
@@ -120,27 +120,28 @@ function addItem(data) {
                 ).join('')}
             </select>
         </div>
-        <div class="col-md-1">
+        <div class="col-md-2">
             <label class="form-label small">Duration</label>
             <input type="text" class="form-control form-control-sm" name="duration" placeholder="e.g. 7 days" value="${escHtml(d.duration || '')}">
         </div>
-        <div class="col-md-1">
+    </div>
+    <div class="row g-2 align-items-end mt-1">
+        <div class="col-md-2">
             <label class="form-label small">Qty</label>
             <input type="number" class="form-control form-control-sm" name="quantity" min="0" value="${d.quantity || ''}">
         </div>
-        <div class="col-md-1">
+        <div class="col-md-2">
             <label class="form-label small">Refills</label>
             <input type="number" class="form-control form-control-sm" name="refill_count" min="0" value="${d.refill_count || 0}">
         </div>
-        <div class="col-md-1 d-flex align-items-end gap-1">
+        <div class="col-md-7">
+            <label class="form-label small">Special Instructions</label>
+            <input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value="${escHtml(d.instructions || '')}">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
             <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.item-row').remove(); checkItems()" title="Remove"><i class="bi bi-trash"></i></button>
         </div>
     </div>`;
-    if (d.instructions) {
-        div.innerHTML += `<div class="row mt-2"><div class="col-12"><input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value="${escHtml(d.instructions)}"></div></div>`;
-    } else {
-        div.innerHTML += `<div class="row mt-2"><div class="col-12"><input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value=""></div></div>`;
-    }
     container.appendChild(div);
 }
 
