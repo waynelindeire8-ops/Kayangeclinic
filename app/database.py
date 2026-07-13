@@ -930,6 +930,7 @@ def _seed_system_config(conn):
         'currency': 'MWK',
         'low_stock_threshold': '10',
         'appointment_slot_minutes': '30',
+        'auto_sync_interval': '5',
     }
     existing = {r[0] for r in conn.execute('SELECT key FROM system_config').fetchall()}
     for k, v in defaults.items():

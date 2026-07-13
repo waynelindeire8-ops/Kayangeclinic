@@ -1,8 +1,10 @@
 from flask import Flask, render_template, redirect
 from flask_jwt_extended import JWTManager
 from config import Config
+import os, logging
 
 jwt = JWTManager()
+logger = logging.getLogger(__name__)
 
 
 def create_app():
@@ -13,6 +15,18 @@ def create_app():
 
     from app.database import init_db
     init_db()
+
+    # On Vercel: restore data from Supabase on cold start
+    if os.environ.get('VERCEL'):
+        try:
+            from app.backup import restore_all, HAS_PG
+            if HAS_PG:
+                logger.info("Vercel: Restoring data from Supabase...")
+                results = restore_all()
+                total = sum(v for v in results.values() if v > 0)
+                logger.info(f"Vercel: Restored {total} rows from Supabase")
+        except Exception as e:
+            logger.error(f"Vercel restore failed: {e}")
 
     from app.auth import auth_bp
     app.register_blueprint(auth_bp)
@@ -91,6 +105,14 @@ def create_app():
 
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
+
+    # Start background auto-sync (pushes SQLite to Supabase periodically)
+    if not os.environ.get('VERCEL'):
+        try:
+            from app.backup import start_auto_sync
+            start_auto_sync(app)
+        except Exception as e:
+            logger.warning(f"Auto-sync failed to start: {e}")
 
     @app.route('/help')
     def help_page():

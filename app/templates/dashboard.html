@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- Sync Status -->
+<div id="sync-banner" class="alert alert-light border d-none mb-3" role="alert">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-cloud-arrow-up text-primary"></i>
+            <span>Cloud Sync: <strong id="sync-status-text">Checking...</strong></span>
+        </div>
+        <small class="text-muted" id="sync-last-time"></small>
+    </div>
+</div>
+
 <!-- Greeting -->
 <div class="greeting-card mb-4">
     <h4 id="greeting-text">Good Morning</h4>
@@ -224,6 +235,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             fetchWithAuth('/reports/api/appointments'),
             fetchWithAuth('/reports/api/queue')
         ]);
+
+        // Load sync status for admins
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.role === 'admin') {
+                const syncRes = await fetchWithAuth('/backup/auto-status');
+                if (syncRes.ok) {
+                    const syncData = await syncRes.json();
+                    document.getElementById('sync-banner').classList.remove('d-none');
+                    document.getElementById('sync-status-text').textContent =
+                        syncData.status === 'ok' ? 'Active' :
+                        syncData.status === 'partial' ? 'Partial' :
+                        syncData.status === 'error' ? 'Error' : 'Idle';
+                    document.getElementById('sync-last-time').textContent =
+                        syncData.time ? 'Last sync: ' + new Date(syncData.time).toLocaleString() : 'No sync yet';
+                }
+            }
+        } catch(e) {}
         const dash = await dashRes.json();
         const consultData = await consultRes.json();
         const aptData = await aptRes.json();
