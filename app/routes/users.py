@@ -67,6 +67,17 @@ def api_create():
     log_audit(current_user['id'], current_user['username'], 'create', 'user', new_id,
               f'Created user {data["username"]} with role {data["role"]}', request.remote_addr)
     db.close()
+
+    # On Vercel: sync immediately so created user survives cold starts
+    import os
+    if os.environ.get('VERCEL'):
+        try:
+            from app.backup import sync_table, HAS_PG
+            if HAS_PG:
+                sync_table('users')
+        except Exception:
+            pass
+
     return jsonify({'id': new_id}), 201
 
 

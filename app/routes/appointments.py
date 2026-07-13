@@ -159,6 +159,17 @@ def api_quick_add():
     log_audit(current_user['id'], current_user['username'], 'walk_in', 'appointment', new_id,
               f'Walk-in added for patient ID {data["patient_id"]}', request.remote_addr)
     db.close()
+
+    # On Vercel: sync this table immediately so walk-in survives cold starts
+    import os
+    if os.environ.get('VERCEL'):
+        try:
+            from app.backup import sync_table, HAS_PG
+            if HAS_PG:
+                sync_table('appointments')
+        except Exception:
+            pass
+
     return jsonify(dict(apt)), 201
 
 
