@@ -276,13 +276,18 @@ def _api_import():
         return jsonify({'error': 'Excel must have "First Name" and "Last Name" columns. Found: ' + ', '.join(headers)}), 400
 
     db = get_db()
+
+    # Drop any leftover temp table from previous failed recreation
+    try:
+        db.execute("DROP TABLE IF EXISTS patients_old")
+    except Exception:
+        pass
+
     db.execute("PRAGMA foreign_keys = OFF")
 
-    # Ensure dob and phone are nullable
-    for r in db.execute("PRAGMA table_info(patients)").fetchall():
-        if r[1] in ('dob', 'phone') and r[3] == 1:
-            _recreate_patients_table(db)
-            break
+    # Recreate patients table to drop FK constraints on scheme_id
+    _recreate_patients_table(db)
+    db.execute("PRAGMA foreign_keys = OFF")
 
     # Build insurance provider lookup (name -> id, case-insensitive)
     providers_raw = db.execute('SELECT id, name FROM insurance_providers').fetchall()
