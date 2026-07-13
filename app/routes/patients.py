@@ -5,7 +5,7 @@ from flask_jwt_extended import get_jwt
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 from config import Config
-from app.database import get_db, _recreate_patients_table
+from app.database import get_db
 from app.auth import login_required, log_audit
 
 patients_bp = Blueprint('patients', __name__, url_prefix='/patients')
@@ -277,16 +277,7 @@ def _api_import():
 
     db = get_db()
 
-    # Drop any leftover temp table from previous failed recreation
-    try:
-        db.execute("DROP TABLE IF EXISTS patients_old")
-    except Exception:
-        pass
-
-    db.execute("PRAGMA foreign_keys = OFF")
-
-    # Recreate patients table to drop FK constraints on scheme_id
-    _recreate_patients_table(db)
+    # Disable FK checks for bulk import
     db.execute("PRAGMA foreign_keys = OFF")
 
     # Build insurance provider lookup (name -> id, case-insensitive)
