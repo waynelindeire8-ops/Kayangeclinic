@@ -68,13 +68,13 @@ def api_create():
               f'Created user {data["username"]} with role {data["role"]}', request.remote_addr)
     db.close()
 
-    # On Vercel: sync immediately so created user survives cold starts
-    import os
+    # On Vercel: sync in background so created user survives cold starts
+    import os, threading
     if os.environ.get('VERCEL'):
         try:
             from app.backup import sync_table, HAS_PG
             if HAS_PG:
-                sync_table('users')
+                threading.Thread(target=sync_table, args=('users',), daemon=True).start()
         except Exception:
             pass
 
