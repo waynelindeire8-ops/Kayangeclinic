@@ -420,9 +420,9 @@ def api_documents_upload(patient_id):
     )
     doc_id = cursor.lastrowid
     db.commit()
+    db.close()
     log_audit(current_user['id'], current_user['username'], 'upload', 'patient_document', doc_id,
               f'Uploaded {file.filename} for patient {patient_id}', request.remote_addr)
-    db.close()
     return jsonify({'id': doc_id, 'message': 'File uploaded'}), 201
 
 

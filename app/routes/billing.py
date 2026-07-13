@@ -24,6 +24,12 @@ def invoice_page(id):
     return render_template('billing/invoice.html', billing_id=id)
 
 
+@billing_bp.route('/<int:id>/print', strict_slashes=False)
+@login_required
+def invoice_print(id):
+    return render_template('billing/print.html', billing_id=id)
+
+
 @billing_bp.route('/api', methods=['GET'])
 @login_required
 def api_list():

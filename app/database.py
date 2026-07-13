@@ -62,6 +62,35 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
                 )''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS vaccines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vaccine_name TEXT NOT NULL,
+                    manufacturer TEXT,
+                    vaccine_type TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS vaccination_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    vaccine_id INTEGER NOT NULL,
+                    dose_number INTEGER DEFAULT 1,
+                    batch_number TEXT,
+                    manufacturer TEXT,
+                    date_administered DATE NOT NULL,
+                    administered_by INTEGER REFERENCES users(id),
+                    injection_site TEXT,
+                    notes TEXT,
+                    next_dose_due DATE,
+                    certificate_id INTEGER REFERENCES medical_certificates(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                    FOREIGN KEY(vaccine_id) REFERENCES vaccines(id)
+                )''')
+            _migrate_patients_yellow_book_fields(conn)
+            _seed_vaccines(conn)
             conn.commit()
             conn.close()
             return
@@ -204,6 +233,33 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(patient_id) REFERENCES patients(id),
             FOREIGN KEY(doctor_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS vaccines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vaccine_name TEXT NOT NULL,
+            manufacturer TEXT,
+            vaccine_type TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vaccination_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            vaccine_id INTEGER NOT NULL,
+            dose_number INTEGER DEFAULT 1,
+            batch_number TEXT,
+            manufacturer TEXT,
+            date_administered DATE NOT NULL,
+            administered_by INTEGER REFERENCES users(id),
+            injection_site TEXT,
+            notes TEXT,
+            next_dose_due DATE,
+            certificate_id INTEGER REFERENCES medical_certificates(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+            FOREIGN KEY(vaccine_id) REFERENCES vaccines(id)
         );
 
         CREATE TABLE IF NOT EXISTS packages (
@@ -770,6 +826,8 @@ def init_db():
     _seed_lab_catalog(conn)
     _migrate_dispensing_unit_price(conn)
     _migrate_patients_nullable(conn)
+    _migrate_patients_yellow_book_fields(conn)
+    _seed_vaccines(conn)
     _migrate_patient_documents(conn)
     _seed_admin_user(conn)
     conn.close()
@@ -1306,6 +1364,43 @@ def _recreate_patients_table(conn):
     conn.execute("DROP TABLE patients_old")
     conn.commit()
     print('Migrated patients table: dob and phone now nullable')
+
+
+def _migrate_patients_yellow_book_fields(conn):
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN passport_number TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN nationality TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
+def _seed_vaccines(conn):
+    existing = conn.execute("SELECT COUNT(*) as c FROM vaccines").fetchone()['c']
+    if existing > 0:
+        return
+    vaccines = [
+        ('Yellow Fever', 'Sanofi Pasteur', 'viral'),
+        ('Cholera', 'Valneva', 'bacterial'),
+        ('Typhoid', 'Sanofi Pasteur', 'bacterial'),
+        ('Hepatitis A', 'GSK', 'viral'),
+        ('Hepatitis B', 'Merck', 'viral'),
+        ('Meningococcal (ACWY)', 'Sanofi Pasteur', 'bacterial'),
+        ('Polio IPV', 'Sanofi Pasteur', 'viral'),
+        ('Rabies', 'Sanofi Pasteur', 'viral'),
+        ('Tetanus/Diphtheria', 'GSK', 'toxoid'),
+        ('COVID-19', 'Various', 'viral'),
+        ('MMR', 'Merck', 'viral'),
+        ('Influenza', 'Sanofi Pasteur', 'viral'),
+    ]
+    for name, manufacturer, vtype in vaccines:
+        conn.execute(
+            'INSERT INTO vaccines (vaccine_name, manufacturer, vaccine_type) VALUES (?, ?, ?)',
+            (name, manufacturer, vtype))
+    conn.commit()
 
 
 def _migrate_patient_documents(conn):

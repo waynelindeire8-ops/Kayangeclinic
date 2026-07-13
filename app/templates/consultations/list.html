@@ -28,7 +28,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     $('#consultations-table').DataTable({
-        ajax: { url: '/consultations/api', dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth('/consultations/api?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'created_at', render: d => new Date(d).toLocaleDateString() },
             { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + d.p_first + ' ' + d.p_last + '</a>' },

@@ -91,7 +91,7 @@ function loadTable(search) {
     const url = search ? '/pharmacy/api/inventory?search=' + search : '/pharmacy/api/inventory';
     if ($.fn.DataTable.isDataTable('#inventory-table')) { $('#inventory-table').DataTable().destroy(); }
     $('#inventory-table').DataTable({
-        ajax: { url, dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth(url + '?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'drug_name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
             { data: 'generic_name', render: d => d || '-' },

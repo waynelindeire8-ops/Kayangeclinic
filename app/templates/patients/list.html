@@ -37,7 +37,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let colorIdx = 0;
 
     let table = $('#patients-table').DataTable({
-        ajax: { url: '/patients/api', dataSrc: '' },
+        ajax: function(data, callback, settings) {
+            fetchWithAuth('/patients/api?' + $.param(data)).then(r => {
+                if (r.status === 401) throw new Error('Unauthorized');
+                return r.json();
+            }).then(d => callback({ data: d })).catch(() => callback({ data: [] }));
+        },
         columns: [
             { data: 'patient_id', render: d => '<span class="fw-semibold" style="color:#0f172a">#' + d + '</span>' },
             { data: null, render: function(d) {

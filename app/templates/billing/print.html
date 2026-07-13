@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice #{{ billing_id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @page { margin: 15mm; }
+        body { font-family: 'Courier New', monospace; font-size: 12pt; color: #000; background: #fff; padding: 20px; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .header h2 { margin: 0; font-weight: bold; }
+        .header p { margin: 2px 0; font-size: 11pt; }
+        .info-table { width: 100%; margin-bottom: 20px; }
+        .info-table td { padding: 2px 0; vertical-align: top; }
+        .info-table td:first-child { font-weight: bold; width: 120px; }
+        table.items { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table.items th { border-bottom: 2px solid #000; padding: 6px 4px; text-align: left; font-size: 11pt; }
+        table.items td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 11pt; }
+        .totals-table { width: 300px; margin-left: auto; margin-top: 15px; }
+        .totals-table td { padding: 4px 8px; font-size: 11pt; }
+        .totals-table td:first-child { font-weight: bold; text-align: right; }
+        .totals-table .grand-total { font-size: 14pt; font-weight: bold; border-top: 2px solid #000; }
+        .footer { margin-top: 40px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px; }
+        .no-print { display: none; }
+        @media print { .no-print { display: none; } body { padding: 0; } }
+    </style>
+</head>
+<body>
+    <div id="print-area">
+        <div class="spinner-border spinner-border-sm" id="spinner"></div>
+    </div>
+    <div class="no-print mt-3">
+        <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+        <button class="btn btn-outline-secondary" onclick="window.close()">Close</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    const billingId = {{ billing_id }};
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        const [invRes, cfgRes] = await Promise.all([
+            fetch('/billing/api/' + billingId, {
+                headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || getCookie('access_token')) }
+            }),
+            fetch('/settings/api/system', {
+                headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || getCookie('access_token')) }
+            })
+        ]);
+        const data = await invRes.json();
+        const cfg = cfgRes.ok ? await cfgRes.json() : {};
+        if (data.error) { document.getElementById('print-area').innerHTML = '<div class="alert alert-danger">' + data.error + '</div>'; return; }
+
+        const clinicName = cfg.clinic_name || 'Kayange Clinic';
+        const clinicAddress = cfg.clinic_address || 'Blantyre, Malawi';
+        const clinicPhone = cfg.clinic_phone || '';
+        const dateStr = new Date(data.created_at).toLocaleDateString('en-GB');
+
+        let itemsHtml = '';
+        (data.items || []).forEach((item, i) => {
+            itemsHtml += '<tr><td>' + (i+1) + '</td><td>' + escHtml(item.item_name) + '</td><td>' + escHtml(item.item_type) + '</td><td>' + item.quantity + '</td><td>MK ' + Number(item.unit_price).toLocaleString() + '</td><td>MK ' + Number(item.total_price).toLocaleString() + '</td></tr>';
+        });
+
+        const total = data.total_amount || 0;
+        const paid = data.amount_paid || 0;
+        const balance = data.balance || 0;
+
+        document.getElementById('print-area').innerHTML =
+            '<div class="header"><h2>' + escHtml(clinicName).toUpperCase() + '</h2><p>' + escHtml(clinicAddress) + '</p>' +
+            (clinicPhone ? '<p>Tel: ' + escHtml(clinicPhone) + '</p>' : '') +
+            '<hr style="margin:5px 0"><h4>INVOICE</h4></div>' +
+            '<table class="info-table"><tr><td>Invoice:</td><td><strong>' + escHtml(data.invoice_number) + '</strong></td></tr>' +
+            '<tr><td>Date:</td><td>' + dateStr + '</td></tr>' +
+            '<tr><td>Patient:</td><td><strong>' + escHtml(data.p_first) + ' ' + escHtml(data.p_last) + '</strong></td></tr>' +
+            (data.p_phone ? '<tr><td>Phone:</td><td>' + escHtml(data.p_phone) + '</td></tr>' : '') +
+            '<tr><td>Payment:</td><td>' + escHtml((data.payment_method || '-').replace(/_/g, ' ')) + '</td></tr>' +
+            '</table>' +
+            '<table class="items"><thead><tr><th>#</th><th>Item</th><th>Type</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>' +
+            itemsHtml +
+            '</tbody></table>' +
+            '<table class="totals-table"><tr><td>Total:</td><td>MK ' + Number(total).toLocaleString() + '</td></tr>' +
+            '<tr><td>Paid:</td><td>MK ' + Number(paid).toLocaleString() + '</td></tr>' +
+            '<tr class="grand-total"><td>Balance:</td><td>MK ' + Number(balance).toLocaleString() + '</td></tr></table>' +
+            '<div class="footer">Thank you for choosing ' + escHtml(clinicName) + '</div>';
+
+        window.print();
+    });
+
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : null;
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+    </script>
+</body>
+</html>

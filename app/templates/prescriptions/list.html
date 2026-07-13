@@ -63,7 +63,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
-    document.getElementById('filter-to').value = new Date().toISOString().split('T')[0];
     const pRes = await fetchWithAuth('/patients/api');
     const patients = await pRes.json();
     const pSel = document.getElementById('filter-patient');
@@ -81,12 +80,10 @@ async function loadOrders() {
     const status = document.getElementById('filter-status').value;
     const patientId = document.getElementById('filter-patient').value;
     const from = document.getElementById('filter-from').value;
-    const to = document.getElementById('filter-to').value;
     let url = '/prescriptions/api/orders?';
     if (status) url += 'status=' + status + '&';
     if (patientId) url += 'patient_id=' + patientId + '&';
     if (from) url += 'date_from=' + from + '&';
-    if (to) url += 'date_to=' + to + '&';
     const res = await fetchWithAuth(url);
     const orders = await res.json();
     const tbody = document.querySelector('#orders-table tbody');

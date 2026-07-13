@@ -80,11 +80,17 @@ def create_app():
     from app.routes.certificates import certificates_bp
     app.register_blueprint(certificates_bp)
 
+    from app.routes.yellow_book import yellow_book_bp
+    app.register_blueprint(yellow_book_bp)
+
     from app.routes.backup import backup_bp
     app.register_blueprint(backup_bp)
 
     from app.routes.users import users_bp
     app.register_blueprint(users_bp)
+
+    from app.routes.reminders import reminders_bp
+    app.register_blueprint(reminders_bp)
 
     @app.route('/help')
     def help_page():

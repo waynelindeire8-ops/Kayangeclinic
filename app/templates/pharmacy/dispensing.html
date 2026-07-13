@@ -66,7 +66,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     $('#dispensing-table').DataTable({
-        ajax: { url: '/pharmacy/api/dispensing', dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth('/pharmacy/api/dispensing?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'dispensed_date', render: d => new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString() },
             { data: null, render: d => `${d.p_first} ${d.p_last}` },

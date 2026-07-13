@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let ci = 0;
 
     $('#staff-table').DataTable({
-        ajax: { url: '/staff/api', dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth('/staff/api?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: null, render: function(d) {
                 const initials = (d.first_name || 'S').charAt(0) + (d.last_name || '').charAt(0);

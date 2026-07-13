@@ -271,19 +271,56 @@
 <div class="help-card card p-3 mb-3">
     <p>Go to <strong>Certificates</strong> to view statistics and manage certificates. Six types available:</p>
     <ul>
-        <li><strong>Sick Note</strong> — Medical leave certification</li>
-        <li><strong>TEP</strong> — Travel/Exit Permit</li>
-        <li><strong>Insurance</strong> — Insurance medical report</li>
-        <li><strong>Police</strong> — Police medical examination form</li>
-        <li><strong>Yellow Book</strong> — International vaccination certificate</li>
-        <li><strong>Foreign Stamp</strong> — Foreign medical stamp</li>
+                <li><strong>Sick Note</strong> — Medical leave certification</li>
+                <li><strong>TEP</strong> — Travel/Exit Permit</li>
+                <li><strong>Insurance</strong> — Insurance medical report</li>
+                <li><strong>Police</strong> — Police medical examination form</li>
+                <li><strong>Yellow Book</strong> — International vaccination certificate (see dedicated module below)</li>
+                <li><strong>Foreign Stamp</strong> — Foreign medical stamp</li>
     </ul>
 </div>
 </div>
 
-<!-- 13. MESSAGES & NOTIFICATIONS -->
+<!-- 13. YELLOW BOOK / VACCINATION -->
+<div class="help-section" id="sec-yellowbook">
+<h5>13. Yellow Book & Vaccinations</h5>
+<div class="help-card card p-3 mb-3">
+    <h6>Overview</h6>
+    <p>The Yellow Book module manages the WHO International Certificate of Vaccination or Prophylaxis for travelling patients. It provides full vaccination tracking and generates printable WHO-standard certificates.</p>
+
+    <h6 class="mt-3">Accessing the Module</h6>
+    <p>Go to <strong>Yellow Book</strong> in the Clinical section of the sidebar (visible to Admin, Doctors, and Nurses).</p>
+
+    <h6 class="mt-3">Recording a Vaccination</h6>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">1</span><span>Go to <strong>Yellow Book</strong> and select a patient from the search dropdown</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">2</span><span>Click <strong>Open Yellow Book</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">3</span><span>Click <strong>Add Vaccination</strong></span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">4</span><span>Select vaccine from the catalog (12+ travel vaccines pre-loaded)</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">5</span><span>Enter: dose number, batch/lot number, manufacturer, date administered, injection site</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">6</span><span>Optionally set a next dose due date</span></div>
+    <div class="d-flex align-items-start mb-1"><span class="step-num">7</span><span>Click <strong>Save</strong></span></div>
+
+    <h6 class="mt-3">Printing the Yellow Book Certificate</h6>
+    <p>From the patient's Yellow Book page, click <strong>Print Yellow Book</strong>. This generates a WHO-standard certificate including:</p>
+    <ul>
+        <li>Patient name, DOB, passport number, nationality</li>
+        <li>Full vaccination history table (vaccine, dose, date, batch, manufacturer, site, next due)</li>
+        <li>Signature and clinic stamp sections</li>
+        <li>WHO disclaimer text</li>
+    </ul>
+
+    <h6 class="mt-3">Vaccine Catalog</h6>
+    <p>The system includes 12 pre-loaded travel vaccines: Yellow Fever, Cholera, Typhoid, Hepatitis A, Hepatitis B, Meningococcal (ACWY), Polio IPV, Rabies, Tetanus/Diphtheria, COVID-19, MMR, and Influenza. Admin users can add, edit, or deactivate vaccines via the database.</p>
+
+    <div class="help-card info card p-2 small bg-light mt-2">
+        <i class="bi bi-info-circle me-1"></i> Enter the patient's passport number and nationality on their profile page before issuing a Yellow Book certificate. These fields appear in the certificate printout.
+    </div>
+</div>
+</div>
+
+<!-- 14. MESSAGES & NOTIFICATIONS -->
 <div class="help-section" id="sec-messages">
-<h5>13. Messages & Notifications</h5>
+<h5>14. Messages & Notifications</h5>
 <div class="help-card card p-3 mb-3">
     <h6>Internal Messaging</h6>
     <p>Communicate with other staff members. Go to <strong>Messages</strong> to view Inbox, Sent messages, or compose a new message. Messages support read receipts and soft-deletion.</p>
@@ -300,9 +337,9 @@
 </div>
 </div>
 
-<!-- 14. REPORTS -->
+<!-- 15. REPORTS -->
 <div class="help-section" id="sec-reports">
-<h5>14. Reports & Analytics</h5>
+<h5>15. Reports & Analytics</h5>
 <div class="help-card card p-3 mb-3">
     <p>The <strong>Reports</strong> page provides analytics including:</p>
     <ul>
@@ -318,9 +355,9 @@
 </div>
 </div>
 
-<!-- 15. ADMINISTRATION -->
+<!-- 16. ADMINISTRATION -->
 <div class="help-section" id="sec-admin">
-<h5>15. Administration</h5>
+<h5>16. Administration</h5>
 <div class="help-card card p-3 mb-3">
     <h6>User Management</h6>
     <p>Admin users can manage all system users: create, edit, delete, toggle active/inactive, and reset passwords. Roles available:</p>
@@ -351,9 +388,9 @@
 </div>
 </div>
 
-<!-- 16. TROUBLESHOOTING -->
+<!-- 17. TROUBLESHOOTING -->
 <div class="help-section" id="sec-troubleshooting">
-<h5>16. Troubleshooting</h5>
+<h5>17. Troubleshooting</h5>
 <div class="help-card card p-3 mb-3">
     <div class="help-card info card p-2 mb-2 small bg-light">
         <strong>Q: I can't log in.</strong>

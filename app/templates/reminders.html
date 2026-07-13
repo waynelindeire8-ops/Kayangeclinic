@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-bell"></i> Reminders</h4>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="reminderTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="birthdays-tab" data-bs-toggle="tab" data-bs-target="#birthdays" type="button" role="tab">
+            <i class="bi bi-gift me-1"></i>Birthdays
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments" type="button" role="tab">
+            <i class="bi bi-calendar-day me-1"></i>Upcoming Appointments
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="reminderTabContent">
+    <div class="tab-pane fade show active" id="birthdays" role="tabpanel">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="bi bi-gift text-warning"></i> Birthdays Today</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="birthdays-today-list"></div>
+                        <div id="birthdays-today-empty" class="text-center text-muted py-5" style="display:none">
+                            <i class="bi bi-emoji-smile" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+                            No birthdays today
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="bi bi-calendar-heart text-warning"></i> Upcoming Birthdays (7 days)</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="birthdays-upcoming-list"></div>
+                        <div id="birthdays-upcoming-empty" class="text-center text-muted py-5" style="display:none">
+                            <i class="bi bi-calendar-heart" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+                            No upcoming birthdays
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="appointments" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-calendar-day text-primary"></i> Appointments Tomorrow</h6>
+            </div>
+            <div class="card-body p-0">
+                <div id="apts-tomorrow-list"></div>
+                <div id="apts-tomorrow-empty" class="text-center text-muted py-5" style="display:none">
+                    <i class="bi bi-calendar-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+                    No appointments tomorrow
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
+    let ci = 0;
+
+    try {
+        const res = await fetchWithAuth('/reminders/api');
+        const data = await res.json();
+
+        function birthdayRow(p) {
+            const initials = (p.first_name || 'P').charAt(0) + (p.last_name || '').charAt(0);
+            const color = avatarColors[ci++ % avatarColors.length];
+            return '<div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom" style="min-height:56px">' +
+                '<div class="patient-avatar" style="background:' + color + ';width:36px;height:36px;border-radius:10px">' + initials + '</div>' +
+                '<div class="flex-grow-1"><div class="fw-semibold"><a href="/patients/' + p.id + '" class="text-decoration-none" style="color:#0f172a">' + p.first_name + ' ' + p.last_name + '</a></div><small class="text-muted">' + (p.age !== null ? p.age + ' years' : '') + (p.phone ? ' &middot; ' + p.phone : '') + '</small></div>' +
+                '<a href="/patients/' + p.id + '" class="btn-action view" title="View Patient"><i class="bi bi-eye"></i></a>' +
+                '</div>';
+        }
+
+        // Birthdays Today
+        const todayList = document.getElementById('birthdays-today-list');
+        const todayEmpty = document.getElementById('birthdays-today-empty');
+        if (data.birthdays_today && data.birthdays_today.length) {
+            todayEmpty.style.display = 'none';
+            data.birthdays_today.forEach(p => { todayList.innerHTML += birthdayRow(p); });
+        } else {
+            todayList.style.display = 'none';
+            todayEmpty.style.display = 'block';
+        }
+
+        // Birthdays Upcoming
+        const upList = document.getElementById('birthdays-upcoming-list');
+        const upEmpty = document.getElementById('birthdays-upcoming-empty');
+        if (data.birthdays_upcoming && data.birthdays_upcoming.length) {
+            upEmpty.style.display = 'none';
+            data.birthdays_upcoming.forEach(p => { upList.innerHTML += birthdayRow(p); });
+        } else {
+            upList.style.display = 'none';
+            upEmpty.style.display = 'block';
+        }
+
+        // Appointments Tomorrow
+        const aptList = document.getElementById('apts-tomorrow-list');
+        const aptEmpty = document.getElementById('apts-tomorrow-empty');
+        if (data.appointments_tomorrow && data.appointments_tomorrow.length) {
+            aptEmpty.style.display = 'none';
+            data.appointments_tomorrow.forEach(a => {
+                const initials = (a.p_first || 'P').charAt(0) + (a.p_last || '').charAt(0);
+                const color = avatarColors[ci++ % avatarColors.length];
+                const statusMap = {scheduled:'warning',confirmed:'info',in_progress:'primary',completed:'success',cancelled:'secondary',no_show:'danger'};
+                aptList.innerHTML += '<div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom" style="min-height:56px">' +
+                    '<div class="patient-avatar" style="background:' + color + ';width:36px;height:36px;border-radius:10px">' + initials + '</div>' +
+                    '<div class="flex-grow-1"><div class="fw-semibold"><a href="/patients/' + a.patient_id + '" class="text-decoration-none" style="color:#0f172a">' + a.p_first + ' ' + a.p_last + '</a></div><small class="text-muted">' + a.appointment_time + (a.reason ? ' &middot; ' + a.reason : '') + '</small></div>' +
+                    '<span class="badge bg-' + (statusMap[a.status] || 'secondary') + '">' + a.status + '</span>' +
+                    '<a href="/patients/' + a.patient_id + '" class="btn-action view" title="View Patient"><i class="bi bi-eye"></i></a>' +
+                    '</div>';
+            });
+        } else {
+            aptList.style.display = 'none';
+            aptEmpty.style.display = 'block';
+        }
+    } catch(e) {
+        console.error('Failed to load reminders:', e);
+    }
+});
+</script>
+{% endblock %}

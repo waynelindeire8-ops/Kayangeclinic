@@ -2,6 +2,8 @@ import sqlite3
 import re
 import json
 import logging
+import threading
+import time
 from datetime import datetime, date
 from config import Config
 
@@ -272,3 +274,127 @@ def get_sync_status():
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
         return []
+
+
+# ── Auto-sync background thread ──────────────────────────────────────────────
+
+_auto_sync_lock = threading.Lock()
+_auto_sync_thread = None
+_auto_sync_stop = threading.Event()
+_last_sync_result = {'time': None, 'status': 'idle', 'message': ''}
+
+
+def _get_sync_interval():
+    """Read sync interval from local system_config (minutes)."""
+    try:
+        db = sqlite3.connect(Config.DATABASE, timeout=10)
+        row = db.execute(
+            "SELECT value FROM system_config WHERE key='auto_sync_interval'"
+        ).fetchone()
+        db.close()
+        if row:
+            return max(1, int(row[0]))
+    except Exception:
+        pass
+    return 5  # default 5 minutes
+
+
+def _set_last_sync_time():
+    """Record last sync timestamp in local system_config."""
+    try:
+        db = sqlite3.connect(Config.DATABASE, timeout=10)
+        db.execute(
+            "INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES ('last_sync_time', ?, CURRENT_TIMESTAMP)",
+            (datetime.now().isoformat(),)
+        )
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.warning(f"Failed to record sync time: {e}")
+
+
+def get_last_sync_info():
+    """Return last sync info dict from the in-memory result."""
+    return dict(_last_sync_result)
+
+
+def _auto_sync_worker(app):
+    """Background worker: periodically syncs all tables to Supabase."""
+    logger.info("Auto-sync worker started")
+    while not _auto_sync_stop.is_set():
+        try:
+            interval_min = _get_sync_interval()
+            _auto_sync_stop.wait(interval_min * 60)
+            if _auto_sync_stop.is_set():
+                break
+
+            if not _auto_sync_lock.acquire(blocking=False):
+                continue
+
+            try:
+                if not HAS_PG:
+                    _last_sync_result['status'] = 'error'
+                    _last_sync_result['message'] = 'psycopg2 not installed'
+                    continue
+
+                logger.info("Auto-sync: starting sync_all")
+                results = sync_all()
+                total = sum(1 for v in results.values() if v >= 0)
+                failed = sum(1 for v in results.values() if v < 0)
+                synced = sum(v for v in results.values() if v > 0)
+                _last_sync_result['time'] = datetime.now().isoformat()
+                _last_sync_result['status'] = 'ok' if failed == 0 else 'partial'
+                _last_sync_result['message'] = f'{synced} rows synced across {total} tables' + (f', {failed} failed' if failed else '')
+                _set_last_sync_time()
+                logger.info(f"Auto-sync complete: {_last_sync_result['message']}")
+
+                # Notify admin users
+                try:
+                    notif_db = sqlite3.connect(Config.DATABASE, timeout=10)
+                    admin_ids = notif_db.execute(
+                        "SELECT id FROM users WHERE role='admin' AND is_active=1"
+                    ).fetchall()
+                    if admin_ids:
+                        notif_msg = _last_sync_result['message']
+                        for (uid,) in admin_ids:
+                            notif_db.execute(
+                                "INSERT INTO notifications (user_id, title, message, type, reference_url, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                                (uid, 'Cloud Sync Complete', notif_msg, 'success' if failed == 0 else 'warning', '/backup')
+                            )
+                        notif_db.commit()
+                    notif_db.close()
+                except Exception as ne:
+                    logger.warning(f"Failed to create sync notification: {ne}")
+
+            except Exception as e:
+                _last_sync_result['time'] = datetime.now().isoformat()
+                _last_sync_result['status'] = 'error'
+                _last_sync_result['message'] = str(e)
+                logger.error(f"Auto-sync failed: {e}")
+            finally:
+                _auto_sync_lock.release()
+
+        except Exception as e:
+            logger.error(f"Auto-sync worker error: {e}")
+
+    logger.info("Auto-sync worker stopped")
+
+
+def start_auto_sync(app):
+    """Start the background auto-sync thread."""
+    global _auto_sync_thread
+    if _auto_sync_thread and _auto_sync_thread.is_alive():
+        logger.info("Auto-sync already running")
+        return
+    _auto_sync_stop.clear()
+    _auto_sync_thread = threading.Thread(
+        target=_auto_sync_worker, args=(app,), daemon=True
+    )
+    _auto_sync_thread.start()
+    logger.info("Auto-sync thread launched")
+
+
+def stop_auto_sync():
+    """Signal the background thread to stop."""
+    _auto_sync_stop.set()
+    logger.info("Auto-sync stop signal sent")

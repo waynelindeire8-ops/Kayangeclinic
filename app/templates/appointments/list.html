@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('date-filter').value = today;
 
     let table = $('#appointments-table').DataTable({
-        ajax: { url: '/appointments/api', dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth('/appointments/api?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'appointment_date' },
             { data: 'appointment_time', render: d => '<span class="fw-semibold">' + d + '</span>' },

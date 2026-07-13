@@ -353,6 +353,7 @@ body {
 .stat-card .stat-icon.red { background: #fef2f2; color: #dc2626; }
 .stat-card .stat-icon.yellow { background: #fffbeb; color: #f59e0b; }
 .stat-card .stat-icon.purple { background: #faf5ff; color: #9333ea; }
+.stat-card .stat-icon.orange { background: #fff7ed; color: #ea580c; }
 .stat-card .stat-icon.cyan { background: #ecfeff; color: #0891b2; }
 
 .stat-card .stat-value {
@@ -535,6 +536,8 @@ body {
 .btn-action.view:hover { background: #bae6fd; }
 .btn-action.delete { background: #fee2e2; color: #dc2626; }
 .btn-action.delete:hover { background: #fecaca; }
+.btn-action.print { background: #e0f2fe; color: #0284c7; }
+.btn-action.print:hover { background: #bae6fd; }
 
 /* ─── FORMS ─── */
 .form-control, .form-select {

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="mb-4 d-flex justify-content-between">
     <a href="/billing" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
-    <button class="btn btn-sm btn-outline-primary no-print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    <button class="btn btn-sm btn-outline-primary no-print" onclick="window.open('/billing/{{ billing_id }}/print','_blank')"><i class="bi bi-printer me-1"></i>Print</button>
 </div>
 
 <div class="card" id="invoice-print">

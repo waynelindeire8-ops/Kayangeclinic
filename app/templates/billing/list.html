@@ -79,7 +79,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let table = $('#billing-table').DataTable({
-        ajax: { url: '/billing/api', dataSrc: '' },
+        ajax: function(data, callback, settings) { fetchWithAuth('/billing/api?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'invoice_number', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
             { data: 'created_at', render: d => new Date(d).toLocaleDateString() },
@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: null, render: d => '<span class="' + (d.balance > 0 ? 'text-danger fw-semibold' : '') + '">MK ' + (d.balance || 0).toLocaleString() + '</span>' },
             { data: 'payment_method', render: d => (d || '-').replace('_', ' ') },
             { data: null, render: d => '<span class="badge bg-' + (d.payment_status === 'paid' ? 'success' : d.payment_status === 'partial' ? 'warning' : 'danger') + '">' + d.payment_status + '</span>' },
-            { data: null, render: d => '<a href="/billing/' + d.id + '" class="btn-action view"><i class="bi bi-eye"></i></a>' }
+            { data: null, render: d => '<a href="/billing/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a><a href="/billing/' + d.id + '/print" class="btn-action print" target="_blank" title="Print"><i class="bi bi-printer"></i></a>' }
         ],
         order: [[1, 'desc']],
         pageLength: 20

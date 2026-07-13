@@ -51,6 +51,50 @@
     </div>
 </div>
 
+<!-- Reminders -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon orange"><i class="bi bi-gift"></i></div>
+                <span class="stat-trend up" id="bday-today-tag">Today</span>
+            </div>
+            <div class="stat-value" id="stat-birthdays-today">0</div>
+            <div class="stat-label">Birthdays Today</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon orange"><i class="bi bi-calendar-heart"></i></div>
+                <span class="stat-trend up" id="bday-week-tag">This Week</span>
+            </div>
+            <div class="stat-value" id="stat-birthdays-week">0</div>
+            <div class="stat-label">Upcoming Birthdays</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon blue"><i class="bi bi-calendar-day"></i></div>
+                <span class="stat-trend up" id="apt-tomorrow-tag">Tomorrow</span>
+            </div>
+            <div class="stat-value" id="stat-apts-tomorrow">0</div>
+            <div class="stat-label">Appointments Tomorrow</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="cursor:pointer" onclick="window.location.href='/reminders'">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon purple"><i class="bi bi-bell"></i></div>
+                <span class="stat-trend up">View All</span>
+            </div>
+            <div class="stat-value" style="font-size:1rem"><i class="bi bi-arrow-right-circle"></i></div>
+            <div class="stat-label">All Reminders</div>
+        </div>
+    </div>
+</div>
+
 <!-- Patient Queue -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -189,6 +233,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('stat-appointments').textContent = dash.today_appointments || 0;
         document.getElementById('stat-revenue').textContent = 'MK ' + (dash.today_revenue || 0).toLocaleString();
         document.getElementById('stat-low-stock').textContent = dash.low_stock || 0;
+
+        const remRes = await fetchWithAuth('/reminders/api');
+        const rem = await remRes.json();
+        document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
+        document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
+        document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
 
         // Patient Queue
         document.getElementById('queue-waiting-badge').textContent = queueData.waiting_count || 0;

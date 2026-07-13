@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.auth import login_required
-from app.backup import sync_all, restore_all, sync_table, restore_table, init_supabase_tables, get_sync_status, SUPABASE_TABLES
+from app.backup import sync_all, restore_all, sync_table, restore_table, init_supabase_tables, get_sync_status, get_last_sync_info, SUPABASE_TABLES
 
 backup_bp = Blueprint('backup', __name__, url_prefix='/backup')
 
@@ -83,6 +83,22 @@ def api_sync_status():
         return jsonify({'error': 'Admin only'}), 403
     logs = get_sync_status()
     return jsonify(logs)
+
+
+@backup_bp.route('/auto-status', methods=['GET'])
+@login_required
+def api_auto_status():
+    current_user = get_jwt()
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Admin only'}), 403
+    info = get_last_sync_info()
+    info['interval_minutes'] = 5
+    try:
+        from app.backup import HAS_PG
+        info['supabase_configured'] = HAS_PG
+    except Exception:
+        info['supabase_configured'] = False
+    return jsonify(info)
 
 
 @backup_bp.route('/tables', methods=['GET'])
