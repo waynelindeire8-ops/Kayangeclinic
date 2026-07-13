@@ -215,7 +215,7 @@ def sync_all():
 
 
 def restore_table(table_name):
-    """Restore a single table from Supabase to SQLite."""
+    """Restore a single table from Supabase to SQLite (non-destructive: preserves local data)."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -228,24 +228,28 @@ def restore_table(table_name):
             return 0
 
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=30)
-        sqlite_db.execute(f"DELETE FROM {table_name}")
 
         columns = list(rows[0].keys())
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['?'] * len(columns))
-        insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders})"
+        # INSERT OR IGNORE preserves local data that hasn't been synced yet
+        insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
 
         count = 0
         for row in rows:
             values = [row[col] for col in columns]
-            sqlite_db.execute(insert_sql, values)
-            count += 1
+            try:
+                sqlite_db.execute(insert_sql, values)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Error restoring row in {table_name}: {e}")
 
         sqlite_db.commit()
         sqlite_db.close()
         cur.close()
         pg.close()
-        logger.info(f"Restored {count} rows to {table_name}")
+        is_empty_before = count == len(rows)
+        logger.info(f"Restored {count} rows to {table_name} (inserted missing rows from Supabase)")
         return count
 
     except Exception as e:

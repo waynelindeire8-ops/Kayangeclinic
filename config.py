@@ -1,4 +1,12 @@
 import os
+import time
+
+# Set Malawi time (CAT, UTC+2) for all datetime.now() / date.today() calls
+os.environ['TZ'] = 'Africa/Blantyre'
+try:
+    time.tzset()
+except AttributeError:
+    pass  # Windows compat
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
