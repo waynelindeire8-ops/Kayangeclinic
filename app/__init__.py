@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect
+from flask import Flask, render_template, redirect, request
 from flask_jwt_extended import JWTManager
 from config import Config
 import os, logging
@@ -112,6 +112,19 @@ def create_app():
         start_auto_sync(app)
     except Exception as e:
         logger.warning(f"Auto-sync failed to start: {e}")
+
+    # On Vercel: sync every write immediately (background threads unreliable on serverless)
+    if os.environ.get('VERCEL'):
+        @app.after_request
+        def sync_on_write(response):
+            if response.status_code in (200, 201, 204) and request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+                try:
+                    from app.backup import sync_all, HAS_PG
+                    if HAS_PG:
+                        sync_all()
+                except Exception:
+                    pass
+            return response
 
     @app.route('/help')
     def help_page():
