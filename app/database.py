@@ -91,6 +91,7 @@ def init_db():
                 )''')
             _migrate_patients_yellow_book_fields(conn)
             _seed_vaccines(conn)
+            _create_indexes(conn)
             conn.commit()
             conn.close()
             return
