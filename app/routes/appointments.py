@@ -134,15 +134,28 @@ def api_update_status(id):
 def api_quick_add():
     current_user = get_jwt()
     data = request.json
-    from datetime import date, datetime
+    from datetime import date, datetime, timedelta
     today = date.today().isoformat()
-    now = datetime.now().strftime('%H:%M')
 
     db = get_db()
+    # Find the latest walk-in time for today so new ones are added sequentially
+    last = db.execute(
+        "SELECT appointment_time FROM appointments WHERE appointment_date=? AND type='walk_in' ORDER BY appointment_time DESC LIMIT 1",
+        (today,)
+    ).fetchone()
+    if last:
+        try:
+            last_time = datetime.strptime(last['appointment_time'], '%H:%M')
+            next_time = (last_time + timedelta(minutes=1)).strftime('%H:%M')
+        except:
+            next_time = datetime.now().strftime('%H:%M')
+    else:
+        next_time = datetime.now().strftime('%H:%M')
+
     cursor = db.execute(
         '''INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, type, status, created_by)
            VALUES (?, ?, ?, ?, ?, 'walk_in', 'scheduled', ?)''',
-        (data['patient_id'], data.get('doctor_id'), today, now,
+        (data['patient_id'], data.get('doctor_id'), today, next_time,
          data.get('reason', 'Walk-in'), current_user['id'])
     )
     new_id = cursor.lastrowid
