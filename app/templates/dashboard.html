@@ -24,9 +24,9 @@
         <div class="stat-card">
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <div class="stat-icon green"><i class="bi bi-people-fill"></i></div>
-                <span class="stat-trend up" id="stat-patients-trend">+0%</span>
+                <span class="stat-trend up" id="stat-patients-trend">Loading...</span>
             </div>
-            <div class="stat-value" id="stat-patients">0</div>
+            <div class="stat-value" id="stat-patients"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Total Patients</div>
         </div>
     </div>
@@ -36,7 +36,7 @@
                 <div class="stat-icon blue"><i class="bi bi-calendar-check-fill"></i></div>
                 <span class="stat-trend up" id="stat-apts-trend">Today</span>
             </div>
-            <div class="stat-value" id="stat-appointments">0</div>
+            <div class="stat-value" id="stat-appointments"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Today's Appointments</div>
         </div>
     </div>
@@ -46,7 +46,7 @@
                 <div class="stat-icon purple"><i class="bi bi-cash-stack"></i></div>
                 <span class="stat-trend up" id="stat-revenue-trend">Today</span>
             </div>
-            <div class="stat-value" id="stat-revenue">MK 0</div>
+            <div class="stat-value" id="stat-revenue"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Today's Revenue</div>
         </div>
     </div>
@@ -56,7 +56,7 @@
                 <div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div>
                 <span class="stat-trend down" id="stock-trend">Alert</span>
             </div>
-            <div class="stat-value" id="stat-low-stock">0</div>
+            <div class="stat-value" id="stat-low-stock"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Low Stock Items</div>
         </div>
     </div>
@@ -70,7 +70,7 @@
                 <div class="stat-icon orange"><i class="bi bi-gift"></i></div>
                 <span class="stat-trend up" id="bday-today-tag">Today</span>
             </div>
-            <div class="stat-value" id="stat-birthdays-today">0</div>
+            <div class="stat-value" id="stat-birthdays-today"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Birthdays Today</div>
         </div>
     </div>
@@ -80,7 +80,7 @@
                 <div class="stat-icon orange"><i class="bi bi-calendar-heart"></i></div>
                 <span class="stat-trend up" id="bday-week-tag">This Week</span>
             </div>
-            <div class="stat-value" id="stat-birthdays-week">0</div>
+            <div class="stat-value" id="stat-birthdays-week"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Upcoming Birthdays</div>
         </div>
     </div>
@@ -90,7 +90,7 @@
                 <div class="stat-icon blue"><i class="bi bi-calendar-day"></i></div>
                 <span class="stat-trend up" id="apt-tomorrow-tag">Tomorrow</span>
             </div>
-            <div class="stat-value" id="stat-apts-tomorrow">0</div>
+            <div class="stat-value" id="stat-apts-tomorrow"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
             <div class="stat-label">Appointments Tomorrow</div>
         </div>
     </div>
@@ -197,23 +197,25 @@
                 </div>
                 <a href="/appointments/new" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>New</a>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table" id="today-appointments-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Patient</th>
-                                <th>Doctor</th>
-                                <th>Reason</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+<div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table" id="today-appointments-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Patient</th>
+                    <th>Doctor</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="apts-loading"><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading appointments...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
         </div>
     </div>
 </div>
@@ -317,6 +319,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         const tbody = document.querySelector('#today-appointments-table tbody');
+        tbody.innerHTML = ''; // Clear loading row
         const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
         if (dash.appointments_today && dash.appointments_today.length) {
             dash.appointments_today.forEach((apt, i) => {
