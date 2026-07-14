@@ -114,9 +114,9 @@
             <small class="text-muted">Today's walk-in and scheduled patients</small>
         </div>
         <div class="d-flex gap-3">
-            <span><span class="badge bg-warning" id="queue-waiting-badge">0</span> Waiting</span>
-            <span><span class="badge bg-primary" id="queue-inprog-badge">0</span> In Consultation</span>
-            <span><span class="badge bg-success" id="queue-done-badge">0</span> Completed</span>
+            <span><span class="badge bg-warning" id="queue-waiting-badge">Loading...</span> Waiting</span>
+            <span><span class="badge bg-primary" id="queue-inprog-badge">Loading...</span> In Consultation</span>
+            <span><span class="badge bg-success" id="queue-done-badge">Loading...</span> Completed</span>
             <button class="btn btn-sm btn-primary ms-2" onclick="showWalkinModal()"><i class="bi bi-plus-lg me-1"></i>Walk-in</button>
         </div>
     </div>
@@ -134,7 +134,9 @@
                         <th style="width:140px">Action</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody>
+                    <tr id="queue-loading"><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading queue...</td></tr>
+                </tbody>
             </table>
         </div>
         <div id="queue-empty" class="text-center text-muted py-5" style="display:none">
