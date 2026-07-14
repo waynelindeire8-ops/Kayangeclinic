@@ -325,12 +325,20 @@ def get_last_sync_info():
 def _auto_sync_worker(app):
     """Background worker: periodically syncs all tables to Supabase."""
     logger.info("Auto-sync worker started")
+    first_run = True
     while not _auto_sync_stop.is_set():
         try:
-            interval_min = _get_sync_interval()
-            _auto_sync_stop.wait(interval_min * 60)
-            if _auto_sync_stop.is_set():
-                break
+            if not first_run:
+                interval_min = _get_sync_interval()
+                _auto_sync_stop.wait(interval_min * 60)
+                if _auto_sync_stop.is_set():
+                    break
+            else:
+                # Small delay on first run to let the app finish starting up
+                _auto_sync_stop.wait(5)
+                if _auto_sync_stop.is_set():
+                    break
+            first_run = False
 
             if not _auto_sync_lock.acquire(blocking=False):
                 continue
