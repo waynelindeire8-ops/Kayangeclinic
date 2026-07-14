@@ -100,15 +100,6 @@ def api_auto_status():
         info['supabase_configured'] = False
         info['interval_minutes'] = 5
     return jsonify(info)
-        return jsonify({'error': 'Admin only'}), 403
-    info = get_last_sync_info()
-    info['interval_minutes'] = 5
-    try:
-        from app.backup import HAS_PG
-        info['supabase_configured'] = HAS_PG
-    except Exception:
-        info['supabase_configured'] = False
-    return jsonify(info)
 
 
 @backup_bp.route('/tables', methods=['GET'])
