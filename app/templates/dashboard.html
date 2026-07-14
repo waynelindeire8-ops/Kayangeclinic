@@ -499,7 +499,7 @@ setInterval(async function() {
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-primary" onclick="submitWalkin()"><i class="bi bi-person-add me-1"></i>Add to Queue</button>
+                <button class="btn btn-primary" id="wi-add-btn" onclick="submitWalkin()"><i class="bi bi-person-add me-1"></i>Add to Queue</button>
             </div>
         </div>
     </div>
@@ -508,64 +508,132 @@ setInterval(async function() {
 <script>
 let walkinPatients = [];
 let walkinDoctors = [];
+let walkinModalInstance = null;
 
 async function showWalkinModal() {
-    if (!walkinPatients.length || !walkinDoctors.length) {
-        try {
-            const [pRes, dRes] = await Promise.all([
-                fetchWithAuth('/patients/api?search='),
-                fetchWithAuth('/staff/api/doctors')
-            ]);
-            walkinPatients = await pRes.json();
-            walkinDoctors = await dRes.json();
-            const pSel = document.getElementById('wi-patient_id');
-            pSel.innerHTML = '';
-            walkinPatients.forEach(p => {
-                const o = document.createElement('option');
-                o.value = p.id;
-                o.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone})`;
-                pSel.appendChild(o);
-            });
-            const dSel = document.getElementById('wi-doctor_id');
-            dSel.innerHTML = '<option value="">-- Not assigned --</option>';
-            walkinDoctors.forEach(d => {
-                const o = document.createElement('option');
-                o.value = d.id;
-                o.textContent = `Dr. ${d.first_name} ${d.last_name} (${d.role.replace('_',' ')})`;
-                dSel.appendChild(o);
-            });
-            $(pSel).select2({ placeholder: 'Search patient...', allowClear: true, width: '100%', dropdownParent: $('#walkinModal') });
-        } catch(e) {
-            console.error('Failed to load walk-in data:', e);
-            alert('Failed to load patient data');
-            return;
-        }
+    // Show the modal immediately with a loading state
+    const pSel = document.getElementById('wi-patient_id');
+    const dSel = document.getElementById('wi-doctor_id');
+    const addBtn = document.getElementById('wi-add-btn');
+
+    // Destroy previous Select2 if exists
+    if ($(pSel).hasClass('select2-hidden-accessible')) {
+        $(pSel).select2('destroy');
     }
-    new bootstrap.Modal(document.getElementById('walkinModal')).show();
+
+    pSel.innerHTML = '<option value="">Loading patients...</option>';
+    dSel.innerHTML = '<option value="">Loading...</option>';
+    addBtn.disabled = true;
+
+    if (!walkinModalInstance) {
+        walkinModalInstance = new bootstrap.Modal(document.getElementById('walkinModal'));
+    }
+    walkinModalInstance.show();
+
+    try {
+        const [pRes, dRes] = await Promise.all([
+            fetchWithAuth('/patients/api?search='),
+            fetchWithAuth('/staff/api/doctors')
+        ]);
+
+        if (!pRes.ok || !dRes.ok) throw new Error('API error');
+
+        walkinPatients = await pRes.json();
+        walkinDoctors = await dRes.json();
+
+        // Populate patients
+        pSel.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '';
+        pSel.appendChild(placeholder);
+        walkinPatients.forEach(p => {
+            const o = document.createElement('option');
+            o.value = p.id;
+            o.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone || 'no phone'})`;
+            pSel.appendChild(o);
+        });
+
+        // Populate doctors
+        dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+        walkinDoctors.forEach(d => {
+            const o = document.createElement('option');
+            o.value = d.id;
+            o.textContent = `Dr. ${d.first_name} ${d.last_name} (${d.role.replace(/_/g,' ')})`;
+            dSel.appendChild(o);
+        });
+
+        // Init Select2 fresh each time
+        $(pSel).select2({
+            placeholder: 'Search patient by name, ID or phone...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#walkinModal')
+        });
+
+        addBtn.disabled = false;
+
+    } catch(e) {
+        console.error('Failed to load walk-in data:', e);
+        pSel.innerHTML = '<option value="">Failed to load patients</option>';
+        dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+        addBtn.disabled = false;
+    }
 }
 
 async function submitWalkin() {
-    const pSel = document.getElementById('wi-patient_id');
-    const patientId = pSel.value;
-    if (!patientId) { alert('Please select a patient'); return; }
-    const doctorId = document.getElementById('wi-doctor_id').value;
-    const reason = document.getElementById('wi-reason').value || 'Walk-in';
+    // Read value using Select2's API to handle the widget correctly
+    const patientId = $('#wi-patient_id').val();
+    if (!patientId) {
+        alert('Please select a patient first');
+        return;
+    }
+    const doctorId = document.getElementById('wi-doctor_id').value || null;
+    const reason = document.getElementById('wi-reason').value.trim() || 'Walk-in';
+
+    const addBtn = document.getElementById('wi-add-btn');
+    addBtn.disabled = true;
+    addBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding...';
+
     try {
         const res = await fetchWithAuth('/appointments/api/quick-add', {
             method: 'POST',
-            body: JSON.stringify({ patient_id: parseInt(patientId), doctor_id: doctorId || null, reason })
+            body: JSON.stringify({
+                patient_id: parseInt(patientId),
+                doctor_id: doctorId ? parseInt(doctorId) : null,
+                reason
+            })
         });
+
         if (!res.ok) {
-            const err = await res.json();
-            alert(err.error || 'Failed to add walk-in');
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || 'Failed to add walk-in. Please try again.');
+            addBtn.disabled = false;
+            addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
             return;
         }
-        bootstrap.Modal.getInstance(document.getElementById('walkinModal')).hide();
+
+        walkinModalInstance.hide();
+        // Reset walk-in cache so next open re-fetches fresh data
+        walkinPatients = [];
+        walkinDoctors = [];
         location.reload();
+
     } catch(e) {
-        alert('Failed to add walk-in');
+        console.error('Walk-in submit error:', e);
+        alert('Network error. Please check your connection and try again.');
+        addBtn.disabled = false;
+        addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
     }
 }
+
+// Reset modal state when it is hidden
+document.getElementById('walkinModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('wi-reason').value = 'Walk-in';
+    const addBtn = document.getElementById('wi-add-btn');
+    addBtn.disabled = false;
+    addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
+});
 </script>
 
 {% endblock %}

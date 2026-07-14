@@ -177,13 +177,13 @@ def api_quick_add():
               f'Walk-in added for patient ID {data["patient_id"]}', request.remote_addr)
     db.close()
 
-    # On Vercel: sync immediately so walk-in shows after page reload
-    import os
+    # On Vercel: sync in background thread so walk-in response is not blocked
+    import os, threading
     if os.environ.get('VERCEL'):
         try:
             from app.backup import sync_table, HAS_PG
             if HAS_PG:
-                sync_table('appointments')
+                threading.Thread(target=sync_table, args=('appointments',), daemon=True).start()
         except Exception:
             pass
 
