@@ -108,6 +108,17 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
+    # Run initial sync on startup (pushes SQLite to Supabase)
+    try:
+        from app.backup import sync_all, HAS_PG
+        if HAS_PG and not os.environ.get('VERCEL'):
+            logger.info("Running initial database sync...")
+            results = sync_all()
+            synced = sum(v for v in results.values() if v > 0)
+            logger.info(f"Initial sync complete: {synced} rows synced")
+    except Exception as e:
+        logger.warning(f"Initial sync failed: {e}")
+
     # Start background auto-sync (pushes SQLite to Supabase periodically, every ~1 minute)
     try:
         from app.backup import start_auto_sync
