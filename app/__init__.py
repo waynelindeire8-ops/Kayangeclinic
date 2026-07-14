@@ -30,17 +30,23 @@ def create_app():
         except Exception as e:
             logger.error(f"Vercel restore failed: {e}")
 
-    # Local: initial sync to Supabase on startup (backup local data)
+    # Local: initial sync to Supabase on startup (backup local data) - run in background
     elif not os.environ.get('VERCEL'):
         try:
             from app.backup import sync_all, HAS_PG
             if HAS_PG:
-                logger.info("Running initial backup sync to Supabase...")
-                results = sync_all()
-                synced = sum(v for v in results.values() if v > 0)
-                logger.info(f"Initial backup sync complete: {synced} rows")
+                logger.info("Starting initial backup sync to Supabase in background...")
+                import threading
+                def _initial_sync():
+                    try:
+                        results = sync_all()
+                        synced = sum(v for v in results.values() if v > 0)
+                        logger.info(f"Initial backup sync complete: {synced} rows")
+                    except Exception as e:
+                        logger.warning(f"Initial backup sync failed: {e}")
+                threading.Thread(target=_initial_sync, daemon=True).start()
         except Exception as e:
-            logger.warning(f"Initial backup sync failed: {e}")
+            logger.warning(f"Failed to start initial backup sync: {e}")
 
     # Start background auto-sync (pushes SQLite to Supabase periodically)
     try:
