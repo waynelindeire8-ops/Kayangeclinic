@@ -44,6 +44,20 @@
     </div>
 
     <script>
+        function safeLocalStorage(key, value) {
+            try {
+                if (value === undefined) return localStorage.getItem(key);
+                if (value === null) localStorage.removeItem(key);
+                else localStorage.setItem(key, value);
+            } catch (e) {
+                console.warn('localStorage error:', e);
+                if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_FILE_TOO_BIG') {
+                    try { localStorage.clear(); } catch (e2) {}
+                }
+                return null;
+            }
+        }
+
         document.getElementById('login-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const errorEl = document.getElementById('login-error');
@@ -64,8 +78,8 @@
                     errorEl.classList.remove('d-none');
                     return;
                 }
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
+                safeLocalStorage('token', data.token);
+                safeLocalStorage('user', JSON.stringify(data.user));
                 window.location.href = '/dashboard';
             } catch (err) {
                 errorEl.textContent = 'Connection error. Please try again.';

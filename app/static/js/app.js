@@ -1,12 +1,35 @@
 const API_BASE = '';
 
+function safeLocalStorage(key, value) {
+    try {
+        if (value === undefined) {
+            return localStorage.getItem(key);
+        } else if (value === null) {
+            localStorage.removeItem(key);
+        } else {
+            localStorage.setItem(key, value);
+        }
+    } catch (e) {
+        console.warn('localStorage error:', e);
+        // Try to clear non-essential items
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_FILE_TOO_BIG') {
+            try {
+                localStorage.clear();
+            } catch (e2) {
+                console.error('Failed to clear localStorage:', e2);
+            }
+        }
+        return null;
+    }
+}
+
 function getToken() {
-    return localStorage.getItem('token');
+    return safeLocalStorage('token');
 }
 
 function getUser() {
     try {
-        return JSON.parse(localStorage.getItem('user') || '{}');
+        return JSON.parse(safeLocalStorage('user') || '{}');
     } catch {
         return {};
     }
