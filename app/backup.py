@@ -76,6 +76,54 @@ def _get_pg_conn():
         )
 
 
+def _get_unique_constraints(table_name):
+    """Get unique constraint columns for a table from PostgreSQL."""
+    try:
+        pg = _get_pg_conn()
+        cur = pg.cursor()
+        cur.execute('''
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            WHERE tc.table_name = %s
+                AND tc.table_schema = 'public'
+                AND tc.constraint_type = 'UNIQUE'
+            ORDER BY tc.constraint_name, kcu.ordinal_position
+        ''', (table_name,))
+        cols = [row[0] for row in cur.fetchall()]
+        cur.close()
+        pg.close()
+        return cols
+    except Exception:
+        return []
+
+
+def _get_primary_key(table_name):
+    """Get primary key columns for a table from PostgreSQL."""
+    try:
+        pg = _get_pg_conn()
+        cur = pg.cursor()
+        cur.execute('''
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            WHERE tc.table_name = %s
+                AND tc.table_schema = 'public'
+                AND tc.constraint_type = 'PRIMARY KEY'
+            ORDER BY kcu.ordinal_position
+        ''', (table_name,))
+        cols = [row[0] for row in cur.fetchall()]
+        cur.close()
+        pg.close()
+        return cols
+    except Exception:
+        return []
+
+
 def _adapt_value(val):
     if val is None:
         return None
@@ -158,7 +206,7 @@ def init_supabase_tables():
 
 
 def sync_table(table_name):
-    """Sync a single table from SQLite to Supabase using UPSERT to handle updates."""
+    """Sync a single table from SQLite to Supabase using UPSERT."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -176,39 +224,47 @@ def sync_table(table_name):
         columns = list(rows[0].keys())
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        
-        # Detect primary key: most tables have 'id' as primary key
         pk_cols = ['id'] if 'id' in columns else [columns[0]]
-        
-        # Build UPSERT query (INSERT ... ON CONFLICT ... DO UPDATE)
-        # Only update non-primary-key columns to handle updates properly
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
         pk_cols_str = ', '.join(pk_cols)
-        
-        # If there are no update columns (only PK), just do INSERT OR IGNORE
+
         if not update_cols:
             upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
         else:
-            upsert_sql = f"""INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) 
-                             ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"""
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"
 
         count = 0
+        batch_size = 100
+        batch = []
         for row in rows:
             values = [_adapt_value(row[col]) for col in columns]
+            batch.append(values)
+            if len(batch) >= batch_size:
+                try:
+                    cur.executemany(upsert_sql, batch)
+                    count += len(batch)
+                    pg.commit()
+                except Exception as e:
+                    logger.warning(f"Batch error in {table_name}: {e}")
+                    pg.rollback()
+                    pg = _get_pg_conn()
+                    cur = pg.cursor()
+                batch = []
+
+        # Process remaining batch
+        if batch:
             try:
-                cur.execute(upsert_sql, values)
-                count += 1
+                cur.executemany(upsert_sql, batch)
+                count += len(batch)
+                pg.commit()
             except Exception as e:
-                logger.warning(f"Error upserting row in {table_name}: {e}")
+                logger.warning(f"Final batch error in {table_name}: {e}")
                 pg.rollback()
-                pg = _get_pg_conn()
-                cur = pg.cursor()
 
         cur.execute(
             "INSERT INTO _sync_log (table_name, operation, synced_at) VALUES (%s, %s, NOW())",
             (table_name, 'sync')
         )
-
         pg.commit()
         sqlite_db.close()
         cur.close()
@@ -224,8 +280,25 @@ def sync_table(table_name):
 def sync_all():
     """Sync all tables from SQLite to Supabase."""
     results = {}
+    
+    # First, get row counts for all tables in one query
+    sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
+    counts = {}
     for table in SUPABASE_TABLES:
-        results[table] = sync_table(table)
+        try:
+            cnt = sqlite_db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if cnt > 0:
+                counts[table] = cnt
+        except Exception:
+            pass
+    sqlite_db.close()
+    
+    # Only sync tables that have data
+    for table in SUPABASE_TABLES:
+        if table in counts:
+            results[table] = sync_table(table)
+        else:
+            results[table] = 0
     return results
 
 
@@ -249,7 +322,16 @@ def sync_table_fast(table_name):
         columns = list(rows[0].keys())
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        
+        # Use unique constraints as conflict target (better for tables like patients with unique patient_id)
+        unique_cols = _get_unique_constraints(table_name)
+        if not unique_cols:
+            pk_cols = _get_primary_key(table_name)
+            if not pk_cols:
+                pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        else:
+            pk_cols = unique_cols
+        
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
         pk_cols_str = ', '.join(pk_cols)
 
@@ -421,6 +503,11 @@ def _auto_sync_worker(app):
                     _last_sync_result['status'] = 'error'
                     _last_sync_result['message'] = 'psycopg2 not installed'
                     continue
+
+                # Update status to syncing before starting
+                _last_sync_result['status'] = 'syncing'
+                _last_sync_result['message'] = 'Sync in progress...'
+                _last_sync_result['time'] = datetime.now().isoformat()
 
                 logger.info("Auto-sync: starting sync_all")
                 results = sync_all()
