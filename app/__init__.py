@@ -134,39 +134,32 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
-    # Vercel: fast sync to Supabase after write requests (uses background queue)
+    # Vercel: sync to Supabase after write requests.
+    #
+    # IMPORTANT: this must be SYNCHRONOUS (run inline, before the response is
+    # returned). A background thread + queue was tried here previously, but
+    # on serverless the function container can freeze or be torn down the
+    # instant the HTTP response is sent -- there is no guarantee the worker
+    # thread ever gets scheduled to actually do the network write. Combined
+    # with a teardown_appcontext hook that stopped the worker after the
+    # very first request in a container's lifetime, writes were silently
+    # never reaching Supabase. That's why a record could show up in one
+    # request (the container's local SQLite that created it) and vanish in
+    # the next (a different container, restored from Supabase, which never
+    # received the write). Doing the sync inline trades a little latency
+    # per write for correctness -- for patient data, that trade is worth it.
     if os.environ.get('VERCEL'):
-        # Background sync worker
-        _vercel_sync_queue = queue.Queue()
-        _vercel_sync_stop = threading.Event()
-
-        def _vercel_sync_worker():
-            while not _vercel_sync_stop.is_set():
-                try:
-                    table = _vercel_sync_queue.get(timeout=1)
-                    try:
-                        from app.backup import sync_table_fast
-                        sync_table_fast(table)
-                    except Exception:
-                        pass
-                    finally:
-                        _vercel_sync_queue.task_done()
-                except queue.Empty:
-                    continue
-
-        _vercel_sync_thread = threading.Thread(target=_vercel_sync_worker, daemon=True)
-        _vercel_sync_thread.start()
-
         @app.after_request
         def vercel_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
-                for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
-                    _vercel_sync_queue.put(table)
+                try:
+                    from app.backup import sync_table_fast, HAS_PG
+                    if HAS_PG:
+                        for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
+                            sync_table_fast(table)
+                except Exception as e:
+                    logger.error(f"Vercel inline sync failed: {e}")
             return response
-
-        @app.teardown_appcontext
-        def _shutdown_vercel_sync(exc=None):
-            _vercel_sync_stop.set()
 
     @app.route('/help')
     def help_page():
