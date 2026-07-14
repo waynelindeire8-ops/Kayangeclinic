@@ -138,21 +138,23 @@ def api_quick_add():
     today = date.today().isoformat()
 
     db = get_db()
-    # Find the latest walk-in time for today so new ones are added sequentially
-    last = db.execute(
-        "SELECT appointment_time FROM appointments WHERE appointment_date=? AND type='walk_in' ORDER BY appointment_time DESC LIMIT 1",
-        (today,)
-    ).fetchone()
-    if last:
-        try:
-            last_time = datetime.strptime(last['appointment_time'], '%H:%M')
-            next_time = (last_time + timedelta(minutes=1)).strftime('%H:%M')
-        except:
-            next_time = datetime.now().strftime('%H:%M')
-    else:
-        next_time = datetime.now().strftime('%H:%M')
-
+    # Use a transaction with row locking to avoid race conditions
+    db.execute("BEGIN IMMEDIATE")
     try:
+        # Find the latest walk-in time for today so new ones are added sequentially
+        last = db.execute(
+            "SELECT appointment_time FROM appointments WHERE appointment_date=? AND type='walk_in' ORDER BY appointment_time DESC, id DESC LIMIT 1",
+            (today,)
+        ).fetchone()
+        if last:
+            try:
+                last_time = datetime.strptime(last['appointment_time'], '%H:%M')
+                next_time = (last_time + timedelta(minutes=1)).strftime('%H:%M')
+            except:
+                next_time = datetime.now().strftime('%H:%M')
+        else:
+            next_time = datetime.now().strftime('%H:%M')
+
         cursor = db.execute(
             '''INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, type, status, created_by)
                VALUES (?, ?, ?, ?, ?, 'walk_in', 'scheduled', ?)''',
@@ -171,6 +173,7 @@ def api_quick_add():
 
         db.commit()
     except Exception as e:
+        db.rollback()
         db.close()
         return jsonify({'error': f'Failed to add walk-in: {str(e)}'}), 400
     log_audit(current_user['id'], current_user['username'], 'walk_in', 'appointment', new_id,

@@ -179,7 +179,7 @@ def api_queue():
            JOIN patients p ON a.patient_id = p.id
            LEFT JOIN users u ON a.doctor_id = u.id
            WHERE a.appointment_date = ? AND a.status IN ('scheduled', 'confirmed', 'in_progress') AND a.type = 'walk_in'
-           ORDER BY a.appointment_time ASC''', (today,)).fetchall()
+           ORDER BY a.appointment_time ASC, a.id ASC''', (today,)).fetchall()
 
     completed = db.execute(
         '''SELECT a.appointment_time, a.reason,
