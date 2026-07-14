@@ -3,6 +3,7 @@ import re
 import json
 import logging
 import threading
+import queue
 import time
 from datetime import datetime, date
 from config import Config
@@ -354,6 +355,11 @@ _auto_sync_thread = None
 _auto_sync_stop = threading.Event()
 _last_sync_result = {'time': None, 'status': 'idle', 'message': ''}
 
+# Vercel write-behind queue
+_vercel_sync_queue = queue.Queue()
+_vercel_sync_thread = None
+_vercel_sync_stop = threading.Event()
+
 
 def _get_sync_interval():
     """Read sync interval from local system_config (minutes)."""
@@ -477,3 +483,57 @@ def stop_auto_sync():
     """Signal the background thread to stop."""
     _auto_sync_stop.set()
     logger.info("Auto-sync stop signal sent")
+
+
+# ── Vercel write-behind queue worker ───────────────────────────────────────────
+
+def _vercel_sync_worker():
+    """Background worker: processes queued table syncs for Vercel."""
+    logger.info("Vercel sync queue worker started")
+    while not _vercel_sync_stop.is_set():
+        try:
+            # Wait for work with timeout to check stop event
+            try:
+                table_name = _vercel_sync_queue.get(timeout=1)
+            except queue.Empty:
+                continue
+
+            if table_name is None:  # Shutdown signal
+                break
+
+            try:
+                if HAS_PG:
+                    sync_table_fast(table_name)
+            except Exception as e:
+                logger.warning(f"Vercel queue sync failed for {table_name}: {e}")
+            finally:
+                _vercel_sync_queue.task_done()
+
+        except Exception as e:
+            logger.error(f"Vercel sync worker error: {e}")
+
+    logger.info("Vercel sync queue worker stopped")
+
+
+def start_vercel_sync_queue():
+    """Start the Vercel background sync queue worker."""
+    global _vercel_sync_thread
+    if _vercel_sync_thread and _vercel_sync_thread.is_alive():
+        return
+    _vercel_sync_stop.clear()
+    _vercel_sync_thread = threading.Thread(target=_vercel_sync_worker, daemon=True)
+    _vercel_sync_thread.start()
+    logger.info("Vercel sync queue worker launched")
+
+
+def stop_vercel_sync_queue():
+    """Stop the Vercel background sync queue worker."""
+    _vercel_sync_stop.set()
+    _vercel_sync_queue.put(None)  # Wake up worker
+    logger.info("Vercel sync queue stop signal sent")
+
+
+def queue_vercel_sync(table_name):
+    """Queue a table for background sync (non-blocking)."""
+    if table_name in SUPABASE_TABLES:
+        _vercel_sync_queue.put(table_name)

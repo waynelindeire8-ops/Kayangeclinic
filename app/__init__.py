@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, request
 from flask_jwt_extended import JWTManager
 from config import Config
-import os, logging
+import os, logging, queue, threading
 
 jwt = JWTManager()
 logger = logging.getLogger(__name__)
@@ -134,20 +134,39 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
-    # Vercel: fast sync to Supabase after write requests
+    # Vercel: fast sync to Supabase after write requests (uses background queue)
     if os.environ.get('VERCEL'):
+        # Background sync worker
+        _vercel_sync_queue = queue.Queue()
+        _vercel_sync_stop = threading.Event()
+
+        def _vercel_sync_worker():
+            while not _vercel_sync_stop.is_set():
+                try:
+                    table = _vercel_sync_queue.get(timeout=1)
+                    try:
+                        from app.backup import sync_table_fast
+                        sync_table_fast(table)
+                    except Exception:
+                        pass
+                    finally:
+                        _vercel_sync_queue.task_done()
+                except queue.Empty:
+                    continue
+
+        _vercel_sync_thread = threading.Thread(target=_vercel_sync_worker, daemon=True)
+        _vercel_sync_thread.start()
+
         @app.after_request
         def vercel_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
-                try:
-                    from app.backup import sync_table_fast
-                    import threading
-                    # Sync commonly modified tables
-                    for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
-                        threading.Thread(target=sync_table_fast, args=(table,), daemon=True).start()
-                except Exception:
-                    pass
+                for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
+                    _vercel_sync_queue.put(table)
             return response
+
+        @app.teardown_appcontext
+        def _shutdown_vercel_sync(exc=None):
+            _vercel_sync_stop.set()
 
     @app.route('/help')
     def help_page():
