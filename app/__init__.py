@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect
+from flask import Flask, render_template, redirect, request
 from flask_jwt_extended import JWTManager
 from config import Config
 import os, logging
@@ -133,6 +133,21 @@ def create_app():
 
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
+
+    # Vercel: fast sync to Supabase after write requests
+    if os.environ.get('VERCEL'):
+        @app.after_request
+        def vercel_fast_sync(response):
+            if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
+                try:
+                    from app.backup import sync_table_fast
+                    import threading
+                    # Sync commonly modified tables
+                    for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
+                        threading.Thread(target=sync_table_fast, args=(table,), daemon=True).start()
+                except Exception:
+                    pass
+            return response
 
     @app.route('/help')
     def help_page():

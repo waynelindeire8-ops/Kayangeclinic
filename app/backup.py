@@ -228,6 +228,59 @@ def sync_all():
     return results
 
 
+def sync_table_fast(table_name):
+    """Fast sync a single table to Supabase (for Vercel after writes).
+    Uses UPSERT to handle both inserts and updates."""
+    try:
+        pg = _get_pg_conn()
+        cur = pg.cursor()
+
+        sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
+        sqlite_db.row_factory = sqlite3.Row
+
+        rows = sqlite_db.execute(f"SELECT * FROM {table_name}").fetchall()
+        if not rows:
+            sqlite_db.close()
+            cur.close()
+            pg.close()
+            return 0
+
+        columns = list(rows[0].keys())
+        cols_str = ', '.join(columns)
+        placeholders = ', '.join(['%s'] * len(columns))
+        pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
+        pk_cols_str = ', '.join(pk_cols)
+
+        if not update_cols:
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+        else:
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"
+
+        count = 0
+        for row in rows:
+            values = [_adapt_value(row[col]) for col in columns]
+            try:
+                cur.execute(upsert_sql, values)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Error upserting row in {table_name}: {e}")
+                pg.rollback()
+                pg = _get_pg_conn()
+                cur = pg.cursor()
+
+        pg.commit()
+        sqlite_db.close()
+        cur.close()
+        pg.close()
+        logger.info(f"Fast synced {count} rows from {table_name}")
+        return count
+
+    except Exception as e:
+        logger.error(f"Failed to fast sync table {table_name}: {e}")
+        return -1
+
+
 def restore_table(table_name):
     """Restore a single table from Supabase to SQLite (non-destructive: preserves local data)."""
     try:

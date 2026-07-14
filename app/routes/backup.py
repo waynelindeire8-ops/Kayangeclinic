@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.auth import login_required
-from app.backup import sync_all, restore_all, sync_table, restore_table, init_supabase_tables, get_sync_status, get_last_sync_info, SUPABASE_TABLES
+from app.backup import sync_all, restore_all, sync_table, restore_table, init_supabase_tables, get_sync_status, get_last_sync_info, SUPABASE_TABLES, sync_table_fast
 
 backup_bp = Blueprint('backup', __name__, url_prefix='/backup')
 
