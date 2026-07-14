@@ -13,7 +13,7 @@ except ImportError:
     HAS_PG = False
 
 
-# Connection pool for Supabase (reuses connections)
+# Connection pool for Supabase (for background sync)
 _pg_pool = None
 
 def _get_pg_pool():
@@ -23,15 +23,16 @@ def _get_pg_pool():
             _pg_pool = psycopg2.pool.ThreadedConnectionPool(
                 minconn=1,
                 maxconn=5,
-                dsn=Config.SUPABASE_DB_URL
+                dsn=Config.SUPABASE_DB_URL,
+                connect_timeout=10
             )
         except Exception:
-            # Fallback to individual connections
             pass
     return _pg_pool
 
 
 def _get_pg_conn():
+    """Get PostgreSQL connection for background sync operations."""
     if not HAS_PG:
         raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
     
@@ -41,13 +42,13 @@ def _get_pg_conn():
             conn = pool.getconn()
             if conn:
                 conn.autocommit = False
-                return PooledConnection(conn, pool)
+                return conn
         except Exception:
             pass
     
-    # Fallback: direct connection
+    # Fallback
     try:
-        return psycopg2.connect(Config.SUPABASE_DB_URL)
+        return psycopg2.connect(Config.SUPABASE_DB_URL, connect_timeout=10)
     except Exception:
         return psycopg2.connect(
             host=Config.SUPABASE_DB_HOST,
@@ -55,127 +56,59 @@ def _get_pg_conn():
             dbname='postgres',
             user=Config.SUPABASE_DB_USER,
             password=Config.SUPABASE_DB_PASSWORD,
-            sslmode='require'
+            sslmode='require',
+            connect_timeout=10
         )
 
 
-class PooledConnection:
-    """Wrapper for pooled connection that returns to pool on close."""
-    def __init__(self, conn, pool):
-        self.conn = conn
-        self.pool = pool
-        self._closed = False
-    
-    def cursor(self, cursor_factory=None):
-        return self.conn.cursor(cursor_factory=cursor_factory)
-    
-    def commit(self):
-        self.conn.commit()
-    
-    def rollback(self):
-        self.conn.rollback()
-    
-    def close(self):
-        if not self._closed and self.pool:
-            self.pool.putconn(self.conn)
-            self._closed = True
-    
-    def execute(self, query, params=None):
-        cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        if params:
-            cur.execute(query, params)
-        else:
-            cur.execute(query)
-        return SupabaseCursor(cur)
-    
-    def executescript(self, script):
-        cur = self.conn.cursor()
-        cur.execute(script)
-        self.conn.commit()
-        return cur
-
-
-class SupabaseDB:
-    """Supabase/PostgreSQL connection wrapper matching sqlite3 API."""
-    
-    def __init__(self):
-        self.conn = _get_pg_conn()
-    
-    def execute(self, query, params=None):
-        # Retry on connection errors
-        for attempt in range(3):
-            try:
-                cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                if params:
-                    cur.execute(query, params)
-                else:
-                    cur.execute(query)
-                return SupabaseCursor(cur)
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                if attempt == 2:
-                    raise
-                # Try to get a fresh connection
-                time.sleep(0.5 * (attempt + 1))
-                self.conn = _get_pg_conn()
-    
-    def executescript(self, script):
-        for attempt in range(3):
-            try:
-                cur = self.conn.cursor()
-                cur.execute(script)
-                self.conn.commit()
-                return cur
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                if attempt == 2:
-                    raise
-                time.sleep(0.5 * (attempt + 1))
-                self.conn = _get_pg_conn()
-    
-    def commit(self):
-        self.conn.commit()
-    
-    def rollback(self):
-        self.conn.rollback()
-    
-    def close(self):
-        self.conn.close()
-    
-    def cursor(self):
-        return self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-
-class SupabaseCursor:
-    """Wrapper to match sqlite3.Cursor API."""
-    
-    def __init__(self, cursor):
-        self.cursor = cursor
-    
-    def fetchone(self):
-        return self.cursor.fetchone()
-    
-    def fetchall(self):
-        return self.cursor.fetchall()
-    
-    def __iter__(self):
-        return iter(self.cursor)
-    
-    @property
-    def lastrowid(self):
-        return self.cursor.lastrowid
-
-
 def get_db():
-    """Get database connection. Uses Supabase on Vercel, SQLite locally."""
+    """
+    Get database connection. 
+    - Local: SQLite (kayange.db) - PRIMARY
+    - Vercel: Restore from Supabase to /tmp/kayange.db on cold start, then use SQLite
+    """
+    # Vercel: ensure database is restored from Supabase on cold start
     if os.environ.get('VERCEL'):
-        # Vercel: use Supabase directly
-        return SupabaseDB()
+        _ensure_vercel_db()
     
-    # Local: use SQLite with WAL mode
+    # Use SQLite (local file or /tmp on Vercel)
     conn = sqlite3.connect(Config.DATABASE, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
+
+
+_vercel_db_initialized = False
+
+def _ensure_vercel_db():
+    """On Vercel cold start, restore database from Supabase to /tmp."""
+    global _vercel_db_initialized
+    if _vercel_db_initialized:
+        return
+    
+    if not os.environ.get('VERCEL') or not HAS_PG:
+        return
+    
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        from app.backup import restore_all, init_supabase_tables
+        
+        logger.info("Vercel cold start: restoring database from Supabase...")
+        
+        # Ensure tables exist in Supabase
+        init_supabase_tables()
+        
+        # Restore all tables to local SQLite
+        results = restore_all()
+        total = sum(v for v in results.values() if v > 0)
+        logger.info(f"Vercel: Restored {total} rows from Supabase to local SQLite")
+        
+        _vercel_db_initialized = True
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Vercel DB restore failed: {e}")
 
 
 def _migrate_appointments_type(conn):
