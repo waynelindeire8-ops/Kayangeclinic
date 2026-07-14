@@ -134,6 +134,32 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
+    # Vercel: pull fresh data from Supabase before serving reads.
+    #
+    # The write-side sync above only solves half the problem. Vercel can run
+    # several containers concurrently under real traffic, and each one only
+    # gets its local SQLite refreshed from Supabase on ITS OWN cold start.
+    # A patient created via container A now reaches Supabase reliably (fix
+    # above), but container B, C, D -- already warm, potentially serving
+    # requests for hours -- have no way to find out about it on their own.
+    # So the same "shows up, then disappears" symptom can still happen: it
+    # just depends on which container Vercel routes the next GET to. This
+    # hook makes every container re-pull from Supabase (non-destructively --
+    # restore_table only inserts rows missing locally, never touches
+    # existing ones) right before it serves a read, so it can't be stale by
+    # more than one request.
+    if os.environ.get('VERCEL'):
+        @app.before_request
+        def vercel_fast_pull():
+            if request.method == 'GET':
+                try:
+                    from app.backup import restore_table, HAS_PG
+                    if HAS_PG:
+                        for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
+                            restore_table(table)
+                except Exception as e:
+                    logger.error(f"Vercel inline pull failed: {e}")
+
     # Vercel: sync to Supabase after write requests.
     #
     # IMPORTANT: this must be SYNCHRONOUS (run inline, before the response is
