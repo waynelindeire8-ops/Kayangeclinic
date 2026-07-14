@@ -41,3 +41,11 @@ class Config:
     SUPABASE_DB_PORT = os.environ.get('SUPABASE_DB_PORT', '6543')
     SUPABASE_DB_USER = os.environ.get('SUPABASE_DB_USER', 'postgres.xozdmkpkxholhukblfuv')
     SUPABASE_DB_PASSWORD = os.environ.get('SUPABASE_DB_PASSWORD', 'himjim@1234@')
+
+    # OneDrive / Microsoft Graph
+    ONEDRIVE_CLIENT_ID = os.environ.get('ONEDRIVE_CLIENT_ID', '')
+    ONEDRIVE_CLIENT_SECRET = os.environ.get('ONEDRIVE_CLIENT_SECRET', '')
+    ONEDRIVE_TENANT_ID = os.environ.get('ONEDRIVE_TENANT_ID', 'common')
+    ONEDRIVE_REFRESH_TOKEN = os.environ.get('ONEDRIVE_REFRESH_TOKEN', '')
+    ONEDRIVE_USER_EMAIL = os.environ.get('ONEDRIVE_USER_EMAIL', 'deannemolina159@gmail.com')
+    ONEDRIVE_BACKUP_FOLDER = os.environ.get('ONEDRIVE_BACKUP_FOLDER', '/Kayange Clinic Backups')

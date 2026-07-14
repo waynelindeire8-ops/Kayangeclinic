@@ -5,6 +5,9 @@ import logging
 import threading
 import queue
 import time
+import os
+import gzip
+import base64
 from datetime import datetime, date
 from config import Config
 
@@ -14,6 +17,12 @@ try:
     HAS_PG = True
 except ImportError:
     HAS_PG = False
+
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 logger = logging.getLogger(__name__)
 
@@ -618,6 +627,293 @@ def stop_vercel_sync_queue():
     _vercel_sync_stop.set()
     _vercel_sync_queue.put(None)  # Wake up worker
     logger.info("Vercel sync queue stop signal sent")
+
+
+# ── OneDrive Backup ────────────────────────────────────────────────────────────
+
+_onedrive_token_cache = {'access_token': None, 'expires_at': 0}
+
+
+def _get_onedrive_access_token():
+    """Get or refresh OneDrive access token using refresh token."""
+    global _onedrive_token_cache
+    
+    now = time.time()
+    if _onedrive_token_cache['access_token'] and _onedrive_token_cache['expires_at'] > now + 60:
+        return _onedrive_token_cache['access_token']
+    
+    if not HAS_REQUESTS:
+        logger.error("requests library not installed. Run: pip install requests")
+        return None
+    
+    if not Config.ONEDRIVE_CLIENT_ID or not Config.ONEDRIVE_CLIENT_SECRET or not Config.ONEDRIVE_REFRESH_TOKEN:
+        logger.error("OneDrive credentials not configured")
+        return None
+    
+    try:
+        token_url = f"https://login.microsoftonline.com/{Config.ONEDRIVE_TENANT_ID}/oauth2/v2.0/token"
+        data = {
+            'client_id': Config.ONEDRIVE_CLIENT_ID,
+            'client_secret': Config.ONEDRIVE_CLIENT_SECRET,
+            'refresh_token': Config.ONEDRIVE_REFRESH_TOKEN,
+            'grant_type': 'refresh_token',
+            'scope': 'https://graph.microsoft.com/.default'
+        }
+        resp = requests.post(token_url, data=data, timeout=30)
+        resp.raise_for_status()
+        token_data = resp.json()
+        
+        _onedrive_token_cache['access_token'] = token_data['access_token']
+        _onedrive_token_cache['expires_at'] = now + token_data.get('expires_in', 3600)
+        
+        # Update refresh token if provided
+        if 'refresh_token' in token_data:
+            Config.ONEDRIVE_REFRESH_TOKEN = token_data['refresh_token']
+            logger.info("OneDrive refresh token updated")
+        
+        return _onedrive_token_cache['access_token']
+    except Exception as e:
+        logger.error(f"Failed to get OneDrive access token: {e}")
+        return None
+
+
+def _onedrive_api_request(method, url, **kwargs):
+    """Make authenticated request to Microsoft Graph API."""
+    token = _get_onedrive_access_token()
+    if not token:
+        return None
+    
+    headers = kwargs.pop('headers', {})
+    headers['Authorization'] = f'Bearer {token}'
+    headers['Content-Type'] = 'application/json'
+    
+    try:
+        resp = requests.request(method, url, headers=headers, timeout=60, **kwargs)
+        if resp.status_code == 401:
+            # Token expired, clear cache and retry once
+            _onedrive_token_cache['access_token'] = None
+            token = _get_onedrive_access_token()
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
+                resp = requests.request(method, url, headers=headers, timeout=60, **kwargs)
+        resp.raise_for_status()
+        return resp
+    except Exception as e:
+        logger.error(f"OneDrive API request failed: {e}")
+        return None
+
+
+def _ensure_onedrive_folder(folder_path):
+    """Ensure backup folder exists in OneDrive, create if needed."""
+    # Split path and create each folder
+    parts = [p for p in folder_path.split('/') if p]
+    current_path = 'root'
+    
+    for part in parts:
+        # Check if folder exists
+        search_url = f"https://graph.microsoft.com/v1.0/me/drive/{current_path}:/'{part}':"
+        resp = _onedrive_api_request('GET', search_url)
+        
+        if resp and resp.status_code == 200:
+            folder = resp.json()
+            current_path = f"items/{folder['id']}"
+        else:
+            # Create folder
+            create_url = f"https://graph.microsoft.com/v1.0/me/drive/{current_path}:/children"
+            data = {'name': part, 'folder': {}, '@microsoft.graph.conflictBehavior': 'rename'}
+            resp = _onedrive_api_request('POST', create_url, json=data)
+            if resp and resp.status_code in (200, 201):
+                folder = resp.json()
+                current_path = f"items/{folder['id']}"
+            else:
+                logger.error(f"Failed to create OneDrive folder: {part}")
+                return None
+    return current_path
+
+
+def backup_to_onedrive():
+    """Create compressed SQLite backup and upload to OneDrive."""
+    try:
+        if not HAS_REQUESTS:
+            logger.error("requests library not installed. Run: pip install requests")
+            return False, "requests library not installed"
+        
+        if not os.path.exists(Config.DATABASE):
+            return False, "Database file not found"
+        
+        # Get access token
+        token = _get_onedrive_access_token()
+        if not token:
+            return False, "Failed to authenticate with OneDrive"
+        
+        # Ensure backup folder exists
+        folder_id = _ensure_onedrive_folder(Config.ONEDRIVE_BACKUP_FOLDER)
+        if not folder_id:
+            return False, "Failed to create/access backup folder"
+        
+        # Create compressed backup
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"kayange_backup_{timestamp}.db.gz"
+        
+        logger.info(f"Creating backup: {backup_filename}")
+        with open(Config.DATABASE, 'rb') as f_in:
+            compressed = gzip.compress(f_in.read())
+        
+        # Upload to OneDrive
+        upload_url = f"https://graph.microsoft.com/v1.0/me/drive/{folder_id}:/{backup_filename}:/content"
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/gzip'
+        }
+        
+        resp = requests.put(upload_url, headers=headers, data=compressed, timeout=120)
+        if resp.status_code in (200, 201):
+            logger.info(f"OneDrive backup uploaded: {backup_filename}")
+            return True, f"Backup uploaded: {backup_filename}"
+        else:
+            logger.error(f"OneDrive upload failed: {resp.status_code} - {resp.text}")
+            return False, f"Upload failed: {resp.status_code}"
+            
+    except Exception as e:
+        logger.error(f"OneDrive backup failed: {e}")
+        return False, str(e)
+
+
+def restore_from_onedrive(filename=None):
+    """Download and restore database from OneDrive backup."""
+    try:
+        if not HAS_REQUESTS:
+            return False, "requests library not installed"
+        
+        token = _get_onedrive_access_token()
+        if not token:
+            return False, "Failed to authenticate with OneDrive"
+        
+        folder_id = _ensure_onedrive_folder(Config.ONEDRIVE_BACKUP_FOLDER)
+        if not folder_id:
+            return False, "Backup folder not found"
+        
+        # List backups
+        list_url = f"https://graph.microsoft.com/v1.0/me/drive/{folder_id}/children"
+        resp = _onedrive_api_request('GET', list_url)
+        if not resp:
+            return False, "Failed to list backups"
+        
+        files = resp.json().get('value', [])
+        backup_files = [f for f in files if f['name'].startswith('kayange_backup_') and f['name'].endswith('.db.gz')]
+        
+        if not backup_files:
+            return False, "No backup files found"
+        
+        # Sort by name (timestamp) descending, get latest or specified
+        backup_files.sort(key=lambda x: x['name'], reverse=True)
+        target_file = None
+        
+        if filename:
+            target_file = next((f for f in backup_files if f['name'] == filename), None)
+        else:
+            target_file = backup_files[0]  # Latest
+        
+        if not target_file:
+            return False, f"Backup file not found: {filename}"
+        
+        # Download backup
+        download_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{target_file['id']}/content"
+        headers = {'Authorization': f'Bearer {token}'}
+        resp = requests.get(download_url, headers=headers, timeout=120)
+        resp.raise_for_status()
+        
+        # Decompress and restore
+        decompressed = gzip.decompress(resp.content)
+        
+        # Backup current database first
+        backup_current = f"{Config.DATABASE}.pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        import shutil
+        shutil.copy2(Config.DATABASE, backup_current)
+        
+        # Write restored database
+        with open(Config.DATABASE, 'wb') as f:
+            f.write(decompressed)
+        
+        logger.info(f"Database restored from OneDrive: {target_file['name']}")
+        return True, f"Restored from {target_file['name']} (previous DB backed up)"
+        
+    except Exception as e:
+        logger.error(f"OneDrive restore failed: {e}")
+        return False, str(e)
+
+
+def list_onedrive_backups():
+    """List available backups on OneDrive."""
+    try:
+        if not HAS_REQUESTS:
+            return []
+        
+        token = _get_onedrive_access_token()
+        if not token:
+            return []
+        
+        folder_id = _ensure_onedrive_folder(Config.ONEDRIVE_BACKUP_FOLDER)
+        if not folder_id:
+            return []
+        
+        list_url = f"https://graph.microsoft.com/v1.0/me/drive/{folder_id}/children"
+        resp = _onedrive_api_request('GET', list_url)
+        if not resp:
+            return []
+        
+        files = resp.json().get('value', [])
+        backup_files = [f for f in files if f['name'].startswith('kayange_backup_') and f['name'].endswith('.db.gz')]
+        backup_files.sort(key=lambda x: x['name'], reverse=True)
+        
+        return [{
+            'name': f['name'],
+            'size': f.get('size', 0),
+            'created': f.get('createdDateTime'),
+            'modified': f.get('lastModifiedDateTime'),
+            'id': f['id']
+        } for f in backup_files]
+        
+    except Exception as e:
+        logger.error(f"Failed to list OneDrive backups: {e}")
+        return []
+
+
+def get_onedrive_status():
+    """Check OneDrive configuration and connectivity."""
+    configured = bool(Config.ONEDRIVE_CLIENT_ID and Config.ONEDRIVE_CLIENT_SECRET and Config.ONEDRIVE_REFRESH_TOKEN)
+    
+    if not configured:
+        return {
+            'configured': False,
+            'connected': False,
+            'message': 'OneDrive credentials not configured'
+        }
+    
+    if not HAS_REQUESTS:
+        return {
+            'configured': True,
+            'connected': False,
+            'message': 'requests library not installed'
+        }
+    
+    token = _get_onedrive_access_token()
+    if token:
+        # Test API call
+        resp = _onedrive_api_request('GET', 'https://graph.microsoft.com/v1.0/me/drive/root')
+        if resp and resp.status_code == 200:
+            return {
+                'configured': True,
+                'connected': True,
+                'message': 'OneDrive connected',
+                'user_email': Config.ONEDRIVE_USER_EMAIL
+            }
+    
+    return {
+        'configured': True,
+        'connected': False,
+        'message': 'Failed to connect to OneDrive'
+    }
 
 
 def queue_vercel_sync(table_name):
