@@ -1,19 +1,51 @@
 import os
 import sqlite3
+import time
 from werkzeug.security import generate_password_hash
 from config import Config
 
 try:
     import psycopg2
     import psycopg2.extras
+    import psycopg2.pool
     HAS_PG = True
 except ImportError:
     HAS_PG = False
 
 
+# Connection pool for Supabase (reuses connections)
+_pg_pool = None
+
+def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is None and HAS_PG:
+        try:
+            _pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=5,
+                dsn=Config.SUPABASE_DB_URL
+            )
+        except Exception:
+            # Fallback to individual connections
+            pass
+    return _pg_pool
+
+
 def _get_pg_conn():
     if not HAS_PG:
         raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
+    
+    pool = _get_pg_pool()
+    if pool:
+        try:
+            conn = pool.getconn()
+            if conn:
+                conn.autocommit = False
+                return PooledConnection(conn, pool)
+        except Exception:
+            pass
+    
+    # Fallback: direct connection
     try:
         return psycopg2.connect(Config.SUPABASE_DB_URL)
     except Exception:
@@ -27,12 +59,26 @@ def _get_pg_conn():
         )
 
 
-class SupabaseDB:
-    """Supabase/PostgreSQL connection wrapper matching sqlite3 API."""
+class PooledConnection:
+    """Wrapper for pooled connection that returns to pool on close."""
+    def __init__(self, conn, pool):
+        self.conn = conn
+        self.pool = pool
+        self._closed = False
     
-    def __init__(self):
-        self.conn = _get_pg_conn()
-        self.conn.autocommit = False
+    def cursor(self, cursor_factory=None):
+        return self.conn.cursor(cursor_factory=cursor_factory)
+    
+    def commit(self):
+        self.conn.commit()
+    
+    def rollback(self):
+        self.conn.rollback()
+    
+    def close(self):
+        if not self._closed and self.pool:
+            self.pool.putconn(self.conn)
+            self._closed = True
     
     def execute(self, query, params=None):
         cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -47,6 +93,43 @@ class SupabaseDB:
         cur.execute(script)
         self.conn.commit()
         return cur
+
+
+class SupabaseDB:
+    """Supabase/PostgreSQL connection wrapper matching sqlite3 API."""
+    
+    def __init__(self):
+        self.conn = _get_pg_conn()
+    
+    def execute(self, query, params=None):
+        # Retry on connection errors
+        for attempt in range(3):
+            try:
+                cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                if params:
+                    cur.execute(query, params)
+                else:
+                    cur.execute(query)
+                return SupabaseCursor(cur)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt == 2:
+                    raise
+                # Try to get a fresh connection
+                time.sleep(0.5 * (attempt + 1))
+                self.conn = _get_pg_conn()
+    
+    def executescript(self, script):
+        for attempt in range(3):
+            try:
+                cur = self.conn.cursor()
+                cur.execute(script)
+                self.conn.commit()
+                return cur
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt == 2:
+                    raise
+                time.sleep(0.5 * (attempt + 1))
+                self.conn = _get_pg_conn()
     
     def commit(self):
         self.conn.commit()
