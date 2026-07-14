@@ -152,23 +152,27 @@ def api_quick_add():
     else:
         next_time = datetime.now().strftime('%H:%M')
 
-    cursor = db.execute(
-        '''INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, type, status, created_by)
-           VALUES (?, ?, ?, ?, ?, 'walk_in', 'scheduled', ?)''',
-        (data['patient_id'], data.get('doctor_id'), today, next_time,
-         data.get('reason', 'Walk-in'), current_user['id'])
-    )
-    new_id = cursor.lastrowid
+    try:
+        cursor = db.execute(
+            '''INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, type, status, created_by)
+               VALUES (?, ?, ?, ?, ?, 'walk_in', 'scheduled', ?)''',
+            (data['patient_id'], data.get('doctor_id'), today, next_time,
+             data.get('reason', 'Walk-in'), current_user['id'])
+        )
+        new_id = cursor.lastrowid
 
-    apt = db.execute(
-        '''SELECT a.*, p.first_name as p_first, p.last_name as p_last, p.phone as p_phone,
-                  u.first_name as d_first, u.last_name as d_last
-           FROM appointments a
-           LEFT JOIN patients p ON a.patient_id = p.id
-           LEFT JOIN users u ON a.doctor_id = u.id
-           WHERE a.id = ?''', (new_id,)).fetchone()
+        apt = db.execute(
+            '''SELECT a.*, p.first_name as p_first, p.last_name as p_last, p.phone as p_phone,
+                      u.first_name as d_first, u.last_name as d_last
+               FROM appointments a
+               LEFT JOIN patients p ON a.patient_id = p.id
+               LEFT JOIN users u ON a.doctor_id = u.id
+               WHERE a.id = ?''', (new_id,)).fetchone()
 
-    db.commit()
+        db.commit()
+    except Exception as e:
+        db.close()
+        return jsonify({'error': f'Failed to add walk-in: {str(e)}'}), 400
     log_audit(current_user['id'], current_user['username'], 'walk_in', 'appointment', new_id,
               f'Walk-in added for patient ID {data["patient_id"]}', request.remote_addr)
     db.close()

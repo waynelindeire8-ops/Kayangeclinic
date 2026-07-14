@@ -281,10 +281,12 @@ def _api_import():
     if 'first_name' not in col_mapping or 'last_name' not in col_mapping:
         return jsonify({'error': 'Excel must have "First Name" and "Last Name" columns. Found: ' + ', '.join(headers)}), 400
 
-    db = get_db()
+    import sqlite3
 
-    # Disable FK checks for bulk import
-    db.execute("PRAGMA foreign_keys = OFF")
+    # Use a raw connection with FK disabled for bulk import
+    db = sqlite3.connect(Config.DATABASE, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
 
     # Build insurance provider lookup (name -> id, case-insensitive)
     providers_raw = db.execute('SELECT id, name FROM insurance_providers').fetchall()
@@ -369,7 +371,6 @@ def _api_import():
             skipped += 1
 
     db.commit()
-    db.execute("PRAGMA foreign_keys = ON")
     log_audit(current_user['id'], current_user['username'], 'import', 'patients', None,
               f'Imported {created} patients from Excel', request.remote_addr)
     db.close()
