@@ -157,7 +157,7 @@ def init_supabase_tables():
 
 
 def sync_table(table_name):
-    """Sync a single table from SQLite to Supabase."""
+    """Sync a single table from SQLite to Supabase using UPSERT to handle updates."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -175,16 +175,30 @@ def sync_table(table_name):
         columns = list(rows[0].keys())
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+        
+        # Detect primary key: most tables have 'id' as primary key
+        pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        
+        # Build UPSERT query (INSERT ... ON CONFLICT ... DO UPDATE)
+        # Only update non-primary-key columns to handle updates properly
+        update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
+        pk_cols_str = ', '.join(pk_cols)
+        
+        # If there are no update columns (only PK), just do INSERT OR IGNORE
+        if not update_cols:
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+        else:
+            upsert_sql = f"""INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) 
+                             ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"""
 
         count = 0
         for row in rows:
             values = [_adapt_value(row[col]) for col in columns]
             try:
-                cur.execute(insert_sql, values)
+                cur.execute(upsert_sql, values)
                 count += 1
             except Exception as e:
-                logger.warning(f"Error inserting row in {table_name}: {e}")
+                logger.warning(f"Error upserting row in {table_name}: {e}")
                 pg.rollback()
                 pg = _get_pg_conn()
                 cur = pg.cursor()
