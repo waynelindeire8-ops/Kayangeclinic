@@ -92,6 +92,16 @@ def api_auto_status():
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
     info = get_last_sync_info()
+    try:
+        from app.backup import HAS_PG, _get_sync_interval
+        info['supabase_configured'] = HAS_PG
+        info['interval_minutes'] = _get_sync_interval()
+    except Exception:
+        info['supabase_configured'] = False
+        info['interval_minutes'] = 5
+    return jsonify(info)
+        return jsonify({'error': 'Admin only'}), 403
+    info = get_last_sync_info()
     info['interval_minutes'] = 5
     try:
         from app.backup import HAS_PG

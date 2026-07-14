@@ -4,6 +4,32 @@
     <h4><i class="bi bi-cloud-arrow-up"></i> Backup to Supabase</h4>
 </div>
 
+<!-- Auto-Sync Status Banner -->
+<div class="card mb-4 border-0 shadow-sm" id="auto-sync-card">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <div id="sync-status-icon" style="font-size:2rem; line-height:1;">
+                    <i class="bi bi-cloud-check text-secondary"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold" id="sync-status-label">Checking sync status...</div>
+                    <small class="text-muted" id="sync-status-detail">—</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="spinner-border spinner-border-sm text-primary d-none" id="sync-spinner" role="status">
+                    <span class="visually-hidden">Syncing...</span>
+                </div>
+                <button class="btn btn-primary btn-sm" id="sync-now-btn" onclick="triggerSyncNow()">
+                    <i class="bi bi-play-circle me-1"></i>Sync Now
+                </button>
+                <span class="text-muted small" id="next-sync-countdown"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="card border-primary">
@@ -72,10 +98,134 @@
 </div>
 
 <script>
+let autoStatusInterval = null;
+let countdownInterval = null;
+let nextSyncAt = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     loadTables();
     loadStatus();
+    loadAutoStatus();
+    // Refresh auto-status every 15 seconds
+    autoStatusInterval = setInterval(loadAutoStatus, 15000);
 });
+
+async function loadAutoStatus() {
+    try {
+        const res = await fetchWithAuth('/backup/auto-status');
+        if (!res.ok) return;
+        const info = await res.json();
+        renderAutoStatus(info);
+    } catch(e) {
+        console.error('Failed to load auto status:', e);
+    }
+}
+
+function renderAutoStatus(info) {
+    const card = document.getElementById('auto-sync-card');
+    const icon = document.getElementById('sync-status-icon');
+    const label = document.getElementById('sync-status-label');
+    const detail = document.getElementById('sync-status-detail');
+
+    const status = info.status || 'idle';
+    const lastTime = info.time;
+    const message = info.message || '';
+    const interval = info.interval_minutes || 5;
+    const hasSupa = info.supabase_configured;
+
+    // Style card based on status
+    card.className = 'card mb-4 border-0 shadow-sm';
+    if (status === 'ok') {
+        card.style.background = 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)';
+        icon.innerHTML = '<i class="bi bi-cloud-check-fill text-success"></i>';
+        label.textContent = '✅ Auto-Sync Active — Last sync succeeded';
+        label.className = 'fw-semibold text-success';
+    } else if (status === 'syncing') {
+        card.style.background = 'linear-gradient(135deg, #cce5ff 0%, #b8daff 100%)';
+        icon.innerHTML = '<i class="bi bi-cloud-arrow-up-fill text-primary"></i>';
+        label.textContent = '🔄 Syncing in progress...';
+        label.className = 'fw-semibold text-primary';
+    } else if (status === 'partial') {
+        card.style.background = 'linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%)';
+        icon.innerHTML = '<i class="bi bi-cloud-exclamation-fill text-warning"></i>';
+        label.textContent = '⚠️ Auto-Sync Active — Last sync partially failed';
+        label.className = 'fw-semibold text-warning';
+    } else if (status === 'error') {
+        card.style.background = 'linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%)';
+        icon.innerHTML = '<i class="bi bi-cloud-slash-fill text-danger"></i>';
+        label.textContent = '❌ Auto-Sync Error';
+        label.className = 'fw-semibold text-danger';
+    } else {
+        // idle
+        card.style.background = 'linear-gradient(135deg, #e2e3e5 0%, #d1d3d5 100%)';
+        icon.innerHTML = '<i class="bi bi-cloud-arrow-up text-secondary"></i>';
+        if (!hasSupa) {
+            label.textContent = '⚙️ Auto-Sync — Supabase not configured';
+        } else {
+            label.textContent = '🕐 Auto-Sync — Starting up, first sync running soon...';
+        }
+        label.className = 'fw-semibold text-secondary';
+    }
+
+    // Detail line
+    let details = [];
+    if (lastTime) {
+        details.push('Last sync: ' + new Date(lastTime).toLocaleString());
+    }
+    if (message) {
+        details.push(message);
+    }
+    details.push('Interval: every ' + interval + ' min');
+    detail.textContent = details.join(' · ');
+
+    // Schedule next sync countdown
+    if (lastTime && (status === 'ok' || status === 'partial')) {
+        nextSyncAt = new Date(new Date(lastTime).getTime() + interval * 60 * 1000);
+        startCountdown();
+    } else {
+        document.getElementById('next-sync-countdown').textContent = '';
+    }
+}
+
+function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    const el = document.getElementById('next-sync-countdown');
+    countdownInterval = setInterval(() => {
+        if (!nextSyncAt) { el.textContent = ''; return; }
+        const diff = Math.round((nextSyncAt - Date.now()) / 1000);
+        if (diff <= 0) {
+            el.textContent = 'Next sync: any moment...';
+        } else {
+            const m = Math.floor(diff / 60);
+            const s = diff % 60;
+            el.textContent = 'Next: ' + (m > 0 ? m + 'm ' : '') + s + 's';
+        }
+    }, 1000);
+}
+
+async function triggerSyncNow() {
+    const btn = document.getElementById('sync-now-btn');
+    const spinner = document.getElementById('sync-spinner');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+
+    // Update status to syncing
+    document.getElementById('sync-status-label').textContent = '🔄 Syncing in progress...';
+    document.getElementById('sync-status-label').className = 'fw-semibold text-primary';
+
+    try {
+        const res = await fetchWithAuth('/backup/sync', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Sync complete');
+        await loadStatus();
+        await loadAutoStatus();
+    } catch(e) {
+        showToast('Sync failed: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+    }
+}
 
 async function loadTables() {
     const res = await fetchWithAuth('/backup/tables');
@@ -115,6 +265,7 @@ async function syncAll() {
     const data = await res.json();
     showToast(data.message);
     loadStatus();
+    loadAutoStatus();
 }
 
 async function restoreAll() {
