@@ -48,7 +48,7 @@ def api_dashboard():
            FROM appointments a
            LEFT JOIN patients p ON a.patient_id = p.id
            LEFT JOIN users u ON a.doctor_id = u.id
-           WHERE a.appointment_date = ?
+           WHERE a.appointment_date = ? AND a.type != 'walk_in'
            ORDER BY a.appointment_time ASC''', (today,)).fetchall()
 
     recent_patients = db.execute(
