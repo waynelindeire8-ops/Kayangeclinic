@@ -3,8 +3,91 @@ import sqlite3
 from werkzeug.security import generate_password_hash
 from config import Config
 
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_PG = True
+except ImportError:
+    HAS_PG = False
+
+
+def _get_pg_conn():
+    if not HAS_PG:
+        raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
+    try:
+        return psycopg2.connect(Config.SUPABASE_DB_URL)
+    except Exception:
+        return psycopg2.connect(
+            host=Config.SUPABASE_DB_HOST,
+            port=Config.SUPABASE_DB_PORT,
+            dbname='postgres',
+            user=Config.SUPABASE_DB_USER,
+            password=Config.SUPABASE_DB_PASSWORD,
+            sslmode='require'
+        )
+
+
+class SupabaseDB:
+    """Supabase/PostgreSQL connection wrapper matching sqlite3 API."""
+    
+    def __init__(self):
+        self.conn = _get_pg_conn()
+        self.conn.autocommit = False
+    
+    def execute(self, query, params=None):
+        cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if params:
+            cur.execute(query, params)
+        else:
+            cur.execute(query)
+        return SupabaseCursor(cur)
+    
+    def executescript(self, script):
+        cur = self.conn.cursor()
+        cur.execute(script)
+        self.conn.commit()
+        return cur
+    
+    def commit(self):
+        self.conn.commit()
+    
+    def rollback(self):
+        self.conn.rollback()
+    
+    def close(self):
+        self.conn.close()
+    
+    def cursor(self):
+        return self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+
+class SupabaseCursor:
+    """Wrapper to match sqlite3.Cursor API."""
+    
+    def __init__(self, cursor):
+        self.cursor = cursor
+    
+    def fetchone(self):
+        return self.cursor.fetchone()
+    
+    def fetchall(self):
+        return self.cursor.fetchall()
+    
+    def __iter__(self):
+        return iter(self.cursor)
+    
+    @property
+    def lastrowid(self):
+        return self.cursor.lastrowid
+
 
 def get_db():
+    """Get database connection. Uses Supabase on Vercel, SQLite locally."""
+    if os.environ.get('VERCEL'):
+        # Vercel: use Supabase directly
+        return SupabaseDB()
+    
+    # Local: use SQLite with WAL mode
     conn = sqlite3.connect(Config.DATABASE, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
