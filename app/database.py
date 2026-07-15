@@ -227,6 +227,11 @@ def init_db():
             blood_group TEXT,
             scheme_provider TEXT,
             scheme_type TEXT,
+            scheme_id INTEGER,
+            scheme_number TEXT,
+            passport_number TEXT,
+            nationality TEXT,
+            is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -1472,17 +1477,21 @@ def _recreate_patients_table(conn):
         scheme_type TEXT,
         scheme_id INTEGER,
         scheme_number TEXT,
+        passport_number TEXT,
+        nationality TEXT,
+        is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     conn.execute('''INSERT INTO patients
         SELECT id, patient_id, first_name, last_name, dob, gender, phone, email, address,
                emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider,
-               scheme_type, scheme_id, scheme_number, created_at, updated_at
+               scheme_type, scheme_id, scheme_number, passport_number, nationality,
+               COALESCE(is_active, 1), created_at, updated_at
         FROM patients_old''')
     conn.execute("DROP TABLE patients_old")
     conn.commit()
-    print('Migrated patients table: dob and phone now nullable')
+    print('Migrated patients table: dob and phone now nullable, is_active and nationality added')
 
 
 def _migrate_patients_yellow_book_fields(conn):
@@ -1492,6 +1501,10 @@ def _migrate_patients_yellow_book_fields(conn):
         pass
     try:
         conn.execute("ALTER TABLE patients ADD COLUMN nationality TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN is_active INTEGER DEFAULT 1")
     except sqlite3.OperationalError:
         pass
     conn.commit()

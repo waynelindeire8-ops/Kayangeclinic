@@ -146,7 +146,7 @@ def _adapt_value(val):
 
 
 def init_supabase_tables():
-    """Create all tables in Supabase PostgreSQL."""
+    """Create all tables in Supabase PostgreSQL (non-destructive: only creates missing tables)."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -165,6 +165,20 @@ def init_supabase_tables():
 
         for table_name in SUPABASE_TABLES:
             try:
+                # Check if table already exists in Supabase
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' AND table_name = %s
+                    )
+                """, (table_name,))
+                table_exists = cur.fetchone()[0]
+
+                if table_exists:
+                    # Table exists - add any missing columns from SQLite schema
+                    _ensure_supabase_columns(cur, sqlite_db, table_name)
+                    continue
+
                 schema = sqlite_db.execute(
                     f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'"
                 ).fetchone()
@@ -191,9 +205,8 @@ def init_supabase_tables():
                 create_sql = re.sub(r',\s*FOREIGN KEY[^,)]*\([^)]*\)\s*REFERENCES[^,)]*\([^)]*\)(?:\s*ON DELETE[^,)]*)?', '', create_sql, flags=re.IGNORECASE)
                 create_sql = re.sub(r'\bREFERENCES\s+\w+\s*\([^)]*\)(?:\s*ON DELETE[^,)]*)?', '', create_sql, flags=re.IGNORECASE)
 
-                cur.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE")
                 cur.execute(create_sql)
-                logger.info(f"Created/updated table: {table_name}")
+                logger.info(f"Created table: {table_name}")
 
             except Exception as e:
                 logger.warning(f"Error creating table {table_name}: {e}")
@@ -212,6 +225,62 @@ def init_supabase_tables():
     except Exception as e:
         logger.error(f"Failed to initialize Supabase tables: {e}")
         return False
+
+
+def _ensure_supabase_columns(cur, sqlite_db, table_name):
+    """Add any missing columns from SQLite schema to existing Supabase table."""
+    try:
+        # Get SQLite columns
+        sqlite_schema = sqlite_db.execute(
+            f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+        ).fetchone()
+        if not sqlite_schema:
+            return
+
+        sqlite_cols = set()
+        for match in re.finditer(r'(\w+)\s+(?:INTEGER|TEXT|REAL|BLOB|DATE|TIMESTAMP|BOOLEAN|NUMERIC)', sqlite_schema['sql'], re.IGNORECASE):
+            col = match.group(1).lower()
+            if col not in ('primary', 'key', 'constraint', 'check', 'unique', 'references'):
+                sqlite_cols.add(col)
+
+        # Get Supabase columns
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = %s
+        """, (table_name,))
+        pg_cols = {row[0].lower() for row in cur.fetchall()}
+
+        # Add missing columns
+        missing = sqlite_cols - pg_cols
+        for col in missing:
+            try:
+                # Find column type from SQLite schema
+                type_match = re.search(rf'\b{col}\s+(INTEGER|TEXT|REAL|BLOB|DATE|TIMESTAMP|BOOLEAN|NUMERIC)', sqlite_schema['sql'], re.IGNORECASE)
+                if not type_match:
+                    continue
+                sqlite_type = type_match.group(1).upper()
+                pg_type = _get_pg_type(sqlite_type)
+                
+                # Check for DEFAULT value
+                default = ''
+                default_match = re.search(rf'\b{col}\s+[^,]*DEFAULT\s+(\S+)', sqlite_schema['sql'], re.IGNORECASE)
+                if default_match:
+                    default_val = default_match.group(1)
+                    if sqlite_type in ('INTEGER', 'BIGINT'):
+                        default = f' DEFAULT {default_val}'
+                    elif default_val.upper() == 'CURRENT_TIMESTAMP':
+                        default = ' DEFAULT NOW()'
+                    elif default_val.upper() == 'CURRENT_DATE':
+                        default = ' DEFAULT CURRENT_DATE'
+
+                cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {col} {pg_type}{default}")
+                logger.info(f"Added column {col} ({pg_type}) to {table_name}")
+            except Exception as e:
+                logger.warning(f"Failed to add column {col} to {table_name}: {e}")
+                pg.rollback()
+
+    except Exception as e:
+        logger.warning(f"Error checking columns for {table_name}: {e}")
 
 
 def sync_table(table_name):
@@ -351,6 +420,10 @@ def sync_table_fast(table_name):
             return 0
 
         columns = list(rows[0].keys())
+        # Exclude 'id' column - let Supabase auto-generate it
+        if 'id' in columns:
+            columns = [c for c in columns if c != 'id']
+        
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
         
