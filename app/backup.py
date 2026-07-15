@@ -239,18 +239,30 @@ def sync_table(table_name):
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
         
-        # Use primary key as conflict target
-        pk_cols = _get_primary_key(table_name)
-        if not pk_cols:
-            pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        # Use unique constraints as conflict target (better for tables like patients with unique patient_id)
+        unique_cols = _get_unique_constraints(table_name)
+        if unique_cols:
+            # Filter to only columns we're inserting
+            conflict_cols = [c for c in unique_cols if c in columns]
+            if not conflict_cols:
+                # Fallback to primary key
+                pk_cols = _get_primary_key(table_name)
+                if not pk_cols:
+                    pk_cols = ['id'] if 'id' in columns else [columns[0]]
+                conflict_cols = pk_cols
+        else:
+            pk_cols = _get_primary_key(table_name)
+            if not pk_cols:
+                pk_cols = ['id'] if 'id' in columns else [columns[0]]
+            conflict_cols = pk_cols
         
-        update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
-        pk_cols_str = ', '.join(pk_cols)
+        update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in conflict_cols])
+        conflict_cols_str = ', '.join(conflict_cols)
 
         if not update_cols:
             upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
         else:
-            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_cols_str}) DO UPDATE SET {update_cols}"
 
         count = 0
         batch_size = 100
