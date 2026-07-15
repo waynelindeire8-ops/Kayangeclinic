@@ -51,15 +51,20 @@ def api_list():
     try:
         db = get_db()
         search = request.args.get('search', '')
+        include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
+        
+        where_clause = "WHERE is_active = 1" if not include_inactive else ""
+        params = []
+        
         if search:
-            patients = db.execute(
-                '''SELECT * FROM patients
-                   WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id LIKE ? OR phone LIKE ?
-                   ORDER BY created_at DESC''',
-                (f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%')
-            ).fetchall()
-        else:
-            patients = db.execute('SELECT * FROM patients ORDER BY created_at DESC').fetchall()
+            if where_clause:
+                where_clause += " AND (first_name LIKE ? OR last_name LIKE ? OR patient_id LIKE ? OR phone LIKE ?)"
+            else:
+                where_clause = "WHERE (first_name LIKE ? OR last_name LIKE ? OR patient_id LIKE ? OR phone LIKE ?)"
+            params.extend([f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%'])
+        
+        query = f'SELECT * FROM patients {where_clause} ORDER BY created_at DESC'
+        patients = db.execute(query, params).fetchall()
         db.close()
         return jsonify([dict(p) for p in patients])
     except Exception as e:
@@ -75,7 +80,7 @@ def api_get(id):
         '''SELECT p.*, ip.name as scheme_name 
            FROM patients p 
            LEFT JOIN insurance_providers ip ON p.scheme_id = ip.id
-           WHERE p.id = ?''', (id,)).fetchone()
+           WHERE p.id = ? AND p.is_active = 1''', (id,)).fetchone()
     if not patient:
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
@@ -182,16 +187,14 @@ def api_update(id):
 def api_delete(id):
     current_user = get_jwt()
     db = get_db()
-    patient = db.execute('SELECT * FROM patients WHERE id = ?', (id,)).fetchone()
+    patient = db.execute('SELECT * FROM patients WHERE id = ? AND is_active = 1', (id,)).fetchone()
     if not patient:
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
-    try:
-        db.execute('DELETE FROM patients WHERE id = ?', (id,))
-        db.commit()
-    except IntegrityError:
-        db.close()
-        return jsonify({'error': 'Cannot delete patient with existing consultations, lab tests, billing records, or other related data. Deactivate the patient instead.'}), 409
+    
+    # Soft delete - mark as inactive
+    db.execute('UPDATE patients SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (id,))
+    db.commit()
     log_audit(current_user['id'], current_user['username'], 'delete', 'patient', id,
               f'Deleted patient {patient["first_name"]} {patient["last_name"]}', request.remote_addr)
     db.close()
@@ -357,8 +360,8 @@ def _api_import():
         try:
             cursor = db.execute(
                 '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
-                   emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number, is_active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
                 (patient_id, first_name, last_name, dob or None, gender,
                  get_val('phone') or None, get_val('email'), get_val('address'),
                  get_val('emergency_contact_name'), get_val('emergency_contact_phone'),

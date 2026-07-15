@@ -21,7 +21,7 @@ def api_dashboard():
     today = date.today().isoformat()
     week_ago = (date.today() - timedelta(days=7)).isoformat()
 
-    total_patients = db.execute('SELECT COUNT(*) as c FROM patients').fetchone()['c']
+    total_patients = db.execute('SELECT COUNT(*) as c FROM patients WHERE is_active = 1').fetchone()['c']
     today_appointments = db.execute(
         'SELECT COUNT(*) as c FROM appointments WHERE appointment_date = ?', (today,)).fetchone()['c']
     pending_appointments = db.execute(
