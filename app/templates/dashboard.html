@@ -476,17 +476,21 @@ async function updateAptStatus(id, status) {
 setInterval(async function() {
     try {
         const res = await fetchWithAuth('/reports/api/queue');
+        if (!res.ok) throw new Error('Queue API failed: ' + res.status);
         const data = await res.json();
         document.getElementById('queue-waiting-badge').textContent = data.waiting_count || 0;
         document.getElementById('queue-inprog-badge').textContent = data.in_progress_count || 0;
         document.getElementById('queue-done-badge').textContent = data.completed_today || 0;
-    } catch(e) {}
+    } catch(e) {
+        console.warn('Queue auto-refresh failed:', e);
+    }
 }, 30000);
 
 // Refresh dashboard stats every 60 seconds
 async function refreshDashboardStats() {
     try {
         const res = await fetchWithAuth('/reports/api/dashboard');
+        if (!res.ok) throw new Error('Dashboard API failed: ' + res.status);
         const dash = await res.json();
         document.getElementById('stat-patients').textContent = (dash.total_patients || 0).toLocaleString();
         document.getElementById('stat-appointments').textContent = dash.today_appointments || 0;
@@ -495,10 +499,12 @@ async function refreshDashboardStats() {
         
         // Reminders
         const remRes = await fetchWithAuth('/reminders/api');
-        const rem = await remRes.json();
-        document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
-        document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
-        document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
+        if (remRes.ok) {
+            const rem = await remRes.json();
+            document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
+            document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
+            document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
+        }
         
         document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
     } catch(e) {

@@ -11,14 +11,8 @@ function safeLocalStorage(key, value) {
         }
     } catch (e) {
         console.warn('localStorage error:', e);
-        // Try to clear non-essential items
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_FILE_TOO_BIG') {
-            try {
-                localStorage.clear();
-            } catch (e2) {
-                console.error('Failed to clear localStorage:', e2);
-            }
-        }
+        // Don't clear localStorage on quota exceeded - just log and continue
+        // This prevents unintentional logout when storage is full
         return null;
     }
 }
