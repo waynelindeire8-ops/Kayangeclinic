@@ -231,9 +231,19 @@ def sync_table(table_name):
             return 0
 
         columns = list(rows[0].keys())
+        
+        # Exclude 'id' column - let Supabase auto-generate it
+        if 'id' in columns:
+            columns = [c for c in columns if c != 'id']
+        
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        
+        # Use primary key as conflict target
+        pk_cols = _get_primary_key(table_name)
+        if not pk_cols:
+            pk_cols = ['id'] if 'id' in columns else [columns[0]]
+        
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
         pk_cols_str = ', '.join(pk_cols)
 
