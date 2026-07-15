@@ -477,7 +477,12 @@ def sync_table_fast(table_name):
 
 
 def restore_table(table_name):
-    """Restore a single table from Supabase to SQLite (non-destructive: preserves local data)."""
+    """Restore a single table from Supabase to SQLite using UPSERT.
+    
+    Uses INSERT ... ON CONFLICT DO UPDATE so that status changes and other
+    updates from other Vercel containers propagate to the local SQLite.
+    Falls back to INSERT OR IGNORE for tables without a usable conflict target.
+    """
     try:
         pg = _get_pg_conn()
         cur = pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -490,12 +495,32 @@ def restore_table(table_name):
             return 0
 
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=30)
+        sqlite_db.execute("PRAGMA journal_mode=WAL")
 
         columns = list(rows[0].keys())
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['?'] * len(columns))
-        # INSERT OR IGNORE preserves local data that hasn't been synced yet
-        insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
+
+        # Determine conflict target: unique constraints first, then PRIMARY KEY
+        pk_col = _get_primary_key(table_name)
+        unique_cols = _get_unique_constraints(table_name)
+        non_id_unique = [c for c in unique_cols if c != 'id']
+
+        conflict_cols = non_id_unique if non_id_unique else ([pk_col] if pk_col else ['id'])
+        conflict_str = ', '.join(conflict_cols)
+
+        # Build UPSERT: update all non-key columns from Supabase
+        update_parts = []
+        for col in columns:
+            if col not in conflict_cols:
+                update_parts.append(f"{col} = excluded.{col}")
+        update_clause = ', '.join(update_parts)
+
+        if update_clause:
+            insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
+        else:
+            # All columns are in conflict key — nothing to update
+            insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
 
         count = 0
         for row in rows:
@@ -510,8 +535,7 @@ def restore_table(table_name):
         sqlite_db.close()
         cur.close()
         pg.close()
-        is_empty_before = count == len(rows)
-        logger.info(f"Restored {count} rows to {table_name} (inserted missing rows from Supabase)")
+        logger.info(f"Restored {count} rows to {table_name} (upserted from Supabase)")
         return count
 
     except Exception as e:

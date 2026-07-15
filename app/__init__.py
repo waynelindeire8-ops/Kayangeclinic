@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, request
 from flask_jwt_extended import JWTManager
 from config import Config
-import os, logging, queue, threading
+import os, logging, queue, threading, time
 
 jwt = JWTManager()
 logger = logging.getLogger(__name__)
@@ -134,27 +134,39 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
-    # Vercel: lightweight pull on first read after cold start.
+    # Vercel: periodic pull from Supabase so warm containers stay fresh.
     #
-    # Instead of pulling from Supabase on EVERY request (5 round-trips = slow),
-    # we only do a full restore on the first GET request after a cold start.
-    # Subsequent requests read from the warm local SQLite — fast.
+    # On Vercel, each warm container has its own ephemeral SQLite at /tmp.
+    # Writes on Container A sync to Supabase, but Container B's SQLite is stale
+    # until it re-pulls. Full restore on cold start, then only high-velocity
+    # tables (appointments, patients, billing) every 90s to keep it lightweight.
     if os.environ.get('VERCEL'):
-        _vercel_pulled = {'done': False}
+        _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
+        _VERCEL_PULL_TABLES = ('appointments', 'patients', 'billing', 'prescriptions', 'lab_tests')
 
         @app.before_request
         def vercel_cold_start_pull():
-            if _vercel_pulled['done']:
+            now = time.time()
+            elapsed = now - _vercel_state['last_pull']
+            # First GET: full restore (cold start). Subsequent: light pull every 90s.
+            if _vercel_state['initial_pull_done'] and elapsed < 90:
                 return
-            if request.method == 'GET':
+            if request.method == 'GET' or not _vercel_state['initial_pull_done']:
                 try:
-                    from app.backup import restore_all, HAS_PG
+                    from app.backup import restore_all, restore_table, HAS_PG
                     if HAS_PG:
-                        restore_all()
-                        logger.info("Vercel: pulled data from Supabase (cold start)")
+                        if not _vercel_state['initial_pull_done']:
+                            restore_all()
+                            logger.info("Vercel: full restore from Supabase (cold start)")
+                        else:
+                            for t in _VERCEL_PULL_TABLES:
+                                restore_table(t)
+                            logger.info(f"Vercel: periodic re-pull from Supabase ({int(elapsed)}s since last)")
+                        _vercel_state['last_pull'] = now
+                        _vercel_state['initial_pull_done'] = True
                 except Exception as e:
-                    logger.error(f"Vercel cold start pull failed: {e}")
-                _vercel_pulled['done'] = True
+                    logger.error(f"Vercel pull failed: {e}")
+                    _vercel_state['initial_pull_done'] = True
 
     # Vercel: sync only the affected table to Supabase after writes.
     #
