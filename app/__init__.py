@@ -134,55 +134,53 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
-    # Vercel: pull fresh data from Supabase before serving reads.
+    # Vercel: lightweight pull on first read after cold start.
     #
-    # The write-side sync above only solves half the problem. Vercel can run
-    # several containers concurrently under real traffic, and each one only
-    # gets its local SQLite refreshed from Supabase on ITS OWN cold start.
-    # A patient created via container A now reaches Supabase reliably (fix
-    # above), but container B, C, D -- already warm, potentially serving
-    # requests for hours -- have no way to find out about it on their own.
-    # So the same "shows up, then disappears" symptom can still happen: it
-    # just depends on which container Vercel routes the next GET to. This
-    # hook makes every container re-pull from Supabase (non-destructively --
-    # restore_table only inserts rows missing locally, never touches
-    # existing ones) right before it serves a read, so it can't be stale by
-    # more than one request.
+    # Instead of pulling from Supabase on EVERY request (5 round-trips = slow),
+    # we only do a full restore on the first GET request after a cold start.
+    # Subsequent requests read from the warm local SQLite — fast.
     if os.environ.get('VERCEL'):
+        _vercel_pulled = {'done': False}
+
         @app.before_request
-        def vercel_fast_pull():
+        def vercel_cold_start_pull():
+            if _vercel_pulled['done']:
+                return
             if request.method == 'GET':
                 try:
-                    from app.backup import restore_table, HAS_PG
+                    from app.backup import restore_all, HAS_PG
                     if HAS_PG:
-                        for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
-                            restore_table(table)
+                        restore_all()
+                        logger.info("Vercel: pulled data from Supabase (cold start)")
                 except Exception as e:
-                    logger.error(f"Vercel inline pull failed: {e}")
+                    logger.error(f"Vercel cold start pull failed: {e}")
+                _vercel_pulled['done'] = True
 
-    # Vercel: sync to Supabase after write requests.
+    # Vercel: sync only the affected table to Supabase after writes.
     #
-    # IMPORTANT: this must be SYNCHRONOUS (run inline, before the response is
-    # returned). A background thread + queue was tried here previously, but
-    # on serverless the function container can freeze or be torn down the
-    # instant the HTTP response is sent -- there is no guarantee the worker
-    # thread ever gets scheduled to actually do the network write. Combined
-    # with a teardown_appcontext hook that stopped the worker after the
-    # very first request in a container's lifetime, writes were silently
-    # never reaching Supabase. That's why a record could show up in one
-    # request (the container's local SQLite that created it) and vanish in
-    # the next (a different container, restored from Supabase, which never
-    # received the write). Doing the sync inline trades a little latency
-    # per write for correctness -- for patient data, that trade is worth it.
+    # Previously synced ALL 5 tables on every write — now we only sync the
+    # tables that map to the request path, cutting write latency ~5x.
     if os.environ.get('VERCEL'):
+        _TABLE_ROUTE_MAP = {
+            '/patients': 'patients',
+            '/appointments': 'appointments',
+            '/consultations': 'consultations',
+            '/billing': 'billing',
+            '/prescriptions': 'prescriptions',
+            '/lab': 'lab_tests',
+        }
+
         @app.after_request
         def vercel_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
                 try:
                     from app.backup import sync_table_fast, HAS_PG
                     if HAS_PG:
-                        for table in ('appointments', 'patients', 'consultations', 'billing', 'prescriptions'):
-                            sync_table_fast(table)
+                        path = request.path.rstrip('/')
+                        for prefix, table in _TABLE_ROUTE_MAP.items():
+                            if path.startswith(prefix):
+                                sync_table_fast(table)
+                                break
                 except Exception as e:
                     logger.error(f"Vercel inline sync failed: {e}")
             return response

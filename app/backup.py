@@ -299,31 +299,27 @@ def sync_table(table_name):
             pg.close()
             return 0
 
-        columns = list(rows[0].keys())
+        all_columns = list(rows[0].keys())
         
-        # Exclude 'id' column - let Supabase auto-generate it
-        if 'id' in columns:
-            columns = [c for c in columns if c != 'id']
+        # Use unique constraints as conflict target
+        unique_cols = _get_unique_constraints(table_name)
+        
+        # If there are unique constraints besides 'id', exclude 'id' from insert
+        non_id_unique = [c for c in unique_cols if c != 'id']
+        if non_id_unique:
+            columns = [c for c in all_columns if c != 'id']
+        else:
+            # No unique constraint besides id - keep id for conflict target
+            columns = list(all_columns)
         
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
         
-        # Use unique constraints as conflict target (better for tables like patients with unique patient_id)
-        unique_cols = _get_unique_constraints(table_name)
-        if unique_cols:
-            # Filter to only columns we're inserting
-            conflict_cols = [c for c in unique_cols if c in columns]
-            if not conflict_cols:
-                # Fallback to primary key
-                pk_cols = _get_primary_key(table_name)
-                if not pk_cols:
-                    pk_cols = ['id'] if 'id' in columns else [columns[0]]
-                conflict_cols = pk_cols
+        if non_id_unique:
+            conflict_cols = [c for c in non_id_unique if c in columns]
         else:
-            pk_cols = _get_primary_key(table_name)
-            if not pk_cols:
-                pk_cols = ['id'] if 'id' in columns else [columns[0]]
-            conflict_cols = pk_cols
+            # Use 'id' as conflict target
+            conflict_cols = ['id']
         
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in conflict_cols])
         conflict_cols_str = ', '.join(conflict_cols)
@@ -404,7 +400,7 @@ def sync_all():
 
 def sync_table_fast(table_name):
     """Fast sync a single table to Supabase (for Vercel after writes).
-    Uses UPSERT to handle both inserts and updates."""
+    Uses batch UPSERT to handle both inserts and updates."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -419,22 +415,20 @@ def sync_table_fast(table_name):
             pg.close()
             return 0
 
-        columns = list(rows[0].keys())
-        # Exclude 'id' column - let Supabase auto-generate it
-        if 'id' in columns:
-            columns = [c for c in columns if c != 'id']
+        all_columns = list(rows[0].keys())
+        
+        # Use unique constraints as conflict target
+        unique_cols = _get_unique_constraints(table_name)
+        non_id_unique = [c for c in unique_cols if c != 'id']
+        if non_id_unique:
+            columns = [c for c in all_columns if c != 'id']
+            pk_cols = non_id_unique
+        else:
+            columns = list(all_columns)
+            pk_cols = ['id']
         
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        
-        # Use unique constraints as conflict target (better for tables like patients with unique patient_id)
-        unique_cols = _get_unique_constraints(table_name)
-        if not unique_cols:
-            pk_cols = _get_primary_key(table_name)
-            if not pk_cols:
-                pk_cols = ['id'] if 'id' in columns else [columns[0]]
-        else:
-            pk_cols = unique_cols
         
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in pk_cols])
         pk_cols_str = ', '.join(pk_cols)
@@ -445,18 +439,32 @@ def sync_table_fast(table_name):
             upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({pk_cols_str}) DO UPDATE SET {update_cols}"
 
         count = 0
+        batch_size = 100
+        batch = []
         for row in rows:
             values = [_adapt_value(row[col]) for col in columns]
-            try:
-                cur.execute(upsert_sql, values)
-                count += 1
-            except Exception as e:
-                logger.warning(f"Error upserting row in {table_name}: {e}")
-                pg.rollback()
-                pg = _get_pg_conn()
-                cur = pg.cursor()
+            batch.append(values)
+            if len(batch) >= batch_size:
+                try:
+                    cur.executemany(upsert_sql, batch)
+                    count += len(batch)
+                    pg.commit()
+                except Exception as e:
+                    logger.warning(f"Batch error in {table_name}: {e}")
+                    pg.rollback()
+                    pg = _get_pg_conn()
+                    cur = pg.cursor()
+                batch = []
 
-        pg.commit()
+        if batch:
+            try:
+                cur.executemany(upsert_sql, batch)
+                count += len(batch)
+                pg.commit()
+            except Exception as e:
+                logger.warning(f"Final batch error in {table_name}: {e}")
+                pg.rollback()
+
         sqlite_db.close()
         cur.close()
         pg.close()
