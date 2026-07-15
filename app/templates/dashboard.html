@@ -555,15 +555,16 @@ let walkinDoctors = [];
 let walkinModalInstance = null;
 
 async function showWalkinModal() {
-    // Show the modal immediately with a loading state
     const pSel = document.getElementById('wi-patient_id');
     const dSel = document.getElementById('wi-doctor_id');
     const addBtn = document.getElementById('wi-add-btn');
 
     // Destroy previous Select2 if exists
-    if ($(pSel).hasClass('select2-hidden-accessible')) {
-        $(pSel).select2('destroy');
-    }
+    try {
+        if (window.$ && $(pSel).hasClass('select2-hidden-accessible')) {
+            $(pSel).select2('destroy');
+        }
+    } catch(e) { /* ignore destroy errors */ }
 
     pSel.innerHTML = '<option value="">Loading patients...</option>';
     dSel.innerHTML = '<option value="">Loading...</option>';
@@ -574,60 +575,79 @@ async function showWalkinModal() {
     }
     walkinModalInstance.show();
 
+    // Step 1: Fetch data from APIs
+    let patients = [];
+    let doctors = [];
     try {
         const [pRes, dRes] = await Promise.all([
             fetchWithAuth('/patients/api?search='),
             fetchWithAuth('/staff/api/doctors')
         ]);
 
-        if (!pRes.ok || !dRes.ok) throw new Error('API error');
+        if (!pRes.ok) {
+            const err = await pRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Patients API returned ' + pRes.status);
+        }
+        if (!dRes.ok) {
+            const err = await dRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Doctors API returned ' + dRes.status);
+        }
 
-        walkinPatients = await pRes.json();
-        walkinDoctors = await dRes.json();
-
-        // Populate patients
-        pSel.innerHTML = '';
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '';
-        pSel.appendChild(placeholder);
-        walkinPatients.forEach(p => {
-            const o = document.createElement('option');
-            o.value = p.id;
-            o.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name} (${p.phone || 'no phone'})`;
-            pSel.appendChild(o);
-        });
-
-        // Populate doctors
-        dSel.innerHTML = '<option value="">-- Not assigned --</option>';
-        walkinDoctors.forEach(d => {
-            const o = document.createElement('option');
-            o.value = d.id;
-            o.textContent = `Dr. ${d.first_name} ${d.last_name} (${d.role.replace(/_/g,' ')})`;
-            dSel.appendChild(o);
-        });
-
-        // Init Select2 fresh each time
-        $(pSel).select2({
-            placeholder: 'Search patient by name, ID or phone...',
-            allowClear: true,
-            width: '100%',
-            dropdownParent: $('#walkinModal')
-        });
-
-        addBtn.disabled = false;
-
+        patients = await pRes.json();
+        doctors = await dRes.json();
     } catch(e) {
         console.error('Failed to load walk-in data:', e);
-        pSel.innerHTML = '<option value="">Failed to load patients</option>';
+        pSel.innerHTML = '<option value="">' + (e.message || 'Failed to load patients') + '</option>';
         dSel.innerHTML = '<option value="">-- Not assigned --</option>';
         addBtn.disabled = false;
+        return;
     }
+
+    // Step 2: Populate dropdowns (works even without Select2)
+    pSel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = patients.length ? 'Select a patient...' : 'No patients found';
+    pSel.appendChild(placeholder);
+    walkinPatients = patients;
+    patients.forEach(function(p) {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = (p.patient_id || '') + ' - ' + (p.first_name || '') + ' ' + (p.last_name || '') + ' (' + (p.phone || 'no phone') + ')';
+        pSel.appendChild(o);
+    });
+
+    dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+    walkinDoctors = doctors;
+    doctors.forEach(function(d) {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = 'Dr. ' + d.first_name + ' ' + d.last_name + ' (' + (d.role || '').replace(/_/g,' ') + ')';
+        dSel.appendChild(o);
+    });
+
+    // Step 3: Init Select2 (non-fatal if it fails)
+    try {
+        if (window.$ && $.fn && $.fn.select2) {
+            $(pSel).select2({
+                placeholder: 'Search patient by name, ID or phone...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#walkinModal')
+            });
+        }
+    } catch(e) {
+        console.warn('Select2 init failed, using plain select:', e);
+    }
+
+    addBtn.disabled = false;
 }
 
 async function submitWalkin() {
-    // Read value using Select2's API to handle the widget correctly
-    const patientId = $('#wi-patient_id').val();
+    const pSel = document.getElementById('wi-patient_id');
+    const patientId = (window.$ && $.fn && $.fn.select2 && $(pSel).hasClass('select2-hidden-accessible'))
+        ? $(pSel).val()
+        : pSel.value;
     if (!patientId) {
         alert('Please select a patient first');
         return;
