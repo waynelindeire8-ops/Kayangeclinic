@@ -6,6 +6,31 @@ from app.auth import login_required, log_audit
 consultations_bp = Blueprint('consultations', __name__, url_prefix='/consultations')
 
 
+def _ensure_consultation(db, data, current_user):
+    """Ensure a consultation exists. If data contains _consultation payload,
+    create one and return the new ID. Otherwise return the id from the URL."""
+    cid = data.get('_consultation_id')
+    if cid:
+        exists = db.execute('SELECT id FROM consultations WHERE id = ?', (cid,)).fetchone()
+        if exists:
+            return cid
+    consultation = data.get('_consultation')
+    if consultation:
+        cursor = db.execute(
+            '''INSERT INTO consultations (patient_id, doctor_id, appointment_id, consultation_type, diagnosis, notes)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (consultation['patient_id'], consultation.get('doctor_id', current_user['id']),
+             consultation.get('appointment_id'), consultation.get('consultation_type', 'general'),
+             consultation.get('diagnosis'), consultation.get('notes'))
+        )
+        new_id = cursor.lastrowid
+        if consultation.get('appointment_id'):
+            db.execute('UPDATE appointments SET status = ? WHERE id = ?',
+                       ('completed', consultation['appointment_id']))
+        return new_id
+    return None
+
+
 @consultations_bp.route('/', strict_slashes=False)
 @login_required
 def list_page():
@@ -211,14 +236,16 @@ def api_exam_create(id):
         if not data or not data.get('system_name'):
             return jsonify({'error': 'system_name is required'}), 400
         db = get_db()
+        current_user = get_jwt()
+        cid = _ensure_consultation(db, data, current_user) or id
         cursor = db.execute(
             '''INSERT INTO medical_examinations (consultation_id, system_name, findings, notes)
                VALUES (?, ?, ?, ?)''',
-            (id, data['system_name'], data.get('findings'), data.get('notes'))
+            (cid, data['system_name'], data.get('findings'), data.get('notes'))
         )
         db.commit()
         db.close()
-        return jsonify({'id': cursor.lastrowid}), 201
+        return jsonify({'id': cursor.lastrowid, 'consultation_id': cid}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -262,17 +289,35 @@ def api_diagnosis_list(id):
 @consultations_bp.route('/api/<int:id>/diagnoses', methods=['POST'])
 @login_required
 def api_diagnosis_create(id):
-    data = request.json
-    db = get_db()
-    cursor = db.execute(
-        '''INSERT INTO diagnoses (consultation_id, diagnosis_name, diagnosis_type, icd_code, notes)
-           VALUES (?, ?, ?, ?, ?)''',
-        (id, data['diagnosis_name'], data.get('diagnosis_type', 'primary'),
-         data.get('icd_code'), data.get('notes'))
-    )
-    db.commit()
-    db.close()
-    return jsonify({'id': cursor.lastrowid}), 201
+    try:
+        data = request.json
+        if not data or not data.get('diagnosis_name'):
+            return jsonify({'error': 'diagnosis_name is required'}), 400
+        if id == 0:
+            if not data.get('patient_id'):
+                return jsonify({'error': 'patient_id required for auto-save'}), 400
+            current_user = get_jwt()
+            db = get_db()
+            cursor = db.execute(
+                '''INSERT INTO consultations (patient_id, doctor_id, consultation_type)
+                   VALUES (?, ?, ?)''',
+                (data['patient_id'], current_user['id'], data.get('consultation_type', 'general'))
+            )
+            id = cursor.lastrowid
+            db.commit()
+        else:
+            db = get_db()
+        cursor = db.execute(
+            '''INSERT INTO diagnoses (consultation_id, diagnosis_name, diagnosis_type, icd_code, notes)
+               VALUES (?, ?, ?, ?, ?)''',
+            (id, data['diagnosis_name'], data.get('diagnosis_type', 'primary'),
+             data.get('icd_code'), data.get('notes'))
+        )
+        db.commit()
+        db.close()
+        return jsonify({'id': cursor.lastrowid, 'consultation_id': id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @consultations_bp.route('/api/<int:id>/diagnoses/<int:did>', methods=['PUT'])
@@ -320,26 +365,32 @@ def api_rx_list(id):
 @consultations_bp.route('/api/<int:id>/prescriptions', methods=['POST'])
 @login_required
 def api_rx_create(id):
-    current_user = get_jwt()
-    data = request.json
-    db = get_db()
-    drug_name = data.get('drug_name')
-    if data.get('inventory_id'):
-        inv = db.execute('SELECT drug_name FROM pharmacy_inventory WHERE id=?',
-                         (data['inventory_id'],)).fetchone()
-        if inv:
-            drug_name = inv['drug_name']
-    cursor = db.execute(
-        '''INSERT INTO prescriptions (consultation_id, patient_id, inventory_id, drug_name, dosage,
-           frequency, duration, route, instructions, quantity, status, prescribed_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)''',
-        (id, data['patient_id'], data.get('inventory_id'), drug_name,
-         data.get('dosage'), data.get('frequency'), data.get('duration'),
-         data.get('route'), data.get('instructions'), data.get('quantity'), current_user['id'])
-    )
-    db.commit()
-    db.close()
-    return jsonify({'id': cursor.lastrowid}), 201
+    try:
+        current_user = get_jwt()
+        data = request.json
+        if not data or not data.get('drug_name'):
+            return jsonify({'error': 'drug_name is required'}), 400
+        db = get_db()
+        cid = _ensure_consultation(db, data, current_user) or id
+        drug_name = data.get('drug_name')
+        if data.get('inventory_id'):
+            inv = db.execute('SELECT drug_name FROM pharmacy_inventory WHERE id=?',
+                             (data['inventory_id'],)).fetchone()
+            if inv:
+                drug_name = inv['drug_name']
+        cursor = db.execute(
+            '''INSERT INTO prescriptions (consultation_id, patient_id, inventory_id, drug_name, dosage,
+               frequency, duration, route, instructions, quantity, status, prescribed_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)''',
+            (cid, data['patient_id'], data.get('inventory_id'), drug_name,
+             data.get('dosage'), data.get('frequency'), data.get('duration'),
+             data.get('route'), data.get('instructions'), data.get('quantity'), current_user['id'])
+        )
+        db.commit()
+        db.close()
+        return jsonify({'id': cursor.lastrowid, 'consultation_id': cid}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @consultations_bp.route('/api/<int:id>/prescriptions/<int:rid>', methods=['PUT'])

@@ -639,38 +639,19 @@ function addExamRow(data) {
     new bootstrap.Modal(document.getElementById('examModal')).show();
 }
 
-async function ensureConsultationSaved() {
-    if (CSLT_ID) return CSLT_ID;
-    const patientId = document.getElementById('patient_id').value;
-    if (!patientId) {
-        alert('Please select a patient first');
-        return null;
-    }
-    const payload = {
-        patient_id: parseInt(patientId),
+function getConsultationPayload() {
+    return {
+        patient_id: parseInt(document.getElementById('patient_id').value),
         appointment_id: document.getElementById('appointment_id').value || null,
         consultation_type: document.getElementById('consultation_type').value,
         diagnosis: document.getElementById('diagnosis').value,
         notes: document.getElementById('notes').value
     };
-    const res = await fetchWithAuth('/consultations/api', {
-        method: 'POST', body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to save consultation');
-        return null;
-    }
-    const result = await res.json();
-    CSLT_ID = result.id;
-    window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
-    document.getElementById('form-title').textContent = 'Edit Consultation';
-    return CSLT_ID;
 }
 
 async function submitExam() {
-    const savedId = await ensureConsultationSaved();
-    if (!savedId) return;
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { alert('Please select a patient first'); return; }
     const systemName = document.getElementById('exam_system').value;
     if (!systemName) { alert('Select a body system'); return; }
     const payload = {
@@ -678,18 +659,30 @@ async function submitExam() {
         findings: document.getElementById('exam_findings').value,
         notes: document.getElementById('exam_notes').value
     };
+    if (CSLT_ID) {
+        payload._consultation_id = CSLT_ID;
+    } else {
+        payload._consultation = getConsultationPayload();
+    }
     const eid = document.getElementById('exam_edit_id').value;
     let res;
     if (eid) {
+        payload._consultation_id = CSLT_ID;
         res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/examinations/' + eid, {
             method: 'PUT', body: JSON.stringify(payload)
         });
     } else {
-        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/examinations', {
+        res = await fetchWithAuth('/consultations/api/' + (CSLT_ID || 0) + '/examinations', {
             method: 'POST', body: JSON.stringify(payload)
         });
     }
     if (res.ok) {
+        const result = await res.json();
+        if (result.consultation_id && !CSLT_ID) {
+            CSLT_ID = result.consultation_id;
+            window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
+            document.getElementById('form-title').textContent = 'Edit Consultation';
+        }
         bootstrap.Modal.getInstance(document.getElementById('examModal')).hide();
         location.reload();
     } else {
@@ -747,8 +740,8 @@ function addDiagRow(data) {
 }
 
 async function submitDiag() {
-    const savedId = await ensureConsultationSaved();
-    if (!savedId) return;
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { alert('Please select a patient first'); return; }
     const name = document.getElementById('diag_name').value;
     if (!name) { alert('Enter diagnosis name'); return; }
     const payload = {
@@ -757,22 +750,35 @@ async function submitDiag() {
         icd_code: document.getElementById('diag_icd').value,
         notes: document.getElementById('diag_notes').value
     };
+    if (CSLT_ID) {
+        payload._consultation_id = CSLT_ID;
+    } else {
+        payload._consultation = getConsultationPayload();
+    }
     const did = document.getElementById('diag_edit_id').value;
     let res;
     if (did) {
+        payload._consultation_id = CSLT_ID;
         res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/diagnoses/' + did, {
             method: 'PUT', body: JSON.stringify(payload)
         });
     } else {
-        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/diagnoses', {
+        res = await fetchWithAuth('/consultations/api/' + (CSLT_ID || 0) + '/diagnoses', {
             method: 'POST', body: JSON.stringify(payload)
         });
     }
     if (res.ok) {
+        const result = await res.json();
+        if (result.consultation_id && !CSLT_ID) {
+            CSLT_ID = result.consultation_id;
+            window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
+            document.getElementById('form-title').textContent = 'Edit Consultation';
+        }
         bootstrap.Modal.getInstance(document.getElementById('diagModal')).hide();
         location.reload();
     } else {
-        alert('Error saving diagnosis');
+        const err = await res.json().catch(() => ({}));
+        alert('Error saving diagnosis: ' + (err.error || res.statusText));
     }
 }
 
@@ -838,13 +844,12 @@ function addRxRow(data) {
 }
 
 async function submitRx() {
-    const savedId = await ensureConsultationSaved();
-    if (!savedId) return;
+    const patientId = parseInt(document.getElementById('patient_id').value);
+    if (!patientId) { alert('Please select a patient first'); return; }
     const drugName = document.getElementById('rx_drug_name').value;
     if (!drugName) { alert('Enter a drug name'); return; }
 
     // Check insurance authorization for drips/IV fluids
-    const patientId = parseInt(document.getElementById('patient_id').value);
     const authCheck = await checkAuthRequired(patientId, drugName);
     if (authCheck) {
         if (!confirm('⚠ Prior Authorization Required\n\n' + authCheck.provider + ' requires authorization for "' + authCheck.item + '".\n\nContinue with adding this prescription anyway?')) {
@@ -864,22 +869,35 @@ async function submitRx() {
         status: document.getElementById('rx_status').value,
         instructions: document.getElementById('rx_instructions').value
     };
+    if (CSLT_ID) {
+        payload._consultation_id = CSLT_ID;
+    } else {
+        payload._consultation = getConsultationPayload();
+    }
     const rid = document.getElementById('rx_edit_id').value;
     let res;
     if (rid) {
+        payload._consultation_id = CSLT_ID;
         res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/prescriptions/' + rid, {
             method: 'PUT', body: JSON.stringify(payload)
         });
     } else {
-        res = await fetchWithAuth('/consultations/api/' + CSLT_ID + '/prescriptions', {
+        res = await fetchWithAuth('/consultations/api/' + (CSLT_ID || 0) + '/prescriptions', {
             method: 'POST', body: JSON.stringify(payload)
         });
     }
     if (res.ok) {
+        const result = await res.json();
+        if (result.consultation_id && !CSLT_ID) {
+            CSLT_ID = result.consultation_id;
+            window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
+            document.getElementById('form-title').textContent = 'Edit Consultation';
+        }
         bootstrap.Modal.getInstance(document.getElementById('rxModal')).hide();
         location.reload();
     } else {
-        alert('Error saving prescription');
+        const err = await res.json().catch(() => ({}));
+        alert('Error saving prescription: ' + (err.error || res.statusText));
     }
 }
 
