@@ -34,7 +34,15 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + d.p_first + ' ' + d.p_last + '</a>' },
             { data: null, render: d => 'Dr. ' + (d.d_first || '') + ' ' + (d.d_last || '') },
             { data: 'consultation_type', render: d => '<span class="badge bg-success">' + (d || 'General') + '</span>' },
-            { data: 'diagnosis', render: d => d || '-' },
+            { data: 'diagnosis', render: function(d, t, row) {
+                if (row.diagnoses && row.diagnoses.length) {
+                    return row.diagnoses.map(function(diag) {
+                        var cls = diag.diagnosis_type === 'primary' ? 'danger' : diag.diagnosis_type === 'secondary' ? 'warning' : 'info';
+                        return '<span class="badge bg-' + cls + ' me-1">' + (diag.diagnosis_type || '') + '</span>' + diag.diagnosis_name;
+                    }).join('<br>');
+                }
+                return d || '-';
+            } },
             { data: null, render: d => '<a href="/consultations/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a><a href="/patients/' + d.patient_id + '" class="btn-action view" title="View Patient"><i class="bi bi-eye"></i></a>' }
         ],
         order: [[0, 'desc']],

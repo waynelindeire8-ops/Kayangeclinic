@@ -66,8 +66,18 @@ def api_list():
         params.append(patient_id)
     query += ' ORDER BY c.created_at DESC'
     consultations = db.execute(query, params).fetchall()
+    result = []
+    for c in consultations:
+        row = dict(c)
+        diags = db.execute(
+            'SELECT diagnosis_name, diagnosis_type FROM diagnoses WHERE consultation_id = ?',
+            (c['id'],)).fetchall()
+        row['diagnoses'] = [dict(d) for d in diags]
+        if not row['diagnosis'] and diags:
+            row['diagnosis'] = ', '.join(d['diagnosis_name'] for d in diags)
+        result.append(row)
     db.close()
-    return jsonify([dict(c) for c in consultations])
+    return jsonify(result)
 
 
 @consultations_bp.route('/api', methods=['POST'])
