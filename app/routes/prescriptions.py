@@ -105,13 +105,18 @@ def api_orders_create():
                              (item['inventory_id'],)).fetchone()
             if inv:
                 drug_name = inv['drug_name']
+        quantity = item.get('quantity')
+        if quantity is not None and quantity != '':
+            quantity = int(quantity)
+        else:
+            quantity = None
         db.execute(
             '''INSERT INTO prescriptions (order_id, patient_id, inventory_id, drug_name, dosage,
                frequency, duration, route, instructions, quantity, status, prescribed_by, prescribed_date)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
-            (order_id, data['patient_id'], item.get('inventory_id'), drug_name,
+            (order_id, data['patient_id'], item.get('inventory_id') or None, drug_name,
              item.get('dosage'), item.get('frequency'), item.get('duration'),
-             item.get('route'), item.get('instructions'), item.get('quantity'), current_user['id'])
+             item.get('route'), item.get('instructions'), quantity, current_user['id'])
         )
 
     db.commit()
