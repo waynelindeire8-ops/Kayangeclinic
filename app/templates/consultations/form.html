@@ -636,6 +636,7 @@ function addExamRow(data) {
 }
 
 async function submitExam() {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     const systemName = document.getElementById('exam_system').value;
     if (!systemName) { alert('Select a body system'); return; }
     const payload = {
@@ -658,7 +659,8 @@ async function submitExam() {
         bootstrap.Modal.getInstance(document.getElementById('examModal')).hide();
         location.reload();
     } else {
-        alert('Error saving examination');
+        const err = await res.json().catch(() => ({}));
+        alert('Error saving examination: ' + (err.error || res.statusText));
     }
 }
 
@@ -712,6 +714,7 @@ function addDiagRow(data) {
 }
 
 async function submitDiag() {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     const name = document.getElementById('diag_name').value;
     if (!name) { alert('Enter diagnosis name'); return; }
     const payload = {
@@ -802,6 +805,7 @@ function addRxRow(data) {
 }
 
 async function submitRx() {
+    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     const drugName = document.getElementById('rx_drug_name').value;
     if (!drugName) { alert('Enter a drug name'); return; }
 
