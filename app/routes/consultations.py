@@ -206,16 +206,21 @@ def api_exam_list(id):
 @consultations_bp.route('/api/<int:id>/examinations', methods=['POST'])
 @login_required
 def api_exam_create(id):
-    data = request.json
-    db = get_db()
-    cursor = db.execute(
-        '''INSERT INTO medical_examinations (consultation_id, system_name, findings, notes)
-           VALUES (?, ?, ?, ?)''',
-        (id, data['system_name'], data.get('findings'), data.get('notes'))
-    )
-    db.commit()
-    db.close()
-    return jsonify({'id': cursor.lastrowid}), 201
+    try:
+        data = request.json
+        if not data or not data.get('system_name'):
+            return jsonify({'error': 'system_name is required'}), 400
+        db = get_db()
+        cursor = db.execute(
+            '''INSERT INTO medical_examinations (consultation_id, system_name, findings, notes)
+               VALUES (?, ?, ?, ?)''',
+            (id, data['system_name'], data.get('findings'), data.get('notes'))
+        )
+        db.commit()
+        db.close()
+        return jsonify({'id': cursor.lastrowid}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @consultations_bp.route('/api/<int:id>/examinations/<int:eid>', methods=['PUT'])
