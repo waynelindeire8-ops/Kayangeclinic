@@ -677,7 +677,7 @@ async function submitExam() {
     }
     if (res.ok) {
         const result = await res.json();
-        if (result.consultation_id && !CSLT_ID) {
+        if (result.consultation_id && String(result.consultation_id) !== String(CSLT_ID)) {
             CSLT_ID = result.consultation_id;
             window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
             document.getElementById('form-title').textContent = 'Edit Consultation';
@@ -767,7 +767,7 @@ async function submitDiag() {
     }
     if (res.ok) {
         const result = await res.json();
-        if (result.consultation_id && !CSLT_ID) {
+        if (result.consultation_id && String(result.consultation_id) !== String(CSLT_ID)) {
             CSLT_ID = result.consultation_id;
             window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
             document.getElementById('form-title').textContent = 'Edit Consultation';
@@ -885,7 +885,7 @@ async function submitRx() {
     }
     if (res.ok) {
         const result = await res.json();
-        if (result.consultation_id && !CSLT_ID) {
+        if (result.consultation_id && String(result.consultation_id) !== String(CSLT_ID)) {
             CSLT_ID = result.consultation_id;
             window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
             document.getElementById('form-title').textContent = 'Edit Consultation';
