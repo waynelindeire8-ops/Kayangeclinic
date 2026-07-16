@@ -134,16 +134,19 @@ def create_app():
     if os.environ.get('VERCEL'):
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
         _VERCEL_PULL_TABLES = (
-            'appointments', 'patients', 'billing', 'prescriptions',
-            'lab_tests', 'lab_invoices', 'lab_invoice_items',
+            'appointments', 'patients', 'billing', 'billing_items',
+            'prescriptions', 'prescription_orders', 'prescription_refills',
+            'lab_tests', 'lab_test_results', 'lab_invoices', 'lab_invoice_items',
             'suppliers', 'departments', 'vaccination_records', 'vaccines',
             'radiology_orders', 'radiology_results',
-            'pharmacy_inventory', 'pharmacy_dispensing',
-            'insurance_claims', 'claim_items', 'insurance_providers',
+            'pharmacy_inventory', 'pharmacy_dispensing', 'drug_scheme_prices',
+            'insurance_claims', 'claim_items', 'claim_status_history', 'insurance_providers', 'patient_insurance',
             'consultations', 'vital_signs', 'medical_examinations', 'diagnoses',
-            'telemedicine_sessions', 'short_stay_admissions', 'short_stay_beds',
+            'telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments',
+            'short_stay_admissions', 'short_stay_beds', 'short_stay_drip_stations',
             'users', 'messages', 'notifications',
-            'medical_certificates', 'procedures',
+            'medical_certificates', 'procedures', 'referrals',
+            'patient_allergies', 'patient_medical_history', 'patient_medications',
         )
 
         @app.before_request
@@ -174,25 +177,25 @@ def create_app():
     # Longer prefixes first to avoid /lab/invoices matching /lab.
     if os.environ.get('VERCEL'):
         _TABLE_ROUTE_MAP = {
-            '/lab/invoices': 'lab_invoices',
-            '/lab': 'lab_tests',
-            '/patients': 'patients',
-            '/appointments': 'appointments',
-            '/consultations': 'consultations',
-            '/billing': 'billing',
-            '/prescriptions': 'prescriptions',
-            '/pharmacy': 'pharmacy_inventory',
-            '/radiology': 'radiology_orders',
-            '/suppliers': 'suppliers',
-            '/departments': 'departments',
-            '/yellow-book': 'vaccination_records',
-            '/insurance': 'insurance_claims',
-            '/telemedicine': 'telemedicine_sessions',
-            '/short-stay': 'short_stay_admissions',
-            '/users': 'users',
-            '/staff': 'users',
-            '/messages': 'messages',
-            '/notifications': 'notifications',
+            '/lab/invoices': ['lab_invoices', 'lab_invoice_items'],
+            '/lab': ['lab_tests', 'lab_test_results'],
+            '/patients': ['patients', 'patient_allergies', 'patient_medical_history', 'patient_medications'],
+            '/appointments': ['appointments'],
+            '/consultations': ['consultations', 'vital_signs', 'medical_examinations', 'diagnoses'],
+            '/billing': ['billing', 'billing_items'],
+            '/prescriptions': ['prescription_orders', 'prescriptions', 'prescription_refills'],
+            '/pharmacy': ['pharmacy_inventory', 'pharmacy_dispensing'],
+            '/radiology': ['radiology_orders', 'radiology_results'],
+            '/suppliers': ['suppliers'],
+            '/departments': ['departments'],
+            '/yellow-book': ['vaccination_records', 'vaccines'],
+            '/insurance': ['insurance_claims', 'claim_items', 'claim_status_history'],
+            '/telemedicine': ['telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments'],
+            '/short-stay': ['short_stay_admissions', 'short_stay_beds', 'short_stay_drip_stations'],
+            '/users': ['users'],
+            '/staff': ['users'],
+            '/messages': ['messages', 'notifications'],
+            '/notifications': ['notifications'],
         }
         _TABLE_ROUTE_KEYS = sorted(_TABLE_ROUTE_MAP.keys(), key=len, reverse=True)
 
@@ -205,7 +208,8 @@ def create_app():
                         path = request.path.rstrip('/')
                         for prefix in _TABLE_ROUTE_KEYS:
                             if path.startswith(prefix):
-                                sync_table_fast(_TABLE_ROUTE_MAP[prefix])
+                                for tbl in _TABLE_ROUTE_MAP[prefix]:
+                                    sync_table_fast(tbl)
                                 break
                 except Exception as e:
                     logger.error(f"Vercel inline sync failed: {e}")
