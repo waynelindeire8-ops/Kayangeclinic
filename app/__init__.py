@@ -129,11 +129,22 @@ def create_app():
     #
     # On Vercel, each warm container has its own ephemeral SQLite at /tmp.
     # Writes on Container A sync to Supabase, but Container B's SQLite is stale
-    # until it re-pulls. Full restore on cold start, then only high-velocity
-    # tables (appointments, patients, billing) every 90s to keep it lightweight.
+    # until it re-pulls. Full restore on cold start, then periodic re-pull of
+    # all active tables every 90s.
     if os.environ.get('VERCEL'):
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
-        _VERCEL_PULL_TABLES = ('appointments', 'patients', 'billing', 'prescriptions', 'lab_tests')
+        _VERCEL_PULL_TABLES = (
+            'appointments', 'patients', 'billing', 'prescriptions',
+            'lab_tests', 'lab_invoices', 'lab_invoice_items',
+            'suppliers', 'departments', 'vaccination_records', 'vaccines',
+            'radiology_orders', 'radiology_results',
+            'pharmacy_inventory', 'pharmacy_dispensing',
+            'insurance_claims', 'claim_items', 'insurance_providers',
+            'consultations', 'vital_signs', 'medical_examinations', 'diagnoses',
+            'telemedicine_sessions', 'short_stay_admissions', 'short_stay_beds',
+            'users', 'messages', 'notifications',
+            'medical_certificates', 'procedures',
+        )
 
         @app.before_request
         def vercel_cold_start_pull():
@@ -159,19 +170,31 @@ def create_app():
                     logger.error(f"Vercel pull failed: {e}")
                     _vercel_state['initial_pull_done'] = True
 
-    # Vercel: sync only the affected table to Supabase after writes.
-    #
-    # Previously synced ALL 5 tables on every write — now we only sync the
-    # tables that map to the request path, cutting write latency ~5x.
+    # Vercel: sync the affected table(s) to Supabase after writes.
+    # Longer prefixes first to avoid /lab/invoices matching /lab.
     if os.environ.get('VERCEL'):
         _TABLE_ROUTE_MAP = {
+            '/lab/invoices': 'lab_invoices',
+            '/lab': 'lab_tests',
             '/patients': 'patients',
             '/appointments': 'appointments',
             '/consultations': 'consultations',
             '/billing': 'billing',
             '/prescriptions': 'prescriptions',
-            '/lab': 'lab_tests',
+            '/pharmacy': 'pharmacy_inventory',
+            '/radiology': 'radiology_orders',
+            '/suppliers': 'suppliers',
+            '/departments': 'departments',
+            '/yellow-book': 'vaccination_records',
+            '/insurance': 'insurance_claims',
+            '/telemedicine': 'telemedicine_sessions',
+            '/short-stay': 'short_stay_admissions',
+            '/users': 'users',
+            '/staff': 'users',
+            '/messages': 'messages',
+            '/notifications': 'notifications',
         }
+        _TABLE_ROUTE_KEYS = sorted(_TABLE_ROUTE_MAP.keys(), key=len, reverse=True)
 
         @app.after_request
         def vercel_fast_sync(response):
@@ -180,9 +203,9 @@ def create_app():
                     from app.backup import sync_table_fast, HAS_PG
                     if HAS_PG:
                         path = request.path.rstrip('/')
-                        for prefix, table in _TABLE_ROUTE_MAP.items():
+                        for prefix in _TABLE_ROUTE_KEYS:
                             if path.startswith(prefix):
-                                sync_table_fast(table)
+                                sync_table_fast(_TABLE_ROUTE_MAP[prefix])
                                 break
                 except Exception as e:
                     logger.error(f"Vercel inline sync failed: {e}")
