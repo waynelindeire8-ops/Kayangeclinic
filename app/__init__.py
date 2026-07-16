@@ -202,17 +202,23 @@ def create_app():
         @app.after_request
         def vercel_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
-                try:
-                    from app.backup import sync_table_fast, HAS_PG
-                    if HAS_PG:
-                        path = request.path.rstrip('/')
-                        for prefix in _TABLE_ROUTE_KEYS:
-                            if path.startswith(prefix):
-                                for tbl in _TABLE_ROUTE_MAP[prefix]:
+                path = request.path.rstrip('/')
+                tables_to_sync = []
+                for prefix in _TABLE_ROUTE_KEYS:
+                    if path.startswith(prefix):
+                        tables_to_sync = _TABLE_ROUTE_MAP[prefix]
+                        break
+                if tables_to_sync:
+                    import threading
+                    def _bg_sync():
+                        try:
+                            from app.backup import sync_table_fast, HAS_PG
+                            if HAS_PG:
+                                for tbl in tables_to_sync:
                                     sync_table_fast(tbl)
-                                break
-                except Exception as e:
-                    logger.error(f"Vercel inline sync failed: {e}")
+                        except Exception as e:
+                            logger.error(f"Vercel background sync failed: {e}")
+                    threading.Thread(target=_bg_sync, daemon=True).start()
             return response
 
     @app.route('/help')
