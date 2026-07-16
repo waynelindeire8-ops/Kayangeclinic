@@ -303,29 +303,18 @@ def api_diagnosis_create(id):
         data = request.json
         if not data or not data.get('diagnosis_name'):
             return jsonify({'error': 'diagnosis_name is required'}), 400
-        if id == 0:
-            if not data.get('patient_id'):
-                return jsonify({'error': 'patient_id required for auto-save'}), 400
-            current_user = get_jwt()
-            db = get_db()
-            cursor = db.execute(
-                '''INSERT INTO consultations (patient_id, doctor_id, consultation_type)
-                   VALUES (?, ?, ?)''',
-                (data['patient_id'], current_user['id'], data.get('consultation_type', 'general'))
-            )
-            id = cursor.lastrowid
-            db.commit()
-        else:
-            db = get_db()
+        db = get_db()
+        current_user = get_jwt()
+        cid = _ensure_consultation(db, data, current_user) or id
         cursor = db.execute(
             '''INSERT INTO diagnoses (consultation_id, diagnosis_name, diagnosis_type, icd_code, notes)
                VALUES (?, ?, ?, ?, ?)''',
-            (id, data['diagnosis_name'], data.get('diagnosis_type', 'primary'),
+            (cid, data['diagnosis_name'], data.get('diagnosis_type', 'primary'),
              data.get('icd_code'), data.get('notes'))
         )
         db.commit()
         db.close()
-        return jsonify({'id': cursor.lastrowid, 'consultation_id': id}), 201
+        return jsonify({'id': cursor.lastrowid, 'consultation_id': cid}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

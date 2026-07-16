@@ -657,12 +657,11 @@ async function submitExam() {
     const payload = {
         system_name: systemName,
         findings: document.getElementById('exam_findings').value,
-        notes: document.getElementById('exam_notes').value
+        notes: document.getElementById('exam_notes').value,
+        _consultation: getConsultationPayload()
     };
     if (CSLT_ID) {
         payload._consultation_id = CSLT_ID;
-    } else {
-        payload._consultation = getConsultationPayload();
     }
     const eid = document.getElementById('exam_edit_id').value;
     let res;
@@ -748,12 +747,11 @@ async function submitDiag() {
         diagnosis_name: name,
         diagnosis_type: document.getElementById('diag_type').value,
         icd_code: document.getElementById('diag_icd').value,
-        notes: document.getElementById('diag_notes').value
+        notes: document.getElementById('diag_notes').value,
+        _consultation: getConsultationPayload()
     };
     if (CSLT_ID) {
         payload._consultation_id = CSLT_ID;
-    } else {
-        payload._consultation = getConsultationPayload();
     }
     const did = document.getElementById('diag_edit_id').value;
     let res;
@@ -867,12 +865,11 @@ async function submitRx() {
         route: document.getElementById('rx_route').value,
         quantity: document.getElementById('rx_quantity').value || null,
         status: document.getElementById('rx_status').value,
-        instructions: document.getElementById('rx_instructions').value
+        instructions: document.getElementById('rx_instructions').value,
+        _consultation: getConsultationPayload()
     };
     if (CSLT_ID) {
         payload._consultation_id = CSLT_ID;
-    } else {
-        payload._consultation = getConsultationPayload();
     }
     const rid = document.getElementById('rx_edit_id').value;
     let res;
