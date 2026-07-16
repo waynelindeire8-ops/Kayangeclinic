@@ -85,10 +85,15 @@ def _get_pg_conn():
         )
 
 
-def _get_unique_constraints(table_name):
+def _get_unique_constraints(table_name, pg_conn=None):
     """Get unique constraint columns for a table from PostgreSQL."""
     try:
-        pg = _get_pg_conn()
+        own_conn = False
+        if pg_conn:
+            pg = pg_conn
+        else:
+            pg = _get_pg_conn()
+            own_conn = True
         cur = pg.cursor()
         cur.execute('''
             SELECT kcu.column_name
@@ -103,16 +108,22 @@ def _get_unique_constraints(table_name):
         ''', (table_name,))
         cols = [row[0] for row in cur.fetchall()]
         cur.close()
-        pg.close()
+        if own_conn:
+            pg.close()
         return cols
     except Exception:
         return []
 
 
-def _get_primary_key(table_name):
+def _get_primary_key(table_name, pg_conn=None):
     """Get primary key columns for a table from PostgreSQL."""
     try:
-        pg = _get_pg_conn()
+        own_conn = False
+        if pg_conn:
+            pg = pg_conn
+        else:
+            pg = _get_pg_conn()
+            own_conn = True
         cur = pg.cursor()
         cur.execute('''
             SELECT kcu.column_name
@@ -127,7 +138,8 @@ def _get_primary_key(table_name):
         ''', (table_name,))
         cols = [row[0] for row in cur.fetchall()]
         cur.close()
-        pg.close()
+        if own_conn:
+            pg.close()
         return cols
     except Exception:
         return []
@@ -476,22 +488,28 @@ def sync_table_fast(table_name):
         return -1
 
 
-def restore_table(table_name, full=False):
+def restore_table(table_name, full=False, pg_conn=None):
     """Restore a single table from Supabase to SQLite.
     
     When full=False (default), only inserts rows that don't exist locally,
     preventing local data from being overwritten by stale Supabase data.
     When full=True, does a full UPSERT to propagate all updates from Supabase.
     """
+    own_conn = False
     try:
-        pg = _get_pg_conn()
+        if pg_conn:
+            pg = pg_conn
+        else:
+            pg = _get_pg_conn()
+            own_conn = True
         cur = pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cur.execute(f"SELECT * FROM {table_name}")
         rows = cur.fetchall()
         if not rows:
             cur.close()
-            pg.close()
+            if own_conn:
+                pg.close()
             return 0
 
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=30)
@@ -502,15 +520,14 @@ def restore_table(table_name, full=False):
         placeholders = ', '.join(['?'] * len(columns))
 
         # Determine conflict target: unique constraints first, then PRIMARY KEY
-        pk_col = _get_primary_key(table_name)
-        unique_cols = _get_unique_constraints(table_name)
+        pk_col = _get_primary_key(table_name, pg_conn=pg)
+        unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
         non_id_unique = [c for c in unique_cols if c != 'id']
 
         conflict_cols = non_id_unique if non_id_unique else ([pk_col] if pk_col else ['id'])
         conflict_str = ', '.join(conflict_cols)
 
         if full:
-            # UPSERT: update all non-key columns from Supabase
             update_parts = []
             for col in columns:
                 if col not in conflict_cols:
@@ -522,7 +539,6 @@ def restore_table(table_name, full=False):
             else:
                 insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
         else:
-            # Incremental: only insert rows that don't exist locally
             insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
 
         count = 0
@@ -537,7 +553,8 @@ def restore_table(table_name, full=False):
         sqlite_db.commit()
         sqlite_db.close()
         cur.close()
-        pg.close()
+        if own_conn:
+            pg.close()
         logger.info(f"Restored {count} rows to {table_name} ({'full upsert' if full else 'incremental'})")
         return count
 
@@ -549,8 +566,16 @@ def restore_table(table_name, full=False):
 def restore_all():
     """Restore all tables from Supabase to SQLite (full UPSERT)."""
     results = {}
-    for table in SUPABASE_TABLES:
-        results[table] = restore_table(table, full=True)
+    try:
+        pg = _get_pg_conn()
+        for table in SUPABASE_TABLES:
+            results[table] = restore_table(table, full=True, pg_conn=pg)
+        pg.close()
+    except Exception as e:
+        logger.error(f"restore_all connection error: {e}")
+        for table in SUPABASE_TABLES:
+            if table not in results:
+                results[table] = restore_table(table, full=True)
     return results
 
 

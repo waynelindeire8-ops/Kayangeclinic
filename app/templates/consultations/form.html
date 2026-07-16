@@ -434,7 +434,7 @@
 </div>
 
 <script>
-const CSLT_ID = {% if consultation_id %}{{ consultation_id }}{% else %}null{% endif %};
+let CSLT_ID = {% if consultation_id %}{{ consultation_id }}{% else %}null{% endif %};
 let currentAncillaryType = null;
 let examData = [];
 let diagData = [];
@@ -620,7 +620,6 @@ async function saveVitals() {
 
 // ─── Examinations ───
 function addExamRow(data) {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     if (data) {
         document.getElementById('exam_edit_id').value = data.id || '';
         document.getElementById('exam_system').value = data.system_name || '';
@@ -635,8 +634,38 @@ function addExamRow(data) {
     new bootstrap.Modal(document.getElementById('examModal')).show();
 }
 
+async function ensureConsultationSaved() {
+    if (CSLT_ID) return CSLT_ID;
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) {
+        alert('Please select a patient first');
+        return null;
+    }
+    const payload = {
+        patient_id: parseInt(patientId),
+        appointment_id: document.getElementById('appointment_id').value || null,
+        consultation_type: document.getElementById('consultation_type').value,
+        diagnosis: document.getElementById('diagnosis').value,
+        notes: document.getElementById('notes').value
+    };
+    const res = await fetchWithAuth('/consultations/api', {
+        method: 'POST', body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to save consultation');
+        return null;
+    }
+    const result = await res.json();
+    CSLT_ID = result.id;
+    window.history.replaceState({}, '', '/consultations/' + CSLT_ID + '/edit');
+    document.getElementById('form-title').textContent = 'Edit Consultation';
+    return CSLT_ID;
+}
+
 async function submitExam() {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    const savedId = await ensureConsultationSaved();
+    if (!savedId) return;
     const systemName = document.getElementById('exam_system').value;
     if (!systemName) { alert('Select a body system'); return; }
     const payload = {
@@ -696,7 +725,6 @@ function renderExamTable() {
 
 // ─── Diagnoses ───
 function addDiagRow(data) {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     if (data) {
         document.getElementById('diag_edit_id').value = data.id || '';
         document.getElementById('diag_type').value = data.diagnosis_type || 'primary';
@@ -714,7 +742,8 @@ function addDiagRow(data) {
 }
 
 async function submitDiag() {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    const savedId = await ensureConsultationSaved();
+    if (!savedId) return;
     const name = document.getElementById('diag_name').value;
     if (!name) { alert('Enter diagnosis name'); return; }
     const payload = {
@@ -777,7 +806,6 @@ function renderDiagTable() {
 
 // ─── Prescriptions ───
 function addRxRow(data) {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
     if (data) {
         document.getElementById('rx_edit_id').value = data.id || '';
         document.getElementById('rx_inventory_id').value = data.inventory_id || '';
@@ -805,7 +833,8 @@ function addRxRow(data) {
 }
 
 async function submitRx() {
-    if (!CSLT_ID) { alert('Save the consultation first'); return; }
+    const savedId = await ensureConsultationSaved();
+    if (!savedId) return;
     const drugName = document.getElementById('rx_drug_name').value;
     if (!drugName) { alert('Enter a drug name'); return; }
 

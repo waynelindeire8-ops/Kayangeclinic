@@ -19,10 +19,8 @@ def create_app():
     # Vercel: restore from Supabase on cold start (ephemeral storage)
     if os.environ.get('VERCEL'):
         try:
-            from app.backup import init_supabase_tables, restore_all, HAS_PG
+            from app.backup import restore_all, HAS_PG
             if HAS_PG:
-                logger.info("Vercel: Initializing Supabase tables...")
-                init_supabase_tables()
                 logger.info("Vercel: Restoring data from Supabase...")
                 results = restore_all()
                 total = sum(v for v in results.values() if v > 0)
@@ -49,11 +47,13 @@ def create_app():
             logger.warning(f"Failed to start initial backup sync: {e}")
 
     # Start background auto-sync (pushes SQLite to Supabase periodically)
-    try:
-        from app.backup import start_auto_sync
-        start_auto_sync(app)
-    except Exception as e:
-        logger.warning(f"Auto-sync failed to start: {e}")
+    # Start background auto-sync (pushes SQLite to Supabase periodically) — skip on Vercel
+    if not os.environ.get('VERCEL'):
+        try:
+            from app.backup import start_auto_sync
+            start_auto_sync(app)
+        except Exception as e:
+            logger.warning(f"Auto-sync failed to start: {e}")
 
     # Register blueprints
     from app.auth import auth_bp
