@@ -546,35 +546,40 @@ function populateForm(data) {
 
 // ─── Consultation Save ───
 document.getElementById('btn-save-main').addEventListener('click', async function() {
-    const patientId = document.getElementById('patient_id').value;
-    if (!patientId) { alert('Please select a patient'); return; }
+    try {
+        const patientId = document.getElementById('patient_id').value;
+        if (!patientId) { alert('Please select a patient'); return; }
 
-    const payload = {
-        patient_id: parseInt(patientId),
-        appointment_id: document.getElementById('appointment_id').value || null,
-        consultation_type: document.getElementById('consultation_type').value,
-        diagnosis: document.getElementById('diagnosis').value,
-        notes: document.getElementById('notes').value
-    };
+        const payload = {
+            patient_id: parseInt(patientId),
+            appointment_id: document.getElementById('appointment_id').value || null,
+            consultation_type: document.getElementById('consultation_type').value,
+            diagnosis: document.getElementById('diagnosis').value,
+            notes: document.getElementById('notes').value
+        };
 
-    let res;
-    if (CSLT_ID) {
-        res = await fetchWithAuth('/consultations/api/' + CSLT_ID, {
-            method: 'PUT', body: JSON.stringify(payload)
-        });
-    } else {
-        res = await fetchWithAuth('/consultations/api', {
-            method: 'POST', body: JSON.stringify(payload)
-        });
-    }
+        let res;
+        if (CSLT_ID) {
+            res = await fetchWithAuth('/consultations/api/' + CSLT_ID, {
+                method: 'PUT', body: JSON.stringify(payload)
+            });
+        } else {
+            res = await fetchWithAuth('/consultations/api', {
+                method: 'POST', body: JSON.stringify(payload)
+            });
+        }
 
-    if (res.ok) {
-        const result = CSLT_ID ? {} : await res.json();
-        if (!CSLT_ID) window.location.href = '/consultations/' + result.id + '/edit';
-        else location.reload();
-    } else {
-        const err = await res.json();
-        alert(err.error || 'Error saving consultation');
+        if (res.ok) {
+            const result = CSLT_ID ? {} : await res.json();
+            if (!CSLT_ID) window.location.href = '/consultations/' + result.id + '/edit';
+            else location.reload();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || 'Error saving consultation (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('Save consultation error:', e);
+        alert('Failed to save consultation: ' + e.message);
     }
 });
 

@@ -116,7 +116,7 @@ def _get_unique_constraints(table_name, pg_conn=None):
 
 
 def _get_primary_key(table_name, pg_conn=None):
-    """Get primary key columns for a table from PostgreSQL."""
+    """Get the first primary key column name for a table from PostgreSQL."""
     try:
         own_conn = False
         if pg_conn:
@@ -135,20 +135,23 @@ def _get_primary_key(table_name, pg_conn=None):
                 AND tc.table_schema = 'public'
                 AND tc.constraint_type = 'PRIMARY KEY'
             ORDER BY kcu.ordinal_position
+            LIMIT 1
         ''', (table_name,))
-        cols = [row[0] for row in cur.fetchall()]
+        row = cur.fetchone()
         cur.close()
         if own_conn:
             pg.close()
-        return cols
+        return row[0] if row else None
     except Exception:
-        return []
+        return None
 
 
 def _adapt_value(val):
     if val is None:
         return None
     if isinstance(val, (date, datetime)):
+        return val.isoformat()
+    if hasattr(val, 'isoformat'):
         return val.isoformat()
     if isinstance(val, bytes):
         return val.hex()
@@ -436,8 +439,13 @@ def sync_table_fast(table_name):
             columns = [c for c in all_columns if c != 'id']
             pk_cols = non_id_unique
         else:
-            columns = list(all_columns)
-            pk_cols = ['id']
+            pk_col = _get_primary_key(table_name)
+            if pk_col and pk_col in all_columns:
+                columns = list(all_columns)
+                pk_cols = [pk_col]
+            else:
+                columns = list(all_columns)
+                pk_cols = ['id']
         
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
@@ -543,7 +551,7 @@ def restore_table(table_name, full=False, pg_conn=None):
 
         count = 0
         for row in rows:
-            values = [row[col] for col in columns]
+            values = [_adapt_value(row[col]) for col in columns]
             try:
                 sqlite_db.execute(insert_sql, values)
                 count += 1

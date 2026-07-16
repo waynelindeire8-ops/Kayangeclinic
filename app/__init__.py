@@ -16,20 +16,11 @@ def create_app():
     from app.database import init_db
     init_db()
 
-    # Vercel: restore from Supabase on cold start (ephemeral storage)
-    if os.environ.get('VERCEL'):
-        try:
-            from app.backup import restore_all, HAS_PG
-            if HAS_PG:
-                logger.info("Vercel: Restoring data from Supabase...")
-                results = restore_all()
-                total = sum(v for v in results.values() if v > 0)
-                logger.info(f"Vercel: Restored {total} rows from Supabase")
-        except Exception as e:
-            logger.error(f"Vercel restore failed: {e}")
+    # Vercel: data restore handled by vercel_cold_start_pull in before_request
+    # (restoring in create_app() blocks the process for 24s+ and causes 30s timeout)
 
     # Local: initial sync to Supabase on startup (backup local data) - run in background
-    elif not os.environ.get('VERCEL'):
+    if not os.environ.get('VERCEL'):
         try:
             from app.backup import sync_all, HAS_PG
             if HAS_PG:
