@@ -13,6 +13,12 @@ def index_page():
     return render_template('reports/index.html')
 
 
+@reports_bp.route('/queue')
+@login_required
+def queue_page():
+    return render_template('queue/index.html')
+
+
 @reports_bp.route('/api/dashboard', methods=['GET'])
 @login_required
 def api_dashboard():

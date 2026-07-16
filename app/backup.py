@@ -476,12 +476,12 @@ def sync_table_fast(table_name):
         return -1
 
 
-def restore_table(table_name):
-    """Restore a single table from Supabase to SQLite using UPSERT.
+def restore_table(table_name, full=False):
+    """Restore a single table from Supabase to SQLite.
     
-    Uses INSERT ... ON CONFLICT DO UPDATE so that status changes and other
-    updates from other Vercel containers propagate to the local SQLite.
-    Falls back to INSERT OR IGNORE for tables without a usable conflict target.
+    When full=False (default), only inserts rows that don't exist locally,
+    preventing local data from being overwritten by stale Supabase data.
+    When full=True, does a full UPSERT to propagate all updates from Supabase.
     """
     try:
         pg = _get_pg_conn()
@@ -509,17 +509,20 @@ def restore_table(table_name):
         conflict_cols = non_id_unique if non_id_unique else ([pk_col] if pk_col else ['id'])
         conflict_str = ', '.join(conflict_cols)
 
-        # Build UPSERT: update all non-key columns from Supabase
-        update_parts = []
-        for col in columns:
-            if col not in conflict_cols:
-                update_parts.append(f"{col} = excluded.{col}")
-        update_clause = ', '.join(update_parts)
+        if full:
+            # UPSERT: update all non-key columns from Supabase
+            update_parts = []
+            for col in columns:
+                if col not in conflict_cols:
+                    update_parts.append(f"{col} = excluded.{col}")
+            update_clause = ', '.join(update_parts)
 
-        if update_clause:
-            insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
+            if update_clause:
+                insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
+            else:
+                insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
         else:
-            # All columns are in conflict key — nothing to update
+            # Incremental: only insert rows that don't exist locally
             insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
 
         count = 0
@@ -535,7 +538,7 @@ def restore_table(table_name):
         sqlite_db.close()
         cur.close()
         pg.close()
-        logger.info(f"Restored {count} rows to {table_name} (upserted from Supabase)")
+        logger.info(f"Restored {count} rows to {table_name} ({'full upsert' if full else 'incremental'})")
         return count
 
     except Exception as e:
@@ -544,10 +547,10 @@ def restore_table(table_name):
 
 
 def restore_all():
-    """Restore all tables from Supabase to SQLite."""
+    """Restore all tables from Supabase to SQLite (full UPSERT)."""
     results = {}
     for table in SUPABASE_TABLES:
-        results[table] = restore_table(table)
+        results[table] = restore_table(table, full=True)
     return results
 
 

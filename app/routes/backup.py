@@ -58,7 +58,7 @@ def api_restore_table(table_name):
         return jsonify({'error': 'Admin only'}), 403
     if table_name not in SUPABASE_TABLES:
         return jsonify({'error': 'Invalid table'}), 400
-    count = restore_table(table_name)
+    count = restore_table(table_name, full=True)
     return jsonify({'message': f'Restored {count} rows', 'count': count})
 
 
