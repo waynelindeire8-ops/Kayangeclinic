@@ -130,30 +130,18 @@ def create_app():
     # On Vercel, each warm container has its own ephemeral SQLite at /tmp.
     # Writes on Container A sync to Supabase, but Container B's SQLite is stale
     # until it re-pulls. Full restore on cold start, then periodic re-pull of
-    # all active tables every 90s.
+    # high-velocity tables.
     if os.environ.get('VERCEL'):
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
         _VERCEL_PULL_TABLES = (
-            'appointments', 'patients', 'billing', 'billing_items',
-            'prescriptions', 'prescription_orders', 'prescription_refills',
-            'lab_tests', 'lab_test_results', 'lab_invoices', 'lab_invoice_items',
-            'suppliers', 'departments', 'vaccination_records', 'vaccines',
-            'radiology_orders', 'radiology_results',
-            'pharmacy_inventory', 'pharmacy_dispensing', 'drug_scheme_prices',
-            'insurance_claims', 'claim_items', 'claim_status_history', 'insurance_providers', 'patient_insurance',
-            'consultations', 'vital_signs', 'medical_examinations', 'diagnoses',
-            'telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments',
-            'short_stay_admissions', 'short_stay_beds', 'short_stay_drip_stations',
-            'users', 'messages', 'notifications',
-            'medical_certificates', 'procedures', 'referrals',
-            'patient_allergies', 'patient_medical_history', 'patient_medications',
+            'appointments', 'patients', 'billing', 'prescriptions',
+            'lab_tests', 'consultations',
         )
 
         @app.before_request
         def vercel_cold_start_pull():
             now = time.time()
             elapsed = now - _vercel_state['last_pull']
-            # First GET: full restore (cold start). Subsequent: light pull every 90s.
             if _vercel_state['initial_pull_done'] and elapsed < 90:
                 return
             if request.method == 'GET' or not _vercel_state['initial_pull_done']:
@@ -166,36 +154,39 @@ def create_app():
                         else:
                             for t in _VERCEL_PULL_TABLES:
                                 restore_table(t)
-                            logger.info(f"Vercel: periodic re-pull from Supabase ({int(elapsed)}s since last)")
+                            logger.info(f"Vercel: periodic re-pull ({int(elapsed)}s)")
                         _vercel_state['last_pull'] = now
                         _vercel_state['initial_pull_done'] = True
                 except Exception as e:
                     logger.error(f"Vercel pull failed: {e}")
                     _vercel_state['initial_pull_done'] = True
 
-    # Vercel: sync the affected table(s) to Supabase after writes.
+    # Vercel: after a write, push the primary table to Supabase so other
+    # containers see the change. We sync ONE table per route (the primary
+    # table) to keep it fast enough for after_request (< 2s). Secondary
+    # tables sync via the periodic pull or their own route writes.
     # Longer prefixes first to avoid /lab/invoices matching /lab.
     if os.environ.get('VERCEL'):
         _TABLE_ROUTE_MAP = {
-            '/lab/invoices': ['lab_invoices', 'lab_invoice_items'],
-            '/lab': ['lab_tests', 'lab_test_results'],
-            '/patients': ['patients', 'patient_allergies', 'patient_medical_history', 'patient_medications'],
-            '/appointments': ['appointments'],
-            '/consultations': ['consultations', 'vital_signs', 'medical_examinations', 'diagnoses'],
-            '/billing': ['billing', 'billing_items'],
-            '/prescriptions': ['prescription_orders', 'prescriptions', 'prescription_refills'],
-            '/pharmacy': ['pharmacy_inventory', 'pharmacy_dispensing'],
-            '/radiology': ['radiology_orders', 'radiology_results'],
-            '/suppliers': ['suppliers'],
-            '/departments': ['departments'],
-            '/yellow-book': ['vaccination_records', 'vaccines'],
-            '/insurance': ['insurance_claims', 'claim_items', 'claim_status_history'],
-            '/telemedicine': ['telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments'],
-            '/short-stay': ['short_stay_admissions', 'short_stay_beds', 'short_stay_drip_stations'],
-            '/users': ['users'],
-            '/staff': ['users'],
-            '/messages': ['messages', 'notifications'],
-            '/notifications': ['notifications'],
+            '/lab/invoices': 'lab_invoices',
+            '/lab': 'lab_tests',
+            '/patients': 'patients',
+            '/appointments': 'appointments',
+            '/consultations': 'consultations',
+            '/billing': 'billing',
+            '/prescriptions': 'prescription_orders',
+            '/pharmacy': 'pharmacy_inventory',
+            '/radiology': 'radiology_orders',
+            '/suppliers': 'suppliers',
+            '/departments': 'departments',
+            '/yellow-book': 'vaccination_records',
+            '/insurance': 'insurance_claims',
+            '/telemedicine': 'telemedicine_sessions',
+            '/short-stay': 'short_stay_admissions',
+            '/users': 'users',
+            '/staff': 'users',
+            '/messages': 'messages',
+            '/notifications': 'notifications',
         }
         _TABLE_ROUTE_KEYS = sorted(_TABLE_ROUTE_MAP.keys(), key=len, reverse=True)
 
@@ -203,22 +194,18 @@ def create_app():
         def vercel_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
                 path = request.path.rstrip('/')
-                tables_to_sync = []
+                table = None
                 for prefix in _TABLE_ROUTE_KEYS:
                     if path.startswith(prefix):
-                        tables_to_sync = _TABLE_ROUTE_MAP[prefix]
+                        table = _TABLE_ROUTE_MAP[prefix]
                         break
-                if tables_to_sync:
-                    import threading
-                    def _bg_sync():
-                        try:
-                            from app.backup import sync_table_fast, HAS_PG
-                            if HAS_PG:
-                                for tbl in tables_to_sync:
-                                    sync_table_fast(tbl)
-                        except Exception as e:
-                            logger.error(f"Vercel background sync failed: {e}")
-                    threading.Thread(target=_bg_sync, daemon=True).start()
+                if table:
+                    try:
+                        from app.backup import sync_table_fast, HAS_PG
+                        if HAS_PG:
+                            sync_table_fast(table)
+                    except Exception as e:
+                        logger.error(f"Vercel sync failed for {table}: {e}")
             return response
 
     @app.route('/help')
