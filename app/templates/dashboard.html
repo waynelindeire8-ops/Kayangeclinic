@@ -106,6 +106,9 @@
     </div>
 </div>
 
+<!-- Department Flow -->
+<div class="row g-3 mb-4" id="dept-flow-cards"></div>
+
 <!-- Patient Queue -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -277,6 +280,32 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
         document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
         document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
+
+        // Department Flow
+        try {
+            const flowRes = await fetchWithAuth('/flow/api/overview');
+            const flowData = await flowRes.json();
+            const deptContainer = document.getElementById('dept-flow-cards');
+            if (flowData.departments && flowData.departments.length) {
+                const active = flowData.departments.filter(d => d.patient_count > 0);
+                if (active.length) {
+                    deptContainer.innerHTML = active.map(d =>
+                        '<div class="col-sm-6 col-lg-4 col-xl-3">' +
+                        '<a href="/flow" class="text-decoration-none">' +
+                        '<div class="stat-card">' +
+                        '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                        '<div class="stat-icon blue"><i class="bi bi-building"></i></div>' +
+                        '<span class="badge bg-primary">' + d.patient_count + '</span>' +
+                        '</div>' +
+                        '<div class="stat-value" style="font-size:0.95rem">' + d.name + '</div>' +
+                        '<div class="stat-label">' + d.patient_count + ' patient' + (d.patient_count !== 1 ? 's' : '') + ' in department</div>' +
+                        '</div></a></div>'
+                    ).join('');
+                } else {
+                    deptContainer.innerHTML = '';
+                }
+            }
+        } catch(e) { console.warn('Dept flow load failed:', e); }
 
         // Patient Queue
         document.getElementById('queue-waiting-badge').textContent = queueData.waiting_count || 0;
@@ -505,6 +534,34 @@ async function refreshDashboardStats() {
             document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
             document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
         }
+
+        // Department Flow
+        try {
+            const flowRes = await fetchWithAuth('/flow/api/overview');
+            if (flowRes.ok) {
+                const flowData = await flowRes.json();
+                const deptContainer = document.getElementById('dept-flow-cards');
+                if (flowData.departments && flowData.departments.length) {
+                    const active = flowData.departments.filter(d => d.patient_count > 0);
+                    if (active.length) {
+                        deptContainer.innerHTML = active.map(d =>
+                            '<div class="col-sm-6 col-lg-4 col-xl-3">' +
+                            '<a href="/flow" class="text-decoration-none">' +
+                            '<div class="stat-card">' +
+                            '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                            '<div class="stat-icon blue"><i class="bi bi-building"></i></div>' +
+                            '<span class="badge bg-primary">' + d.patient_count + '</span>' +
+                            '</div>' +
+                            '<div class="stat-value" style="font-size:0.95rem">' + d.name + '</div>' +
+                            '<div class="stat-label">' + d.patient_count + ' patient' + (d.patient_count !== 1 ? 's' : '') + '</div>' +
+                            '</div></a></div>'
+                        ).join('');
+                    } else {
+                        deptContainer.innerHTML = '';
+                    }
+                }
+            }
+        } catch(e) {}
         
         document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
     } catch(e) {

@@ -110,6 +110,17 @@ def api_admit():
     db.commit()
     log_audit(claims['id'], claims['username'], 'admit', 'short_stay', cur.lastrowid,
               f'Admitted to {"bed" if resource_type == "bed" else "drip station"} #{resource_id}')
+
+    # Auto-transfer: admission → Internal Medicine (ward)
+    try:
+        from app.routes.flow import transfer_patient
+        ward = db.execute("SELECT id FROM departments WHERE name='Internal Medicine'").fetchone()
+        if ward:
+            transfer_patient(db, patient_id, ward['id'], claims['id'], 'Admitted to short-stay')
+            db.commit()
+    except Exception:
+        pass
+
     db.close()
     return jsonify({'message': 'Patient admitted', 'id': cur.lastrowid}), 201
 

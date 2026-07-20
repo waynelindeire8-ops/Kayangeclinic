@@ -163,6 +163,16 @@ def api_orders_create():
 
     log_audit(current_user['id'], current_user['username'], 'create', 'radiology_order', order_id,
               f'Created radiology order {order_number}', request.remote_addr)
+
+    # Auto-transfer: radiology ordered → Radiology department
+    try:
+        from app.routes.flow import transfer_patient
+        radiology_dept = db.execute("SELECT id FROM departments WHERE name='Radiology'").fetchone()
+        if radiology_dept:
+            transfer_patient(db, data['patient_id'], radiology_dept['id'], current_user['id'], f'Radiology: {mod_name}')
+            db.commit()
+    except Exception:
+        pass
     db.close()
     return jsonify({'id': order_id, 'order_number': order_number}), 201
 

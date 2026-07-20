@@ -125,6 +125,9 @@ def create_app():
     from app.routes.reminders import reminders_bp
     app.register_blueprint(reminders_bp)
 
+    from app.routes.flow import flow_bp
+    app.register_blueprint(flow_bp)
+
     # Vercel: periodic pull from Supabase so warm containers stay fresh.
     #
     # On Vercel, each warm container has its own ephemeral SQLite at /tmp.
@@ -135,7 +138,7 @@ def create_app():
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
         _VERCEL_PULL_TABLES = (
             'appointments', 'patients', 'billing', 'prescriptions',
-            'lab_tests', 'consultations',
+            'lab_tests', 'consultations', 'patient_flow',
         )
 
         @app.before_request
@@ -186,6 +189,7 @@ def create_app():
             '/staff': 'users',
             '/messages': 'messages',
             '/notifications': 'notifications',
+            '/flow': 'patient_flow',
         }
         _TABLE_ROUTE_KEYS = sorted(_TABLE_ROUTE_MAP.keys(), key=len, reverse=True)
         _ANCILLARY_TABLE_MAP = {

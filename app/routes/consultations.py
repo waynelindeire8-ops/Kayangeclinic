@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
+from app.routes.flow import transfer_patient
 
 consultations_bp = Blueprint('consultations', __name__, url_prefix='/consultations')
 
@@ -100,6 +101,17 @@ def api_create():
     db.commit()
     log_audit(current_user['id'], current_user['username'], 'create', 'consultation', new_id,
               f'Created consultation for patient {data["patient_id"]}', request.remote_addr)
+
+    # Auto-transfer: consultation created → Doctor's department
+    try:
+        doc_id = data.get('doctor_id', current_user['id'])
+        doc = db.execute('SELECT department_id FROM users WHERE id=?', (doc_id,)).fetchone()
+        if doc and doc['department_id']:
+            transfer_patient(db, data['patient_id'], doc['department_id'], current_user['id'], 'Consultation started')
+            db.commit()
+    except Exception:
+        pass
+
     db.close()
     return jsonify({'id': new_id}), 201
 
@@ -503,6 +515,35 @@ def api_ancillaries():
             return jsonify({'error': 'Invalid ancillary type'}), 400
 
         db.commit()
+
+        # Auto-transfer: lab test ordered → Laboratory
+        if anc_type == 'lab':
+            try:
+                lab = db.execute("SELECT id FROM departments WHERE name='Laboratory'").fetchone()
+                if lab:
+                    transfer_patient(db, data['patient_id'], lab['id'], current_user['id'], f'Lab test: {data.get("test_name","")}')
+                    db.commit()
+            except Exception:
+                pass
+        # Auto-transfer: procedure → current doctor's department (stay in consultation)
+        elif anc_type == 'procedure':
+            try:
+                doc = db.execute('SELECT department_id FROM users WHERE id=?', (current_user['id'],)).fetchone()
+                if doc and doc['department_id']:
+                    transfer_patient(db, data['patient_id'], doc['department_id'], current_user['id'], f'Procedure: {data.get("procedure_type","")}')
+                    db.commit()
+            except Exception:
+                pass
+        # Auto-transfer: prescription → Pharmacy
+        elif anc_type == 'prescription':
+            try:
+                pharm = db.execute("SELECT id FROM departments WHERE name='Pharmacy'").fetchone()
+                if pharm:
+                    transfer_patient(db, data['patient_id'], pharm['id'], current_user['id'], 'Prescription issued')
+                    db.commit()
+            except Exception:
+                pass
+
         db.close()
         return jsonify({'id': cursor.lastrowid}), 201
 

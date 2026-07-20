@@ -57,10 +57,10 @@ def api_create():
 
     password = data.get('password', 'changeme123')
     cursor = db.execute(
-        '''INSERT INTO users (username, password_hash, role, first_name, last_name, email, phone)
-           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        '''INSERT INTO users (username, password_hash, role, first_name, last_name, email, phone, department_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
         (data['username'], generate_password_hash(password), data['role'],
-         data['first_name'], data['last_name'], data.get('email'), data.get('phone'))
+         data['first_name'], data['last_name'], data.get('email'), data.get('phone'), data.get('department_id'))
     )
     new_id = cursor.lastrowid
     db.commit()
@@ -96,9 +96,9 @@ def api_update(id):
 
     db.execute(
         '''UPDATE users SET first_name=?, last_name=?, email=?, phone=?, role=?, is_active=?,
-           updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+           department_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
         (data['first_name'], data['last_name'], data.get('email'), data.get('phone'),
-         data['role'], data.get('is_active', 1), id)
+         data['role'], data.get('is_active', 1), data.get('department_id'), id)
     )
     if data.get('password'):
         db.execute('UPDATE users SET password_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',

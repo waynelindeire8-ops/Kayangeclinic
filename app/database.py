@@ -908,6 +908,34 @@ def init_db():
             FOREIGN KEY(drip_station_id) REFERENCES short_stay_drip_stations(id),
             FOREIGN KEY(admitted_by) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS patient_flow (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL UNIQUE,
+            department_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'waiting' CHECK(status IN ('waiting','in_progress','completed','transferred')),
+            notes TEXT,
+            assigned_to INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+            FOREIGN KEY(department_id) REFERENCES departments(id),
+            FOREIGN KEY(assigned_to) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS patient_flow_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            from_department_id INTEGER,
+            to_department_id INTEGER NOT NULL,
+            moved_by INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(from_department_id) REFERENCES departments(id),
+            FOREIGN KEY(to_department_id) REFERENCES departments(id),
+            FOREIGN KEY(moved_by) REFERENCES users(id)
+        );
     ''')
 
     conn.commit()
@@ -935,6 +963,7 @@ def init_db():
     _seed_vaccines(conn)
     _migrate_patient_documents(conn)
     _seed_admin_user(conn)
+    _migrate_users_department(conn)
     _create_indexes(conn)
     conn.close()
 
@@ -947,6 +976,9 @@ def _create_indexes(conn):
         'CREATE INDEX IF NOT EXISTS idx_billing_created ON billing(created_at)',
         'CREATE INDEX IF NOT EXISTS idx_inventory_stock ON pharmacy_inventory(stock_quantity, reorder_level)',
         'CREATE INDEX IF NOT EXISTS idx_users_active_role ON users(is_active, role)',
+        'CREATE INDEX IF NOT EXISTS idx_patient_flow_patient ON patient_flow(patient_id)',
+        'CREATE INDEX IF NOT EXISTS idx_patient_flow_dept ON patient_flow(department_id)',
+        'CREATE INDEX IF NOT EXISTS idx_flow_log_patient ON patient_flow_log(patient_id)',
     ]
     for sql in indexes:
         try:
@@ -1548,5 +1580,44 @@ def _migrate_patient_documents(conn):
             uploaded_by INTEGER REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )    ''')
+    conn.commit()
+
+
+def _migrate_users_department(conn):
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN department_id INTEGER REFERENCES departments(id)")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migrate_patient_flow(conn):
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS patient_flow (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL UNIQUE,
+            department_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'waiting' CHECK(status IN ('waiting','in_progress','completed','transferred')),
+            notes TEXT,
+            assigned_to INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+            FOREIGN KEY(department_id) REFERENCES departments(id),
+            FOREIGN KEY(assigned_to) REFERENCES users(id)
+        )''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS patient_flow_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            from_department_id INTEGER,
+            to_department_id INTEGER NOT NULL,
+            moved_by INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(patient_id) REFERENCES patients(id),
+            FOREIGN KEY(from_department_id) REFERENCES departments(id),
+            FOREIGN KEY(to_department_id) REFERENCES departments(id),
+            FOREIGN KEY(moved_by) REFERENCES users(id)
         )''')
     conn.commit()

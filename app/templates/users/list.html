@@ -112,6 +112,12 @@
                             <option value="file_manager">File Manager</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Department</label>
+                        <select class="form-select" id="department_id">
+                            <option value="">No department</option>
+                        </select>
+                    </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Email</label>
@@ -190,7 +196,22 @@ const roleHierarchy = {
 document.addEventListener('DOMContentLoaded', function() {
     loadUsers();
     loadRoleHierarchy();
+    loadDepartments();
 });
+
+async function loadDepartments() {
+    try {
+        const res = await fetchWithAuth('/departments/api');
+        const depts = await res.json();
+        const sel = document.getElementById('department_id');
+        depts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.name;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
 
 async function loadUsers() {
     const res = await fetchWithAuth('/users/api');
@@ -270,6 +291,7 @@ async function editUser(id) {
     document.getElementById('username').value = u.username;
     document.getElementById('username').readOnly = true;
     document.getElementById('role').value = u.role;
+    document.getElementById('department_id').value = u.department_id || '';
     document.getElementById('email').value = u.email || '';
     document.getElementById('phone').value = u.phone || '';
     document.getElementById('password').value = '';
@@ -290,6 +312,7 @@ async function saveUser() {
         role: document.getElementById('role').value,
         email: document.getElementById('email').value,
         phone: document.getElementById('phone').value,
+        department_id: document.getElementById('department_id').value || null,
     };
     if (!data.first_name || !data.last_name || !data.username || !data.role) {
         alert('Fill all required fields'); return;

@@ -40,7 +40,7 @@ SUPABASE_TABLES = [
     'insurance_authorization_rules', 'medical_certificates',
     'packages', 'package_services',
     'procedures', 'referrals', 'messages', 'notifications',
-    'radiology_orders', 'radiology_results',
+    'radiology_orders', 'radiology_results', 'patient_flow', 'patient_flow_log',
     'telemedicine_sessions', 'telemedicine_messages', 'telemedicine_payments', 'telemedicine_recordings',
     'short_stay_beds', 'short_stay_drip_stations', 'short_stay_admissions',
     'drug_scheme_prices', 'lab_invoices', 'lab_invoice_items', 'suppliers',

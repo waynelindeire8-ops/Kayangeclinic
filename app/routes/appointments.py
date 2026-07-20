@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
+from app.routes.flow import transfer_patient
 
 appointments_bp = Blueprint('appointments', __name__, url_prefix='/appointments')
 
@@ -125,6 +126,30 @@ def api_update_status(id):
     db.commit()
     log_audit(current_user['id'], current_user['username'], 'update_status', 'appointment', id,
               f'Changed appointment {id} status to {data["status"]}', request.remote_addr)
+
+    # Auto-transfer based on status change
+    apt = db.execute('SELECT patient_id, doctor_id FROM appointments WHERE id=?', (id,)).fetchone()
+    if apt:
+        patient_id = apt['patient_id']
+        if data['status'] == 'confirmed':
+            # Check-in → Triage (Outpatient Services)
+            try:
+                triage = db.execute("SELECT id FROM departments WHERE name='Outpatient Services'").fetchone()
+                if triage:
+                    transfer_patient(db, patient_id, triage['id'], current_user['id'], 'Checked in - Triage')
+                    db.commit()
+            except Exception:
+                pass
+        elif data['status'] == 'in_progress' and apt['doctor_id']:
+            # Consultation started → Doctor's department
+            try:
+                doc = db.execute('SELECT department_id FROM users WHERE id=?', (apt['doctor_id'],)).fetchone()
+                if doc and doc['department_id']:
+                    transfer_patient(db, patient_id, doc['department_id'], current_user['id'], 'Consultation started')
+                    db.commit()
+            except Exception:
+                pass
+
     db.close()
     return jsonify({'message': 'Status updated'})
 
@@ -178,6 +203,15 @@ def api_quick_add():
         return jsonify({'error': f'Failed to add walk-in: {str(e)}'}), 400
     log_audit(current_user['id'], current_user['username'], 'walk_in', 'appointment', new_id,
               f'Walk-in added for patient ID {data["patient_id"]}', request.remote_addr)
+
+    # Auto-transfer: walk-in registered → Outpatient Services (reception)
+    try:
+        outpatient = db.execute("SELECT id FROM departments WHERE name='Outpatient Services'").fetchone()
+        if outpatient:
+            transfer_patient(db, data['patient_id'], outpatient['id'], current_user['id'], 'Walk-in registration')
+            db.commit()
+    except Exception:
+        pass
     db.close()
 
     # On Vercel: sync in background thread so walk-in response is not blocked
