@@ -12,6 +12,7 @@
         <div class="stat-card">
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <div class="stat-icon yellow"><i class="bi bi-clock-history"></i></div>
+                <span class="badge bg-danger" id="stat-urgent-badge" style="display:none">0 urgent</span>
             </div>
             <div class="stat-value" id="stat-pending">0</div>
             <div class="stat-label">Pending / Collected</div>
@@ -46,6 +47,87 @@
     </div>
 </div>
 
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon" style="background:#fef3c7"><i class="bi bi-calendar-week" style="color:#d97706"></i></div>
+            </div>
+            <div class="stat-value" id="stat-week-ordered">0</div>
+            <div class="stat-label">Ordered This Week</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon" style="background:#d1fae5"><i class="bi bi-check2-all" style="color:#059669"></i></div>
+            </div>
+            <div class="stat-value" id="stat-week-completed">0</div>
+            <div class="stat-label">Completed This Week</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon" style="background:#fee2e2"><i class="bi bi-exclamation-triangle" style="color:#dc2626"></i></div>
+            </div>
+            <div class="stat-value" id="stat-flagged">0</div>
+            <div class="stat-label">Flagged Results (7d)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon" style="background:#e0e7ff"><i class="bi bi-graph-up" style="color:#4f46e5"></i></div>
+            </div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Orders</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-header"><h6>Status Pipeline</h6></div>
+            <div class="card-body" id="status-pipeline">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-header"><h6>Category Breakdown (30 days)</h6></div>
+            <div class="card-body" id="category-breakdown">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header"><h6>Weekly Trend</h6></div>
+            <div class="card-body" id="weekly-trend">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header"><h6>Results Entered Today</h6></div>
+            <div class="card-body p-0" style="max-height:280px;overflow-y:auto">
+                <div id="results-today-list"></div>
+                <div id="results-empty" class="text-center text-muted py-4" style="display:none">
+                    <i class="bi bi-check2-all" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                    No results entered today
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-xl-7">
         <div class="card">
@@ -61,6 +143,8 @@
                                 <th>Order #</th>
                                 <th>Patient</th>
                                 <th>Test</th>
+                                <th>Category</th>
+                                <th>Priority</th>
                                 <th>Status</th>
                                 <th>Date</th>
                                 <th>Action</th>
@@ -78,12 +162,14 @@
     </div>
     <div class="col-xl-5">
         <div class="card">
-            <div class="card-header"><h6>Results Entered Today</h6></div>
-            <div class="card-body p-0">
-                <div id="results-today-list"></div>
-                <div id="results-empty" class="text-center text-muted py-4" style="display:none">
-                    <i class="bi bi-check2-all" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
-                    No results entered today
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Urgent / Stat Orders</h6>
+                <a href="/lab/orders?priority=urgent" class="btn btn-sm btn-outline-danger">View All</a>
+            </div>
+            <div class="card-body p-0" id="urgent-list">
+                <div id="urgent-empty" class="text-center text-muted py-4">
+                    <i class="bi bi-check-circle" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>
+                    No urgent orders
                 </div>
             </div>
         </div>
@@ -99,19 +185,38 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('stat-inprog').textContent = data.in_progress || 0;
     document.getElementById('stat-completed').textContent = data.completed_today || 0;
     document.getElementById('stat-ordered').textContent = data.ordered_today || 0;
+    document.getElementById('stat-week-ordered').textContent = data.ordered_week || 0;
+    document.getElementById('stat-week-completed').textContent = data.completed_week || 0;
+    document.getElementById('stat-flagged').textContent = data.flagged_count || 0;
+    document.getElementById('stat-total').textContent = (data.total_orders || 0).toLocaleString();
+
+    if (data.urgent_count > 0) {
+        const badge = document.getElementById('stat-urgent-badge');
+        badge.style.display = '';
+        badge.textContent = data.urgent_count + ' urgent';
+    }
+
+    renderStatusPipeline(data.status_breakdown || []);
+    renderCategoryBreakdown(data.category_breakdown || []);
+    renderWeeklyTrend(data.weekly_trend || []);
 
     const tbody = document.querySelector('#recent-table tbody');
     const recent = data.recent || [];
     if (recent.length) {
         document.getElementById('recent-empty').style.display = 'none';
+        const colors = { ordered: 'secondary', collected: 'info', in_progress: 'primary', completed: 'success' };
+        const prioColors = { urgent: 'danger', stat: 'danger', normal: '' };
+        const catLabels = { haematology: 'Haem', parasitology: 'Para', microbiology: 'Micro', chemistry: 'Chem', lipogram: 'Lipo', u_and_e: 'U&E', cardiac: 'Cardiac', serology: 'Sero', tumour_markers: 'Tumour', endocrinology: 'Endo', fertility: 'Fertility', radiology: 'Radio', general: 'General' };
         recent.forEach(o => {
-            const colors = { ordered: 'secondary', collected: 'info', in_progress: 'primary', completed: 'success' };
+            const prioBadge = o.priority && o.priority !== 'normal' ? '<span class="badge bg-' + (prioColors[o.priority] || 'secondary') + ' ms-1">' + o.priority.toUpperCase() + '</span>' : '';
             tbody.innerHTML += '<tr>' +
                 '<td><span class="fw-semibold">#' + o.id + '</span></td>' +
                 '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + (o.p_first || '') + ' ' + (o.p_last || '') + '</a></td>' +
-                '<td>' + (o.test_name || '') + '</td>' +
+                '<td>' + escHtml(o.test_name || '') + '</td>' +
+                '<td><span class="badge bg-secondary bg-opacity-10 text-secondary">' + (catLabels[o.test_category] || o.test_category || '') + '</span></td>' +
+                '<td>' + prioBadge + '</td>' +
                 '<td><span class="badge bg-' + (colors[o.status] || 'secondary') + '">' + (o.status || '').replace('_', ' ') + '</span></td>' +
-                '<td>' + (o.ordered_date || o.created_at ? new Date(o.ordered_date || o.created_at).toLocaleDateString() : '') + '</td>' +
+                '<td><small>' + (o.ordered_date || '') + '</small></td>' +
                 '<td><a href="/lab/orders/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a></td></tr>';
         });
     } else {
@@ -125,13 +230,93 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('results-empty').style.display = 'none';
         results.forEach(r => {
             const flagColors = { normal: 'success', high: 'danger', low: 'warning', critical_high: 'danger', critical_low: 'danger', pending: 'secondary' };
-            resultsList.innerHTML += '<div class="p-3 border-bottom"><div class="d-flex justify-content-between"><strong>' + escHtml(r.parameter_name) + '</strong><span class="badge bg-' + (flagColors[r.flag] || 'secondary') + '">' + (r.flag || '') + '</span></div><small class="text-muted">' + escHtml(r.test_name || '') + ' - ' + escHtml(r.p_first || '') + ' ' + escHtml(r.p_last || '') + ' | ' + (r.value || '-') + ' ' + (r.unit || '') + '</small></div>';
+            const flagIcon = { high: '↑', low: '↓', critical_high: '↑↑', critical_low: '↓↓', normal: '✓', pending: '—' };
+            resultsList.innerHTML += '<div class="p-3 border-bottom">' +
+                '<div class="d-flex justify-content-between align-items-center">' +
+                '<div><strong>' + escHtml(r.parameter_name) + '</strong> <span class="text-muted ms-1">' + (r.value || '-') + ' ' + (r.unit || '') + '</span></div>' +
+                '<span class="badge bg-' + (flagColors[r.flag] || 'secondary') + '">' + (flagIcon[r.flag] || '') + ' ' + (r.flag || '') + '</span></div>' +
+                '<small class="text-muted">' + escHtml(r.test_name || '') + ' &middot; ' + escHtml(r.p_first || '') + ' ' + escHtml(r.p_last || '') + '</small></div>';
         });
     } else {
         resultsList.style.display = 'none';
         document.getElementById('results-empty').style.display = 'block';
     }
 });
+
+function renderStatusPipeline(breakdown) {
+    const el = document.getElementById('status-pipeline');
+    const total = breakdown.reduce((s, b) => s + b.count, 0) || 1;
+    const statuses = [
+        { key: 'ordered', label: 'Ordered', color: '#6b7280' },
+        { key: 'collected', label: 'Collected', color: '#0ea5e9' },
+        { key: 'in_progress', label: 'In Progress', color: '#3b82f6' },
+        { key: 'completed', label: 'Completed', color: '#22c55e' }
+    ];
+    let html = '<div class="d-flex gap-2 mb-3">';
+    statuses.forEach(s => {
+        const item = breakdown.find(b => b.status === s.key);
+        const count = item ? item.count : 0;
+        const pct = Math.round(count / total * 100);
+        html += '<div class="flex-fill text-center">' +
+            '<div class="fw-bold fs-4" style="color:' + s.color + '">' + count + '</div>' +
+            '<div style="font-size:0.8rem;color:#64748b">' + s.label + '</div>' +
+            '<div class="progress mt-1" style="height:4px"><div class="progress-bar" style="width:' + pct + '%;background:' + s.color + '"></div></div>' +
+            '</div>';
+    });
+    html += '</div>';
+    html += '<div class="progress" style="height:10px;border-radius:5px">';
+    statuses.forEach(s => {
+        const item = breakdown.find(b => b.status === s.key);
+        const count = item ? item.count : 0;
+        const pct = Math.round(count / total * 100);
+        if (pct > 0) html += '<div class="progress-bar" style="width:' + pct + '%;background:' + s.color + '" title="' + s.label + ': ' + count + '"></div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderCategoryBreakdown(breakdown) {
+    const el = document.getElementById('category-breakdown');
+    if (!breakdown.length) { el.innerHTML = '<div class="text-center text-muted py-3">No data for the past 30 days</div>'; return; }
+    const maxCount = Math.max(...breakdown.map(b => b.count));
+    const catColors = { haematology: '#3b82f6', parasitology: '#8b5cf6', microbiology: '#ec4899', chemistry: '#f59e0b', lipogram: '#10b981', u_and_e: '#06b6d4', cardiac: '#ef4444', serology: '#6366f1', tumour_markers: '#f97316', endocrinology: '#14b8a6', fertility: '#a855f7', radiology: '#64748b', general: '#94a3b8' };
+    let html = '<div class="table-responsive"><table class="table table-sm mb-0">';
+    breakdown.forEach(c => {
+        const pct = Math.round(c.count / maxCount * 100);
+        const color = catColors[c.test_category] || '#64748b';
+        const completedPct = c.count > 0 ? Math.round(c.completed / c.count * 100) : 0;
+        html += '<tr><td style="width:140px"><span class="fw-semibold" style="font-size:0.85rem">' + (c.test_category || 'general').replace('_', ' ') + '</span></td>' +
+            '<td style="width:40px"><span class="fw-bold">' + c.count + '</span></td>' +
+            '<td><div class="progress" style="height:18px;border-radius:4px">' +
+            '<div class="progress-bar" style="width:' + pct + '%;background:' + color + ';font-size:0.7rem;line-height:18px">' + (c.completed || 0) + '/' + c.count + ' done</div></div></td>' +
+            '<td style="width:50px"><small class="text-muted">' + completedPct + '%</small></td></tr>';
+    });
+    html += '</table></div>';
+    el.innerHTML = html;
+}
+
+function renderWeeklyTrend(trend) {
+    const el = document.getElementById('weekly-trend');
+    if (!trend.length) { el.innerHTML = '<div class="text-center text-muted py-3">No data for the past 7 days</div>'; return; }
+    const maxVal = Math.max(...trend.map(t => t.ordered), 1);
+    let html = '<div class="d-flex align-items-end gap-2" style="height:140px">';
+    trend.forEach(t => {
+        const orderedH = Math.round(t.ordered / maxVal * 120);
+        const completedH = Math.round(t.completed / maxVal * 120);
+        const day = t.day ? new Date(t.day + 'T00:00:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+        html += '<div class="flex-fill text-center position-relative">' +
+            '<div class="d-flex justify-content-center gap-1 align-items-end" style="height:120px">' +
+            '<div style="width:16px;height:' + orderedH + 'px;background:#3b82f6;border-radius:3px 3px 0 0" title="Ordered: ' + t.ordered + '"></div>' +
+            '<div style="width:16px;height:' + completedH + 'px;background:#22c55e;border-radius:3px 3px 0 0" title="Completed: ' + t.completed + '"></div>' +
+            '</div>' +
+            '<div style="font-size:0.65rem;color:#64748b;margin-top:4px;white-space:nowrap">' + day + '</div>' +
+            '</div>';
+    });
+    html += '</div>';
+    html += '<div class="d-flex gap-3 mt-2 justify-content-center"><small><span class="d-inline-block rounded" style="width:10px;height:10px;background:#3b82f6"></span> Ordered</small>' +
+        '<small><span class="d-inline-block rounded" style="width:10px;height:10px;background:#22c55e"></span> Completed</small></div>';
+    el.innerHTML = html;
+}
 
 function escHtml(str) {
     if (!str) return '';

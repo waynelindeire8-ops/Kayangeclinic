@@ -3,6 +3,7 @@
 <div class="page-header">
     <h4><i class="bi bi-people"></i> Patients</h4>
     <div>
+        <button class="btn btn-outline-info me-2" onclick="syncFromSupabase()" id="sync-btn"><i class="bi bi-cloud-download me-1"></i>Sync from Supabase</button>
         <a href="/patients/import" class="btn btn-outline-success me-2"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Import</a>
         <a href="/patients/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Patient</a>
     </div>
@@ -10,6 +11,15 @@
 
 <div class="card">
     <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="showDeleted" onchange="toggleDeleted()">
+                    <label class="form-check-label" for="showDeleted"><small>Show Archived Patients</small></label>
+                </div>
+                <span class="badge bg-primary" id="patient-count">0 patients</span>
+            </div>
+        </div>
         <div class="table-responsive">
             <table class="table" id="patients-table">
                 <thead>
@@ -29,26 +39,58 @@
     </div>
 </div>
 
+<div class="modal fade" id="syncResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cloud-download me-2"></i>Supabase Sync Result</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="sync-result-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal" onclick="location.reload()">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const INSURANCE_PROVIDERS = {{ providers_json | safe }};
+let showArchived = false;
 
 document.addEventListener('DOMContentLoaded', function() {
+    initTable();
+});
+
+function initTable() {
     const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
     let colorIdx = 0;
 
-    let table = $('#patients-table').DataTable({
+    if ($.fn.DataTable.isDataTable('#patients-table')) {
+        $('#patients-table').DataTable().destroy();
+        $('#patients-table tbody').empty();
+    }
+
+    $('#patients-table').DataTable({
         ajax: function(data, callback, settings) {
-            fetchWithAuth('/patients/api?' + $.param(data)).then(r => {
+            const params = $.param(data);
+            const extra = showArchived ? '&include_inactive=true' : '';
+            fetchWithAuth('/patients/api?' + params + extra).then(r => {
                 if (r.status === 401) throw new Error('Unauthorized');
                 return r.json();
-            }).then(d => callback({ data: d })).catch(() => callback({ data: [] }));
+            }).then(d => {
+                document.getElementById('patient-count').textContent = d.length + ' patient' + (d.length !== 1 ? 's' : '');
+                callback({ data: d });
+            }).catch(() => callback({ data: [] }));
         },
         columns: [
             { data: 'patient_id', render: d => '<span class="fw-semibold" style="color:#0f172a">#' + d + '</span>' },
             { data: null, render: function(d) {
                 const initials = (d.first_name || 'P').charAt(0) + (d.last_name || '').charAt(0);
                 const color = avatarColors[colorIdx++ % avatarColors.length];
-                return '<div class="patient-cell"><div class="patient-avatar" style="background:' + color + '">' + initials + '</div><div><div class="fw-semibold" style="color:#0f172a"><a href="/patients/' + d.id + '" class="text-decoration-none" style="color:inherit">' + d.first_name + ' ' + d.last_name + '</a></div><small class="text-muted">' + (d.email || '') + '</small></div></div>';
+                const archived = d.is_active === 0;
+                const style = archived ? 'opacity:0.5;filter:grayscale(0.5)' : '';
+                return '<div class="patient-cell" style="' + style + '"><div class="patient-avatar" style="background:' + color + '">' + initials + '</div><div><div class="fw-semibold" style="color:#0f172a"><a href="/patients/' + d.id + '" class="text-decoration-none" style="color:inherit">' + d.first_name + ' ' + d.last_name + '</a>' + (archived ? ' <span class="badge bg-warning text-dark">Archived</span>' : '') + '</div><small class="text-muted">' + (d.email || '') + '</small></div></div>';
             }},
             { data: 'gender', render: d => d || '-' },
             { data: 'dob', render: d => d || '-' },
@@ -59,23 +101,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return '<span class="badge bg-secondary">Self-Pay</span>';
             }},
-            { data: null, render: d => '<div class="d-flex gap-1"><a href="/patients/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a><a href="/patients/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a><button class="btn-action delete" title="Delete" onclick="deletePatient(' + d.id + ')"><i class="bi bi-trash"></i></button></div>' }
+            { data: null, render: function(d) {
+                if (d.is_active === 0) {
+                    return '<div class="d-flex gap-1"><a href="/patients/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a><button class="btn-action" title="Restore" style="color:#16a34a;border-color:#16a34a" onclick="restorePatient(' + d.id + ')"><i class="bi bi-arrow-counterclockwise"></i></button></div>';
+                }
+                return '<div class="d-flex gap-1"><a href="/patients/' + d.id + '" class="btn-action view" title="View"><i class="bi bi-eye"></i></a><a href="/patients/' + d.id + '/edit" class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></a><button class="btn-action delete" title="Delete" onclick="deletePatient(' + d.id + ')"><i class="bi bi-trash"></i></button></div>';
+            }}
         ],
         order: [[0, 'desc']],
         pageLength: 15,
         language: { search: '', searchPlaceholder: 'Search...' }
     });
-});
+}
+
+function toggleDeleted() {
+    showArchived = document.getElementById('showDeleted').checked;
+    initTable();
+}
 
 async function deletePatient(id) {
-    if (!confirm('Delete this patient and all related records?')) return;
+    if (!confirm('Archive this patient? They can be restored later from the patient list.')) return;
     const res = await fetchWithAuth('/patients/api/' + id, { method: 'DELETE' });
     if (res.ok) {
         $('#patients-table').DataTable().ajax.reload();
     } else {
         const err = await res.json();
-        alert(err.error || 'Error deleting patient');
+        alert(err.error || 'Error archiving patient');
     }
+}
+
+async function restorePatient(id) {
+    if (!confirm('Restore this patient? They will appear in the active patient list again.')) return;
+    const res = await fetchWithAuth('/patients/api/' + id + '/restore', { method: 'POST' });
+    if (res.ok) {
+        $('#patients-table').DataTable().ajax.reload();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error restoring patient');
+    }
+}
+
+async function syncFromSupabase() {
+    const btn = document.getElementById('sync-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    try {
+        const res = await fetchWithAuth('/patients/api/sync-supabase', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('sync-result-body').innerHTML =
+                '<div class="alert alert-success">' + data.message + '</div>' +
+                '<table class="table table-sm"><tr><td>Total before</td><td><strong>' + data.before + '</strong></td></tr>' +
+                '<tr><td>Total after</td><td><strong>' + data.after + '</strong></td></tr>' +
+                '<tr><td>Active</td><td><strong>' + data.active + '</strong></td></tr></table>';
+        } else {
+            document.getElementById('sync-result-body').innerHTML = '<div class="alert alert-danger">' + (data.error || 'Sync failed') + '</div>';
+        }
+    } catch(e) {
+        document.getElementById('sync-result-body').innerHTML = '<div class="alert alert-danger">Connection error: ' + e.message + '</div>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync from Supabase';
+    new bootstrap.Modal(document.getElementById('syncResultModal')).show();
 }
 </script>
 {% endblock %}

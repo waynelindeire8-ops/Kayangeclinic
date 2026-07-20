@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.database import get_db
 from app.auth import login_required, log_audit
+from datetime import date, timedelta
 
 prescriptions_bp = Blueprint('prescriptions', __name__, url_prefix='/prescriptions')
 
@@ -38,6 +39,69 @@ def print_page(id):
     return render_template('prescriptions/print.html', order_id=id)
 
 
+# ─── API: Dashboard Stats ───
+
+@prescriptions_bp.route('/api/dashboard', methods=['GET'])
+@login_required
+def api_dashboard():
+    db = get_db()
+    today = date.today().isoformat()
+    month_ago = (date.today() - timedelta(days=30)).isoformat()
+
+    active_orders = db.execute(
+        "SELECT COUNT(*) as c FROM prescription_orders WHERE status = 'active'"
+    ).fetchone()['c']
+
+    completed_month = db.execute(
+        "SELECT COUNT(*) as c FROM prescription_orders WHERE status = 'completed' AND updated_at >= ?",
+        (month_ago,)
+    ).fetchone()['c']
+
+    cancelled_month = db.execute(
+        "SELECT COUNT(*) as c FROM prescription_orders WHERE status = 'cancelled' AND updated_at >= ?",
+        (month_ago,)
+    ).fetchone()['c']
+
+    total_orders = db.execute('SELECT COUNT(*) as c FROM prescription_orders').fetchone()['c']
+
+    total_drugs = db.execute(
+        "SELECT COUNT(*) as c FROM prescriptions WHERE status = 'active'"
+    ).fetchone()['c']
+
+    dispensed_month = db.execute(
+        "SELECT COUNT(*) as c FROM pharmacy_dispensing WHERE DATE(dispensed_date) >= ?",
+        (month_ago,)
+    ).fetchone()['c']
+
+    top_drugs = db.execute(
+        '''SELECT drug_name, COUNT(*) as count FROM prescriptions
+           WHERE prescribed_date >= ? AND drug_name IS NOT NULL
+           GROUP BY LOWER(drug_name) ORDER BY count DESC LIMIT 8''',
+        (month_ago,)
+    ).fetchall()
+
+    low_stock = db.execute(
+        'SELECT COUNT(*) as c FROM pharmacy_inventory WHERE stock_quantity <= reorder_level AND stock_quantity > 0'
+    ).fetchone()['c']
+
+    out_of_stock = db.execute(
+        'SELECT COUNT(*) as c FROM pharmacy_inventory WHERE stock_quantity <= 0'
+    ).fetchone()['c']
+
+    db.close()
+    return jsonify({
+        'active_orders': active_orders,
+        'completed_month': completed_month,
+        'cancelled_month': cancelled_month,
+        'total_orders': total_orders,
+        'total_drugs': total_drugs,
+        'dispensed_month': dispensed_month,
+        'top_drugs': [dict(d) for d in top_drugs],
+        'low_stock': low_stock,
+        'out_of_stock': out_of_stock
+    })
+
+
 # ─── API: Orders ───
 
 @prescriptions_bp.route('/api/orders', methods=['GET'])
@@ -46,11 +110,13 @@ def api_orders_list():
     db = get_db()
     status = request.args.get('status', '')
     patient_id = request.args.get('patient_id', '')
+    doctor_id = request.args.get('doctor_id', '')
+    search = request.args.get('search', '')
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
 
     query = '''SELECT o.*, p.first_name as p_first, p.last_name as p_last,
-                      p.patient_id as p_patient_id,
+                      p.patient_id as p_patient_id, p.phone as p_phone,
                       u.first_name as d_first, u.last_name as d_last
                FROM prescription_orders o
                LEFT JOIN patients p ON o.patient_id = p.id
@@ -63,6 +129,13 @@ def api_orders_list():
     if patient_id:
         query += ' AND o.patient_id = ?'
         params.append(patient_id)
+    if doctor_id:
+        query += ' AND o.doctor_id = ?'
+        params.append(doctor_id)
+    if search:
+        query += ' AND (p.first_name LIKE ? OR p.last_name LIKE ? OR p.patient_id LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)'
+        s = f'%{search}%'
+        params.extend([s, s, s, s, s])
     if date_from:
         query += ' AND o.created_at >= ?'
         params.append(date_from)
@@ -74,10 +147,18 @@ def api_orders_list():
     orders = db.execute(query, params).fetchall()
     result = []
     for o in orders:
-        item_count = db.execute(
-            'SELECT COUNT(*) as c FROM prescriptions WHERE order_id = ?', (o['id'],)).fetchone()['c']
+        items = db.execute(
+            '''SELECT drug_name, dosage, frequency, quantity, status, unit_price
+               FROM prescriptions WHERE order_id = ?''', (o['id'],)).fetchall()
+        total_cost = sum(
+            (i['unit_price'] or 0) * (i['quantity'] or 0) for i in items
+        )
         r = dict(o)
-        r['item_count'] = item_count
+        r['item_count'] = len(items)
+        r['drug_names'] = ', '.join(i['drug_name'] for i in items if i['drug_name'])
+        r['total_cost'] = total_cost
+        active_items = sum(1 for i in items if i['status'] == 'active')
+        r['active_items'] = active_items
         result.append(r)
     db.close()
     return jsonify(result)
@@ -100,11 +181,13 @@ def api_orders_create():
     items = data.get('items', [])
     for item in items:
         drug_name = item.get('drug_name')
+        unit_price = 0
         if item.get('inventory_id'):
-            inv = db.execute('SELECT drug_name FROM pharmacy_inventory WHERE id=?',
+            inv = db.execute('SELECT drug_name, unit_price FROM pharmacy_inventory WHERE id=?',
                              (item['inventory_id'],)).fetchone()
             if inv:
                 drug_name = inv['drug_name']
+                unit_price = inv['unit_price'] or 0
         quantity = item.get('quantity')
         if quantity is not None and quantity != '':
             quantity = int(quantity)
@@ -112,16 +195,19 @@ def api_orders_create():
             quantity = None
         db.execute(
             '''INSERT INTO prescriptions (order_id, patient_id, inventory_id, drug_name, dosage,
-               frequency, duration, route, instructions, quantity, status, prescribed_by, prescribed_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
+               frequency, duration, route, instructions, quantity, refill_count, status,
+               prescribed_by, prescribed_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
             (order_id, data['patient_id'], item.get('inventory_id') or None, drug_name,
              item.get('dosage'), item.get('frequency'), item.get('duration'),
-             item.get('route'), item.get('instructions'), quantity, current_user['id'])
+             item.get('route'), item.get('instructions'), quantity,
+             item.get('refill_count', 0), current_user['id'])
         )
 
     db.commit()
     log_audit(current_user['id'], current_user['username'], 'create', 'prescription_order', order_id,
-              f'Created prescription order for patient {data["patient_id"]}', request.remote_addr)
+              f'Created prescription order for patient {data["patient_id"]} ({len(items)} items)',
+              request.remote_addr)
     db.close()
     return jsonify({'id': order_id}), 201
 
@@ -133,6 +219,7 @@ def api_orders_get(id):
     order = db.execute(
         '''SELECT o.*, p.first_name as p_first, p.last_name as p_last,
                   p.dob, p.gender, p.blood_group, p.patient_id as p_patient_id,
+                  p.phone as p_phone, p.email as p_email,
                   u.first_name as d_first, u.last_name as d_last
            FROM prescription_orders o
            LEFT JOIN patients p ON o.patient_id = p.id
@@ -143,11 +230,13 @@ def api_orders_get(id):
         return jsonify({'error': 'Prescription order not found'}), 404
 
     items = db.execute(
-        '''SELECT p.*, i.drug_name as inventory_drug, i.unit_price, i.stock_quantity
-           FROM prescriptions p
-           LEFT JOIN pharmacy_inventory i ON p.inventory_id = i.id
-           WHERE p.order_id = ?
-           ORDER BY p.created_at''', (id,)).fetchall()
+        '''SELECT pr.*, i.drug_name as inventory_drug, i.unit_price as inventory_price,
+                  i.stock_quantity, i.expiry_date, i.category as drug_category,
+                  i.generic_name, i.reorder_level
+           FROM prescriptions pr
+           LEFT JOIN pharmacy_inventory i ON pr.inventory_id = i.id
+           WHERE pr.order_id = ?
+           ORDER BY pr.created_at''', (id,)).fetchall()
 
     refills = db.execute(
         '''SELECT r.*, u.first_name as r_first, u.last_name as r_last
@@ -156,10 +245,15 @@ def api_orders_get(id):
            WHERE r.order_id = ?
            ORDER BY r.refill_date DESC''', (id,)).fetchall()
 
+    total_cost = sum(
+        (i['unit_price'] or 0) * (i['quantity'] or 0) for i in items
+    )
+
     db.close()
     result = dict(order)
     result['items'] = [dict(i) for i in items]
     result['refills'] = [dict(r) for r in refills]
+    result['total_cost'] = total_cost
     return jsonify(result)
 
 
@@ -197,20 +291,23 @@ def api_orders_update(id):
             submitted_ids.add(item_id)
             db.execute(
                 '''UPDATE prescriptions SET inventory_id=?, drug_name=?, dosage=?, frequency=?,
-                   duration=?, route=?, instructions=?, quantity=?, status=?
+                   duration=?, route=?, instructions=?, quantity=?, refill_count=?, status=?
                    WHERE id=? AND order_id=?''',
                 (item.get('inventory_id'), drug_name, item.get('dosage'), item.get('frequency'),
                  item.get('duration'), item.get('route'), item.get('instructions'),
-                 item.get('quantity'), item.get('status', 'active'), item_id, id)
+                 item.get('quantity'), item.get('refill_count', 0),
+                 item.get('status', 'active'), item_id, id)
             )
         else:
             cursor = db.execute(
                 '''INSERT INTO prescriptions (order_id, patient_id, inventory_id, drug_name, dosage,
-                   frequency, duration, route, instructions, quantity, status, prescribed_by, prescribed_date)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
+                   frequency, duration, route, instructions, quantity, refill_count, status,
+                   prescribed_by, prescribed_date)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
                 (id, order['patient_id'], item.get('inventory_id'), drug_name,
                  item.get('dosage'), item.get('frequency'), item.get('duration'),
-                 item.get('route'), item.get('instructions'), item.get('quantity'), current_user['id'])
+                 item.get('route'), item.get('instructions'), item.get('quantity'),
+                 item.get('refill_count', 0), current_user['id'])
             )
             submitted_ids.add(cursor.lastrowid)
 
@@ -262,6 +359,33 @@ def api_orders_status(id):
     return jsonify({'message': 'Status updated'})
 
 
+# ─── API: Patient Prescription History ───
+
+@prescriptions_bp.route('/api/patient/<int:patient_id>/history', methods=['GET'])
+@login_required
+def api_patient_history(patient_id):
+    db = get_db()
+    orders = db.execute(
+        '''SELECT o.*, u.first_name as d_first, u.last_name as d_last
+           FROM prescription_orders o
+           LEFT JOIN users u ON o.doctor_id = u.id
+           WHERE o.patient_id = ?
+           ORDER BY o.created_at DESC LIMIT 20''',
+        (patient_id,)
+    ).fetchall()
+    result = []
+    for o in orders:
+        items = db.execute(
+            'SELECT drug_name, dosage, frequency, status FROM prescriptions WHERE order_id = ?',
+            (o['id'],)).fetchall()
+        r = dict(o)
+        r['drug_names'] = ', '.join(i['drug_name'] for i in items if i['drug_name'])
+        r['item_count'] = len(items)
+        result.append(r)
+    db.close()
+    return jsonify(result)
+
+
 # ─── API: Items ───
 
 @prescriptions_bp.route('/api/orders/<int:oid>/items', methods=['POST'])
@@ -285,11 +409,13 @@ def api_items_create(oid):
 
     cursor = db.execute(
         '''INSERT INTO prescriptions (order_id, patient_id, inventory_id, drug_name, dosage,
-           frequency, duration, route, instructions, quantity, status, prescribed_by, prescribed_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
+           frequency, duration, route, instructions, quantity, refill_count, status,
+           prescribed_by, prescribed_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, DATE('now'))''',
         (oid, order['patient_id'], data.get('inventory_id'), drug_name,
          data.get('dosage'), data.get('frequency'), data.get('duration'),
-         data.get('route'), data.get('instructions'), data.get('quantity'), current_user['id'])
+         data.get('route'), data.get('instructions'), data.get('quantity'),
+         data.get('refill_count', 0), current_user['id'])
     )
     db.commit()
     db.close()
@@ -309,10 +435,11 @@ def api_items_update(id):
             drug_name = inv['drug_name']
     db.execute(
         '''UPDATE prescriptions SET inventory_id=?, drug_name=?, dosage=?, frequency=?, duration=?,
-           route=?, instructions=?, quantity=?, status=? WHERE id=?''',
+           route=?, instructions=?, quantity=?, refill_count=?, status=? WHERE id=?''',
         (data.get('inventory_id'), drug_name, data.get('dosage'), data.get('frequency'),
          data.get('duration'), data.get('route'), data.get('instructions'),
-         data.get('quantity'), data.get('status', 'active'), id)
+         data.get('quantity'), data.get('refill_count', 0),
+         data.get('status', 'active'), id)
     )
     db.commit()
     db.close()

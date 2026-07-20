@@ -7,52 +7,100 @@
 
 <div class="row">
     <div class="col-md-8">
-        <div class="card">
+        <div class="card mb-3">
             <div class="card-body">
                 <form id="order-form">
-                    <div class="mb-3">
-                        <label class="form-label">Patient <span class="text-danger">*</span></label>
-                        <select class="form-select" id="patient_id" required>
-                            <option value="">Select patient...</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Test <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <select class="form-select" id="catalog_id" required>
-                                <option value="">Select test...</option>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Patient <span class="text-danger">*</span></label>
+                            <select class="form-select" id="patient_id" required onchange="loadPatientHistory()">
+                                <option value="">Select patient...</option>
                             </select>
-                            <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#addCatalogModal" title="Add to catalog"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Priority</label>
+                            <select class="form-select" id="priority">
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="stat">STAT</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" id="test_category">
+                                <option value="general">General</option>
+                                <option value="haematology">Haematology</option>
+                                <option value="parasitology">Parasitology</option>
+                                <option value="microbiology">Microbiology</option>
+                                <option value="chemistry">Chemistry</option>
+                                <option value="lipogram">Lipogram</option>
+                                <option value="u_and_e">U&E</option>
+                                <option value="cardiac">Cardiac</option>
+                                <option value="serology">Serology</option>
+                                <option value="tumour_markers">Tumour Markers</option>
+                                <option value="endocrinology">Endocrinology</option>
+                                <option value="fertility">Fertility & Steroids</option>
+                                <option value="radiology">Radiology</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Test Name (if not in catalog)</label>
-                        <input type="text" class="form-control" id="test_name_other" placeholder="Free-text test name">
+
+                    <hr>
+                    <h6 class="mb-3">Test Selection</h6>
+
+                    <div id="test-rows">
+                        <div class="test-row row g-2 mb-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label" style="font-size:0.8rem">Test (from catalog)</label>
+                                <select class="form-select form-select-sm catalog-select" onchange="onCatalogChange(this)">
+                                    <option value="">Select test...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="font-size:0.8rem">Or enter manually</label>
+                                <input type="text" class="form-control form-control-sm free-text" placeholder="Free-text test name">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label" style="font-size:0.8rem">Sample</label>
+                                <input type="text" class="form-control form-control-sm sample-display" readonly style="background:#f8fafc">
+                            </div>
+                            <div class="col-md-2 d-flex gap-1">
+                                <span class="price-display text-muted" style="font-size:0.8rem;line-height:30px"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeTestRow(this)" title="Remove"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select class="form-select" id="test_category">
-                            <option value="general">General</option>
-                            <option value="haematology">Haematology</option>
-                            <option value="parasitology">Parasitology</option>
-                            <option value="microbiology">Microbiology</option>
-                            <option value="chemistry">Chemistry</option>
-                            <option value="lipogram">Lipogram</option>
-                            <option value="u_and_e">U&E</option>
-                            <option value="cardiac">Cardiac</option>
-                            <option value="serology">Serology</option>
-                            <option value="tumour_markers">Tumour Markers</option>
-                            <option value="endocrinology">Endocrinology</option>
-                            <option value="fertility">Fertility & Steroids</option>
-                            <option value="radiology">Radiology</option>
-                        </select>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addTestRow()"><i class="bi bi-plus-lg me-1"></i>Add Another Test</button>
+
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Clinical Notes</label>
+                        <textarea class="form-control" id="notes" rows="2" placeholder="Optional clinical notes for the lab..."></textarea>
                     </div>
+
                     <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>Create Order</button>
                     <a href="/lab/orders" class="btn btn-outline-secondary">Cancel</a>
                 </form>
                 <div id="order-success" class="alert alert-success mt-3" style="display:none">
                     <i class="bi bi-check-circle me-1"></i> Lab order created! <a href="/lab/orders/" class="alert-link">Back to orders</a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header"><h6>Catalog Info</h6></div>
+            <div class="card-body" id="catalog-info">
+                <p class="text-muted" style="font-size:0.85rem">Select a test to see details</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>Patient Order History</h6>
+            </div>
+            <div class="card-body p-0" id="patient-history">
+                <div class="text-center text-muted py-3" style="font-size:0.85rem">Select a patient first</div>
             </div>
         </div>
     </div>
@@ -68,31 +116,50 @@
                         <label class="form-label">Test Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="qc-name" required>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select class="form-select" id="qc-category">
-                            <option value="general">General</option>
-                            <option value="haematology">Haematology</option>
-                            <option value="parasitology">Parasitology</option>
-                            <option value="microbiology">Microbiology</option>
-                            <option value="chemistry">Chemistry</option>
-                            <option value="lipogram">Lipogram</option>
-                            <option value="u_and_e">U&E</option>
-                            <option value="cardiac">Cardiac</option>
-                            <option value="serology">Serology</option>
-                            <option value="tumour_markers">Tumour Markers</option>
-                            <option value="endocrinology">Endocrinology</option>
-                            <option value="fertility">Fertility & Steroids</option>
-                            <option value="radiology">Radiology</option>
-                        </select>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" id="qc-category">
+                                <option value="general">General</option>
+                                <option value="haematology">Haematology</option>
+                                <option value="parasitology">Parasitology</option>
+                                <option value="microbiology">Microbiology</option>
+                                <option value="chemistry">Chemistry</option>
+                                <option value="lipogram">Lipogram</option>
+                                <option value="u_and_e">U&E</option>
+                                <option value="cardiac">Cardiac</option>
+                                <option value="serology">Serology</option>
+                                <option value="tumour_markers">Tumour Markers</option>
+                                <option value="endocrinology">Endocrinology</option>
+                                <option value="fertility">Fertility & Steroids</option>
+                                <option value="radiology">Radiology</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sample Type</label>
+                            <select class="form-select" id="qc-sample">
+                                <option value="blood">Blood</option>
+                                <option value="urine">Urine</option>
+                                <option value="stool">Stool</option>
+                                <option value="semen">Semen</option>
+                                <option value="specimen">Specimen</option>
+                                <option value="radiology">Radiology</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Classification</label>
-                        <select class="form-select" id="qc-classification">
-                            <option value="standard">Standard</option>
-                            <option value="rapid">Rapid</option>
-                            <option value="reusable">Reusable</option>
-                        </select>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Classification</label>
+                            <select class="form-select" id="qc-classification">
+                                <option value="standard">Standard</option>
+                                <option value="rapid">Rapid</option>
+                                <option value="reusable">Reusable</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Default Price (MWK)</label>
+                            <input type="number" class="form-control" id="qc-price" min="0" value="0">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Description</label>
@@ -109,114 +176,257 @@
 </div>
 
 <script>
+let allCatalog = [];
+let allPatients = [];
+
 document.addEventListener('DOMContentLoaded', async function() {
     const [patientsRes, catalogRes] = await Promise.all([
         fetchWithAuth('/patients/api'),
         fetchWithAuth('/lab/api/catalog')
     ]);
-    const patients = await patientsRes.json();
-    const catalog = await catalogRes.json();
+    allPatients = await patientsRes.json();
+    allCatalog = await catalogRes.json();
 
     const pSel = document.getElementById('patient_id');
-    patients.forEach(p => {
+    allPatients.forEach(p => {
         const o = document.createElement('option');
         o.value = p.id;
         o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
         pSel.appendChild(o);
     });
 
-    const cSel = document.getElementById('catalog_id');
-    const activeItems = catalog.filter(c => c.is_active);
-    activeItems.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c.id;
-        const cls = c.classification ? ' [' + c.classification + ']' : '';
-        o.textContent = c.test_name + ' (' + c.category + ')' + cls;
-        o.dataset.name = c.test_name;
-        o.dataset.category = c.category;
-        o.dataset.classification = c.classification || '';
-        cSel.appendChild(o);
-    });
-
-    cSel.addEventListener('change', function() {
-        if (this.value) {
-            const opt = this.options[this.selectedIndex];
-            document.getElementById('test_name_other').value = opt.dataset.name || '';
-            document.getElementById('test_category').value = opt.dataset.category || 'general';
-        }
-    });
-
-    document.getElementById('quick-catalog-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const name = document.getElementById('qc-name').value.trim();
-        if (!name) return;
-        const btn = document.getElementById('btn-qc-save');
-        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding...';
-        const res = await fetchWithAuth('/lab/api/catalog', {
-            method: 'POST',
-            body: JSON.stringify({
-                test_name: name,
-                category: document.getElementById('qc-category').value,
-                classification: document.getElementById('qc-classification').value,
-                description: document.getElementById('qc-desc').value.trim(),
-                parameters: '[]'
-            })
-        });
-        btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Add';
-        if (res.ok) {
-            const data = await res.json();
-            bootstrap.Modal.getInstance(document.getElementById('addCatalogModal')).hide();
-            document.getElementById('qc-name').value = '';
-            document.getElementById('qc-desc').value = '';
-            catalog.push({ id: data.id, test_name: name, category: document.getElementById('qc-category').value, classification: document.getElementById('qc-classification').value, is_active: 1 });
-            const o = document.createElement('option');
-            o.value = data.id;
-            o.textContent = name + ' (' + document.getElementById('qc-category').value + ')';
-            o.dataset.name = name;
-            o.dataset.category = document.getElementById('qc-category').value;
-            document.getElementById('catalog_id').appendChild(o);
-            document.getElementById('catalog_id').value = data.id;
-            document.getElementById('catalog_id').dispatchEvent(new Event('change'));
-            showToast('Test added to catalog', 'success');
-        } else {
-            const err = await res.json();
-            showToast(err.error || 'Failed to add', 'danger');
-        }
-    });
-
-    document.getElementById('order-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const patientId = document.getElementById('patient_id').value;
-        const catalogId = document.getElementById('catalog_id').value;
-        let testName = document.getElementById('test_name_other').value.trim();
-        if (!catalogId && !testName) { alert('Select a test or enter a test name'); return; }
-        if (!testName && catalogId) {
-            const opt = document.getElementById('catalog_id').options[document.getElementById('catalog_id').selectedIndex];
-            testName = opt.dataset.name;
-        }
-
-        const btn = document.getElementById('btn-submit');
-        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
-
-        const res = await fetchWithAuth('/lab/api/orders', {
-            method: 'POST',
-            body: JSON.stringify({
-                patient_id: parseInt(patientId),
-                catalog_id: catalogId || null,
-                test_name: testName,
-                test_category: document.getElementById('test_category').value
-            })
-        });
-
-        btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create Order';
-        if (res.ok) {
-            document.getElementById('order-form').style.display = 'none';
-            document.getElementById('order-success').style.display = 'block';
-        } else {
-            const err = await res.json();
-            alert(err.error || 'Failed to create order');
-        }
-    });
+    populateCatalogSelects();
 });
+
+function populateCatalogSelects() {
+    document.querySelectorAll('.catalog-select').forEach(sel => {
+        const current = sel.value;
+        sel.innerHTML = '<option value="">Select test...</option>';
+        const activeItems = allCatalog.filter(c => c.is_active);
+        let lastCat = '';
+        activeItems.forEach(c => {
+            if (c.category !== lastCat) {
+                const og = document.createElement('optgroup');
+                og.label = c.category.replace('_', ' ');
+                sel.appendChild(og);
+                lastCat = c.category;
+            }
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            const sampleIcon = { blood: '🩸', urine: '💧', stool: '🧪', semen: '🔬', specimen: '📋', radiology: '📡' };
+            const priceText = c.default_price > 0 ? ' (MWK ' + Number(c.default_price).toLocaleString() + ')' : '';
+            opt.textContent = c.test_name + priceText;
+            opt.dataset.name = c.test_name;
+            opt.dataset.category = c.category;
+            opt.dataset.sample = c.sample_type || '';
+            opt.dataset.price = c.default_price || 0;
+            opt.dataset.params = c.default_params || '';
+            opt.dataset.classification = c.classification || '';
+            opt.dataset.description = c.description || '';
+            const parent = sel.querySelector('optgroup:last-child') || sel;
+            parent.appendChild(opt);
+        });
+        if (current) sel.value = current;
+    });
+}
+
+function onCatalogChange(sel) {
+    const row = sel.closest('.test-row');
+    if (!sel.value) {
+        row.querySelector('.sample-display').value = '';
+        row.querySelector('.price-display').textContent = '';
+        return;
+    }
+    const opt = sel.options[sel.selectedIndex];
+    row.querySelector('.free-text').value = opt.dataset.name || '';
+    row.querySelector('.sample-display').value = opt.dataset.sample || '';
+    row.querySelector('.price-display').textContent = opt.dataset.price > 0 ? 'MWK ' + Number(opt.dataset.price).toLocaleString() : '';
+    const cat = opt.dataset.category;
+    if (cat) document.getElementById('test_category').value = cat;
+
+    let paramCount = 0;
+    if (opt.dataset.params) {
+        try { paramCount = JSON.parse(opt.dataset.params).length; } catch(e) {}
+    }
+    const infoEl = document.getElementById('catalog-info');
+    infoEl.innerHTML = '<table class="table-details"><tr><td>Test</td><td><strong>' + escHtml(opt.dataset.name || '') + '</strong></td></tr>' +
+        '<tr><td>Category</td><td>' + escHtml(cat || '') + '</td></tr>' +
+        '<tr><td>Sample</td><td>' + escHtml(opt.dataset.sample || '-') + '</td></tr>' +
+        '<tr><td>Classification</td><td>' + escHtml(opt.dataset.classification || 'standard') + '</td></tr>' +
+        '<tr><td>Default Params</td><td>' + paramCount + ' parameters</td></tr>' +
+        '<tr><td>Price</td><td>MWK ' + Number(opt.dataset.price || 0).toLocaleString() + '</td></tr>' +
+        (opt.dataset.description ? '<tr><td>Description</td><td><small>' + escHtml(opt.dataset.description) + '</small></td></tr>' : '') +
+        '</table>';
+}
+
+function addTestRow() {
+    const container = document.getElementById('test-rows');
+    const row = document.createElement('div');
+    row.className = 'test-row row g-2 mb-2 align-items-end';
+    row.innerHTML = `<div class="col-md-5">
+        <label class="form-label" style="font-size:0.8rem">Test (from catalog)</label>
+        <select class="form-select form-select-sm catalog-select" onchange="onCatalogChange(this)"></select></div>
+    <div class="col-md-3">
+        <label class="form-label" style="font-size:0.8rem">Or enter manually</label>
+        <input type="text" class="form-control form-control-sm free-text" placeholder="Free-text test name"></div>
+    <div class="col-md-2">
+        <label class="form-label" style="font-size:0.8rem">Sample</label>
+        <input type="text" class="form-control form-control-sm sample-display" readonly style="background:#f8fafc"></div>
+    <div class="col-md-2 d-flex gap-1">
+        <span class="price-display text-muted" style="font-size:0.8rem;line-height:30px"></span>
+        <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeTestRow(this)" title="Remove"><i class="bi bi-x-lg"></i></button></div>`;
+    container.appendChild(row);
+    const sel = row.querySelector('.catalog-select');
+    const currentItems = allCatalog.filter(c => c.is_active);
+    let lastCat = '';
+    currentItems.forEach(c => {
+        if (c.category !== lastCat) {
+            const og = document.createElement('optgroup');
+            og.label = c.category.replace('_', ' ');
+            sel.appendChild(og);
+            lastCat = c.category;
+        }
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.test_name + (c.default_price > 0 ? ' (MWK ' + Number(c.default_price).toLocaleString() + ')' : '');
+        opt.dataset.name = c.test_name;
+        opt.dataset.category = c.category;
+        opt.dataset.sample = c.sample_type || '';
+        opt.dataset.price = c.default_price || 0;
+        const parent = sel.querySelector('optgroup:last-child') || sel;
+        parent.appendChild(opt);
+    });
+}
+
+function removeTestRow(btn) {
+    const rows = document.querySelectorAll('.test-row');
+    if (rows.length <= 1) { showToast('Need at least one test', 'danger'); return; }
+    btn.closest('.test-row').remove();
+}
+
+async function loadPatientHistory() {
+    const patientId = document.getElementById('patient_id').value;
+    const el = document.getElementById('patient-history');
+    if (!patientId) { el.innerHTML = '<div class="text-center text-muted py-3" style="font-size:0.85rem">Select a patient first</div>'; return; }
+    el.innerHTML = '<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span></div>';
+    const res = await fetchWithAuth('/lab/api/patient/' + patientId + '/orders');
+    const orders = await res.json();
+    if (!orders.length) { el.innerHTML = '<div class="text-center text-muted py-3" style="font-size:0.85rem">No previous lab orders</div>'; return; }
+    const colors = { ordered: 'secondary', collected: 'info', in_progress: 'primary', completed: 'success' };
+    let html = '<div style="max-height:300px;overflow-y:auto">';
+    orders.slice(0, 10).forEach(o => {
+        html += '<div class="p-2 border-bottom d-flex justify-content-between align-items-center" style="font-size:0.85rem">' +
+            '<div><a href="/lab/orders/' + o.id + '" class="fw-semibold text-decoration-none">#' + o.id + ' ' + escHtml(o.test_name) + '</a>' +
+            '<br><small class="text-muted">' + (o.ordered_date || '') + '</small></div>' +
+            '<span class="badge bg-' + (colors[o.status] || 'secondary') + '">' + o.status + '</span></div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+document.getElementById('order-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const patientId = document.getElementById('patient_id').value;
+    if (!patientId) { showToast('Select a patient', 'danger'); return; }
+
+    const tests = [];
+    document.querySelectorAll('.test-row').forEach(row => {
+        const catSel = row.querySelector('.catalog-select');
+        const freeText = row.querySelector('.free-text').value.trim();
+        let testName = freeText;
+        let catalogId = null;
+        if (catSel.value) {
+            const opt = catSel.options[catSel.selectedIndex];
+            testName = opt.dataset.name || freeText;
+            catalogId = catSel.value;
+        }
+        if (testName) {
+            tests.push({
+                test_name: testName,
+                catalog_id: catalogId,
+                test_category: document.getElementById('test_category').value,
+                sample_type: row.querySelector('.sample-display').value || '',
+                priority: document.getElementById('priority').value,
+                notes: document.getElementById('notes').value.trim()
+            });
+        }
+    });
+
+    if (!tests.length) { showToast('Add at least one test', 'danger'); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+
+    let url, body;
+    if (tests.length === 1) {
+        url = '/lab/api/orders';
+        body = JSON.stringify({ patient_id: parseInt(patientId), ...tests[0] });
+    } else {
+        url = '/lab/api/orders/bulk';
+        body = JSON.stringify({ patient_id: parseInt(patientId), tests });
+    }
+
+    const res = await fetchWithAuth(url, { method: 'POST', body });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create Order';
+    if (res.ok) {
+        const data = await res.json();
+        const count = data.count || 1;
+        document.getElementById('order-form').style.display = 'none';
+        const success = document.getElementById('order-success');
+        success.style.display = 'block';
+        success.innerHTML = '<i class="bi bi-check-circle me-1"></i> ' + count + ' lab order' + (count > 1 ? 's' : '') + ' created! <a href="/lab/orders/" class="alert-link">Back to orders</a>';
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to create order', 'danger');
+    }
+});
+
+document.getElementById('quick-catalog-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const name = document.getElementById('qc-name').value.trim();
+    if (!name) return;
+    const btn = document.getElementById('btn-qc-save');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding...';
+    const res = await fetchWithAuth('/lab/api/catalog', {
+        method: 'POST',
+        body: JSON.stringify({
+            test_name: name,
+            category: document.getElementById('qc-category').value,
+            sample_type: document.getElementById('qc-sample').value,
+            classification: document.getElementById('qc-classification').value,
+            description: document.getElementById('qc-desc').value.trim(),
+            default_price: parseFloat(document.getElementById('qc-price').value) || 0,
+            parameters: '[]'
+        })
+    });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Add';
+    if (res.ok) {
+        const data = await res.json();
+        bootstrap.Modal.getInstance(document.getElementById('addCatalogModal')).hide();
+        document.getElementById('qc-name').value = '';
+        document.getElementById('qc-desc').value = '';
+        document.getElementById('qc-price').value = '0';
+        allCatalog.push({ id: data.id, test_name: name, category: document.getElementById('qc-category').value,
+            classification: document.getElementById('qc-classification').value, sample_type: document.getElementById('qc-sample').value,
+            default_price: parseFloat(document.getElementById('qc-price').value) || 0, is_active: 1 });
+        populateCatalogSelects();
+        showToast('Test added to catalog', 'success');
+    } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to add', 'danger');
+    }
+});
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
 </script>
+
+<style>.test-row { padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
+.table-details td { padding: 0.25rem 0.5rem; vertical-align: top; font-size: 0.85rem; }
+.table-details tr td:first-child { font-weight: 500; color: #64748b; width: 1%; white-space: nowrap; padding-right: 1rem; }
+</style>
 {% endblock %}

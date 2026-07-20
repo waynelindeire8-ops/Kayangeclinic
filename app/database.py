@@ -964,8 +964,29 @@ def init_db():
     _migrate_patient_documents(conn)
     _seed_admin_user(conn)
     _migrate_users_department(conn)
+    _migrate_lab_notes(conn)
     _create_indexes(conn)
     conn.close()
+
+
+def _migrate_lab_notes(conn):
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN notes TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN priority TEXT DEFAULT 'normal' CHECK(priority IN ('normal','urgent','stat'))")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE lab_tests ADD COLUMN sample_type TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE lab_test_catalog ADD COLUMN default_price REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
 
 
 def _create_indexes(conn):

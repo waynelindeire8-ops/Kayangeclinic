@@ -156,7 +156,7 @@ def create_app():
                             logger.info("Vercel: full restore from Supabase (cold start)")
                         else:
                             for t in _VERCEL_PULL_TABLES:
-                                restore_table(t)
+                                restore_table(t, full=True)
                             logger.info(f"Vercel: periodic re-pull ({int(elapsed)}s)")
                         _vercel_state['last_pull'] = now
                         _vercel_state['initial_pull_done'] = True

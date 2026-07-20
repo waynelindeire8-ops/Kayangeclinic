@@ -3,14 +3,65 @@
 <div class="page-header">
     <h4><i class="bi bi-prescription2"></i> Prescriptions</h4>
     <div class="d-flex gap-2">
+        <span class="badge bg-secondary fs-6" id="total-count">0</span>
         <a href="/prescriptions/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Prescription</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-activity"></i></div>
+            <div class="stat-value" id="stat-active">0</div>
+            <div class="stat-label">Active Orders</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-value" id="stat-completed">0</div>
+            <div class="stat-label">Completed (30d)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="bi bi-capsule"></i></div>
+            <div class="stat-value" id="stat-drugs">0</div>
+            <div class="stat-label">Active Drugs</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i class="bi bi-cart-check"></i></div>
+            <div class="stat-value" id="stat-dispensed">0</div>
+            <div class="stat-label">Dispensed (30d)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header"><h6>Most Prescribed Drugs (30 days)</h6></div>
+            <div class="card-body" id="top-drugs">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header"><h6>Stock Alerts</h6></div>
+            <div class="card-body" id="stock-alerts">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-2 align-items-end">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">Status</label>
                 <select class="form-select" id="filter-status">
                     <option value="">All</option>
@@ -19,18 +70,29 @@
                     <option value="cancelled">Cancelled</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">Patient</label>
                 <select class="form-select" id="filter-patient">
                     <option value="">All patients</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label class="form-label">Search</label>
+                <input type="text" class="form-control" id="filter-search" placeholder="Patient, doctor...">
+            </div>
+            <div class="col-md-2">
                 <label class="form-label">From</label>
                 <input type="date" class="form-control" id="filter-from">
             </div>
-            <div class="col-md-3 d-flex gap-2 align-items-end">
-                <button class="btn btn-primary" onclick="loadOrders()"><i class="bi bi-search me-1"></i>Filter</button>
+            <div class="col-md-2">
+                <label class="form-label">To</label>
+                <input type="date" class="form-control" id="filter-to">
+            </div>
+            <div class="col-md-2">
+                <div class="d-flex gap-1">
+                    <button class="btn btn-primary flex-fill" onclick="loadOrders()"><i class="bi bi-search me-1"></i>Filter</button>
+                    <button class="btn btn-outline-secondary" onclick="resetFilters()"><i class="bi bi-x-lg"></i></button>
+                </div>
             </div>
         </div>
     </div>
@@ -45,7 +107,9 @@
                         <th>#</th>
                         <th>Patient</th>
                         <th>Doctor</th>
+                        <th>Drugs</th>
                         <th>Items</th>
+                        <th>Est. Cost</th>
                         <th>Date</th>
                         <th>Status</th>
                         <th style="width:120px">Action</th>
@@ -62,44 +126,94 @@
 </div>
 
 <script>
+let allPatients = [];
+
 document.addEventListener('DOMContentLoaded', async function() {
-    const pRes = await fetchWithAuth('/patients/api');
-    const patients = await pRes.json();
+    const [pRes, dashRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/prescriptions/api/dashboard')
+    ]);
+    allPatients = await pRes.json();
     const pSel = document.getElementById('filter-patient');
-    patients.forEach(p => {
+    allPatients.forEach(p => {
         const o = document.createElement('option');
         o.value = p.id;
         o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
         pSel.appendChild(o);
     });
+
+    const dash = await dashRes.json();
+    document.getElementById('stat-active').textContent = dash.active_orders || 0;
+    document.getElementById('stat-completed').textContent = dash.completed_month || 0;
+    document.getElementById('stat-drugs').textContent = dash.total_drugs || 0;
+    document.getElementById('stat-dispensed').textContent = dash.dispensed_month || 0;
+
+    const topEl = document.getElementById('top-drugs');
+    const topDrugs = dash.top_drugs || [];
+    if (topDrugs.length) {
+        const maxCount = Math.max(...topDrugs.map(d => d.count));
+        let html = '<div class="d-flex flex-column gap-2">';
+        topDrugs.forEach(d => {
+            const pct = Math.round(d.count / maxCount * 100);
+            html += '<div class="d-flex align-items-center gap-2">' +
+                '<div style="width:120px;font-size:0.85rem" class="text-truncate">' + escHtml(d.drug_name) + '</div>' +
+                '<div class="flex-fill"><div class="progress" style="height:16px;border-radius:4px">' +
+                '<div class="progress-bar bg-primary" style="width:' + pct + '%;font-size:0.7rem;line-height:16px">' + d.count + '</div></div></div></div>';
+        });
+        html += '</div>';
+        topEl.innerHTML = html;
+    } else {
+        topEl.innerHTML = '<div class="text-center text-muted py-3">No data</div>';
+    }
+
+    const alertEl = document.getElementById('stock-alerts');
+    const alerts = [];
+    if (dash.low_stock > 0) alerts.push('<div class="d-flex justify-content-between p-2 border-bottom"><span><i class="bi bi-exclamation-triangle text-warning me-1"></i>Low Stock</span><span class="badge bg-warning text-dark">' + dash.low_stock + '</span></div>');
+    if (dash.out_of_stock > 0) alerts.push('<div class="d-flex justify-content-between p-2 border-bottom"><span><i class="bi bi-x-circle text-danger me-1"></i>Out of Stock</span><span class="badge bg-danger">' + dash.out_of_stock + '</span></div>');
+    if (dash.cancelled_month > 0) alerts.push('<div class="d-flex justify-content-between p-2"><span><i class="bi bi-x-octagon text-danger me-1"></i>Cancelled (30d)</span><span class="badge bg-danger">' + dash.cancelled_month + '</span></div>');
+    alertEl.innerHTML = alerts.length ? alerts.join('') : '<div class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-1"></i>All good</div>';
+
     loadOrders();
     document.getElementById('filter-status').addEventListener('change', loadOrders);
+    let searchTimer;
+    document.getElementById('filter-search').addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(loadOrders, 300);
+    });
 });
 
 async function loadOrders() {
     const status = document.getElementById('filter-status').value;
     const patientId = document.getElementById('filter-patient').value;
+    const search = document.getElementById('filter-search').value;
     const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
     let url = '/prescriptions/api/orders?';
     if (status) url += 'status=' + status + '&';
     if (patientId) url += 'patient_id=' + patientId + '&';
+    if (search) url += 'search=' + encodeURIComponent(search) + '&';
     if (from) url += 'date_from=' + from + '&';
+    if (to) url += 'date_to=' + to + '&';
     const res = await fetchWithAuth(url);
     const orders = await res.json();
     const tbody = document.querySelector('#orders-table tbody');
     const empty = document.getElementById('orders-empty');
     tbody.innerHTML = '';
+    document.getElementById('total-count').textContent = orders.length;
     if (orders.length) {
         document.getElementById('orders-table').style.display = '';
         empty.style.display = 'none';
         const colors = { active: 'success', completed: 'secondary', cancelled: 'danger' };
         orders.forEach(o => {
+            const drugPreview = escHtml((o.drug_names || '').substring(0, 60)) + ((o.drug_names || '').length > 60 ? '...' : '');
             tbody.innerHTML += '<tr>' +
                 '<td><span class="fw-semibold">' + o.id + '</span></td>' +
                 '<td><a href="/patients/' + o.patient_id + '" class="text-decoration-none fw-semibold" style="color:#0f172a">' + escHtml(o.p_first || '') + ' ' + escHtml(o.p_last || '') + '</a><br><small class="text-muted">' + (o.p_patient_id || '') + '</small></td>' +
-                '<td>Dr. ' + escHtml(o.d_first || '') + ' ' + escHtml(o.d_last || '') + '</td>' +
-                '<td><span class="badge bg-secondary">' + (o.item_count || 0) + '</span></td>' +
-                '<td>' + (o.created_at ? new Date(o.created_at).toLocaleDateString() : '') + '</td>' +
+                '<td><small>Dr. ' + escHtml(o.d_first || '') + ' ' + escHtml(o.d_last || '') + '</small></td>' +
+                '<td><small class="text-muted">' + (drugPreview || '-') + '</small></td>' +
+                '<td><span class="badge bg-secondary">' + (o.item_count || 0) + '</span>' + (o.active_items > 0 && o.active_items !== o.item_count ? ' <small class="text-muted">(' + o.active_items + ' active)</small>' : '') + '</td>' +
+                '<td><small>' + (o.total_cost > 0 ? 'MWK ' + o.total_cost.toLocaleString() : '<span class="text-muted">-</span>') + '</small></td>' +
+                '<td><small>' + (o.created_at ? new Date(o.created_at).toLocaleDateString() : '') + '</small></td>' +
                 '<td><span class="badge bg-' + (colors[o.status] || 'secondary') + '">' + o.status + '</span></td>' +
                 '<td><div class="d-flex gap-1"><a href="/prescriptions/' + o.id + '" class="btn-action view"><i class="bi bi-eye"></i></a><a href="/prescriptions/' + o.id + '/edit" class="btn-action edit"><i class="bi bi-pencil"></i></a><a href="/prescriptions/' + o.id + '/print" class="btn-action print" target="_blank"><i class="bi bi-printer"></i></a></div></td></tr>';
         });
@@ -107,6 +221,15 @@ async function loadOrders() {
         document.getElementById('orders-table').style.display = 'none';
         empty.style.display = 'block';
     }
+}
+
+function resetFilters() {
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-patient').value = '';
+    document.getElementById('filter-search').value = '';
+    document.getElementById('filter-from').value = '';
+    document.getElementById('filter-to').value = '';
+    loadOrders();
 }
 
 function escHtml(str) {

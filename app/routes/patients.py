@@ -80,7 +80,7 @@ def api_get(id):
         '''SELECT p.*, ip.name as scheme_name 
            FROM patients p 
            LEFT JOIN insurance_providers ip ON p.scheme_id = ip.id
-           WHERE p.id = ? AND p.is_active = 1''', (id,)).fetchone()
+           WHERE p.id = ?''', (id,)).fetchone()
     if not patient:
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
@@ -192,13 +192,70 @@ def api_delete(id):
         db.close()
         return jsonify({'error': 'Patient not found'}), 404
     
-    # Soft delete - mark as inactive
     db.execute('UPDATE patients SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (id,))
     db.commit()
     log_audit(current_user['id'], current_user['username'], 'delete', 'patient', id,
               f'Deleted patient {patient["first_name"]} {patient["last_name"]}', request.remote_addr)
     db.close()
     return jsonify({'message': 'Patient deleted successfully'})
+
+
+@patients_bp.route('/api/<int:id>/restore', methods=['POST'])
+@login_required
+def api_restore(id):
+    current_user = get_jwt()
+    db = get_db()
+    patient = db.execute('SELECT * FROM patients WHERE id = ? AND is_active = 0', (id,)).fetchone()
+    if not patient:
+        db.close()
+        return jsonify({'error': 'Patient not found or not archived'}), 404
+
+    db.execute('UPDATE patients SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (id,))
+    db.commit()
+    log_audit(current_user['id'], current_user['username'], 'restore', 'patient', id,
+              f'Restored patient {patient["first_name"]} {patient["last_name"]}', request.remote_addr)
+    db.close()
+    return jsonify({'message': 'Patient restored successfully'})
+
+
+@patients_bp.route('/api/sync-supabase', methods=['POST'])
+@login_required
+def api_sync_supabase():
+    try:
+        from app.backup import restore_table, _get_pg_conn, HAS_PG
+        if not HAS_PG:
+            return jsonify({'error': 'PostgreSQL driver not available'}), 500
+
+        db = get_db()
+        before = db.execute('SELECT COUNT(*) as c FROM patients').fetchone()['c']
+        db.close()
+
+        pg = _get_pg_conn()
+        tables_synced = []
+        for table in ['patients', 'patient_allergies', 'patient_medical_history', 'patient_medications']:
+            restore_table(table, full=True, pg_conn=pg)
+            tables_synced.append(table)
+        pg.close()
+
+        db = get_db()
+        after = db.execute('SELECT COUNT(*) as c FROM patients').fetchone()['c']
+        restored = db.execute('SELECT COUNT(*) as c FROM patients WHERE is_active = 1').fetchone()['c']
+        db.close()
+
+        log_audit(get_jwt()['id'], get_jwt()['username'], 'sync', 'patients', None,
+                  f'Synced patients from Supabase: {before} → {after} total ({restored} active)',
+                  request.remote_addr)
+
+        return jsonify({
+            'message': f'Sync complete: {before} → {after} total patients ({restored} active)',
+            'before': before,
+            'after': after,
+            'active': restored,
+            'tables_synced': tables_synced
+        })
+    except Exception as e:
+        logger.error(f"Supabase sync error: {e}")
+        return jsonify({'error': f'Sync failed: {str(e)}'}), 500
 
 
 @patients_bp.route('/api/<int:id>/history', methods=['GET'])
