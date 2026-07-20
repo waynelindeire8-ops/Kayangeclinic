@@ -997,15 +997,19 @@ async function saveAncillary() {
         data.end_date = document.getElementById('anc_diet_end').value;
     }
 
-    const res = await fetchWithAuth('/consultations/api/ancillaries', {
-        method: 'POST', body: JSON.stringify(data)
-    });
-    if (res.ok) {
-        alert('Saved successfully!');
-        bootstrap.Modal.getInstance(document.getElementById('ancillaryModal')).hide();
-    } else {
-        const err = await res.json();
-        alert(err.error || 'Error saving');
+    try {
+        const res = await fetchWithAuth('/consultations/api/ancillaries', {
+            method: 'POST', body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            alert('Saved successfully!');
+            bootstrap.Modal.getInstance(document.getElementById('ancillaryModal')).hide();
+        } else {
+            const err = await res.json();
+            alert(err.error || 'Error saving');
+        }
+    } catch(e) {
+        alert('Network error: ' + e.message);
     }
 }
 

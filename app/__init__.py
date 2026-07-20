@@ -161,8 +161,10 @@ def create_app():
                     logger.error(f"Vercel pull failed: {e}")
                     _vercel_state['initial_pull_done'] = True
 
-    # Vercel: after a write, push just the affected row to Supabase.
-    # Uses sync_single_row / sync_delete_row (instant) instead of full-table dump.
+    # Vercel: after a write, sync the affected row to Supabase so other
+    # containers see the change. Uses single-row sync (< 1s) instead of
+    # full-table sync which was blocking responses.
+    # Longer prefixes first to avoid /lab/invoices matching /lab.
     if os.environ.get('VERCEL'):
         _TABLE_ROUTE_MAP = {
             '/lab/invoices': 'lab_invoices',
@@ -186,7 +188,7 @@ def create_app():
             '/notifications': 'notifications',
         }
         _TABLE_ROUTE_KEYS = sorted(_TABLE_ROUTE_MAP.keys(), key=len, reverse=True)
-        _ANCILLARY_TYPE_TABLE = {
+        _ANCILLARY_TABLE_MAP = {
             'lab': 'lab_tests', 'procedure': 'procedures',
             'certificate': 'medical_certificates', 'referral': 'referrals',
             'diet': 'diet_support',
@@ -194,36 +196,49 @@ def create_app():
 
         @app.after_request
         def vercel_fast_sync(response):
-            if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE') or response.status_code >= 400:
-                return response
-            try:
-                from app.backup import sync_single_row, sync_delete_row, HAS_PG
-                if not HAS_PG:
-                    return response
+            if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
                 path = request.path.rstrip('/')
                 table = None
-                for prefix in _TABLE_ROUTE_KEYS:
-                    if path.startswith(prefix):
-                        table = _TABLE_ROUTE_MAP[prefix]
-                        break
-                if table == 'consultations' and '/api/ancillaries' in path:
+                row_id = None
+
+                # Extract ID from response JSON (POST/PUT/PATCH) or URL (DELETE)
+                if request.method == 'DELETE':
+                    parts = path.rstrip('/').split('/')
+                    for prefix in _TABLE_ROUTE_KEYS:
+                        if path.startswith(prefix):
+                            table = _TABLE_ROUTE_MAP[prefix]
+                            break
                     try:
-                        body = request.get_json(silent=True) or {}
-                        table = _ANCILLARY_TYPE_TABLE.get(body.get('type'), 'consultations')
-                    except Exception:
+                        row_id = int(parts[-1])
+                    except (ValueError, IndexError):
                         pass
-                if request.method == 'DELETE' and table:
-                    row_id = path.rsplit('/', 1)[-1]
-                    if row_id.isdigit():
-                        sync_delete_row(table, int(row_id))
-                    return response
-                if table and request.method in ('POST', 'PUT', 'PATCH'):
-                    resp_json = response.get_json(silent=True) or {}
-                    row_id = resp_json.get('id')
-                    if row_id:
-                        sync_single_row(table, row_id)
-            except Exception as e:
-                logger.error(f"Vercel row sync failed: {e}")
+                else:
+                    resp_json = response.get_json(silent=True)
+                    if resp_json and isinstance(resp_json, dict):
+                        row_id = resp_json.get('id')
+                    for prefix in _TABLE_ROUTE_KEYS:
+                        if path.startswith(prefix):
+                            table = _TABLE_ROUTE_MAP[prefix]
+                            break
+                    # Ancillary routes write to different tables based on type
+                    if '/api/ancillaries' in path and row_id:
+                        try:
+                            req_json = request.get_json(silent=True) or {}
+                            anc_type = req_json.get('type', '')
+                            table = _ANCILLARY_TABLE_MAP.get(anc_type, table)
+                        except Exception:
+                            pass
+
+                if table and row_id:
+                    try:
+                        from app.backup import sync_row_to_pg, delete_row_from_pg, HAS_PG
+                        if HAS_PG:
+                            if request.method == 'DELETE':
+                                delete_row_from_pg(table, row_id)
+                            else:
+                                sync_row_to_pg(table, row_id)
+                    except Exception as e:
+                        logger.error(f"Vercel sync failed for {table}:{row_id}: {e}")
             return response
 
     @app.route('/help')

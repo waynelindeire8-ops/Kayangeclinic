@@ -496,35 +496,28 @@ def sync_table_fast(table_name):
         return -1
 
 
-def sync_single_row(table_name, row_id):
-    """Push a single row (by primary key) from SQLite to Supabase.
-    Used by after_request for fast, non-blocking sync."""
+def sync_row_to_pg(table_name, row_id):
+    """Sync a single row from SQLite to Supabase by primary key. Fast enough for after_request."""
     if not row_id:
-        return False
+        return 0
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
 
-        pk_col = _get_primary_key(table_name, pg_conn=pg)
-        if not pk_col:
-            pk_col = 'id'
-
-        unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
-        non_id_unique = [c for c in unique_cols if c != 'id']
-
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
         sqlite_db.row_factory = sqlite3.Row
 
-        row = sqlite_db.execute(
-            f"SELECT * FROM {table_name} WHERE {pk_col} = ?", (row_id,)
-        ).fetchone()
+        pk_col = _get_primary_key(table_name) or 'id'
+        row = sqlite_db.execute(f"SELECT * FROM {table_name} WHERE {pk_col} = ?", (row_id,)).fetchone()
         if not row:
             sqlite_db.close()
             cur.close()
             pg.close()
-            return False
+            return 0
 
         all_columns = list(row.keys())
+        unique_cols = _get_unique_constraints(table_name)
+        non_id_unique = [c for c in unique_cols if c != 'id']
         if non_id_unique:
             columns = [c for c in all_columns if c != 'id']
             conflict_cols = non_id_unique
@@ -535,44 +528,41 @@ def sync_single_row(table_name, row_id):
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
         values = [_adapt_value(row[col]) for col in columns]
-
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in conflict_cols])
         conflict_cols_str = ', '.join(conflict_cols)
 
         if not update_cols:
-            sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
         else:
-            sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_cols_str}) DO UPDATE SET {update_cols}"
+            upsert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_cols_str}) DO UPDATE SET {update_cols}"
 
-        cur.execute(sql, values)
+        cur.execute(upsert_sql, values)
         pg.commit()
         sqlite_db.close()
         cur.close()
         pg.close()
-        return True
+        return 1
     except Exception as e:
-        logger.error(f"Failed to sync single row for {table_name}: {e}")
-        return False
+        logger.error(f"Failed to sync row {row_id} to {table_name}: {e}")
+        return -1
 
 
-def sync_delete_row(table_name, row_id):
+def delete_row_from_pg(table_name, row_id):
     """Delete a single row from Supabase by primary key."""
     if not row_id:
-        return False
+        return 0
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
-        pk_col = _get_primary_key(table_name, pg_conn=pg)
-        if not pk_col:
-            pk_col = 'id'
+        pk_col = _get_primary_key(table_name) or 'id'
         cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = %s", (row_id,))
         pg.commit()
         cur.close()
         pg.close()
-        return True
+        return 1
     except Exception as e:
-        logger.error(f"Failed to delete row from {table_name}: {e}")
-        return False
+        logger.error(f"Failed to delete row {row_id} from {table_name}: {e}")
+        return -1
 
 
 def restore_table(table_name, full=False, pg_conn=None):

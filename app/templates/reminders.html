@@ -129,6 +129,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     } catch(e) {
         console.error('Failed to load reminders:', e);
+        ['birthdays-today-list','birthdays-upcoming-list','apts-tomorrow-list'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>Failed to load reminders</div>';
+        });
     }
 });
 </script>

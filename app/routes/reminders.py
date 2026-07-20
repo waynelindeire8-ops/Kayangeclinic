@@ -18,25 +18,23 @@ def index_page():
 def api_reminders():
     db = get_db()
     today = date.today()
-    today_str = today.isoformat()
-    tomorrow_str = (today + timedelta(days=1)).isoformat()
+    tomorrow = today + timedelta(days=1)
+    week_later = today + timedelta(days=7)
+    today_md = today.strftime('%m-%d')
+    week_md = week_later.strftime('%m-%d')
+    tomorrow_str = tomorrow.isoformat()
+
+    dob_filter = "dob IS NOT NULL AND dob != ''"
 
     birthdays_today = db.execute(
-        "SELECT id, first_name, last_name, dob, phone FROM patients WHERE dob IS NOT NULL AND strftime('%m-%d', dob) = ?",
-        (today.strftime('%m-%d'),)
+        f"SELECT id, first_name, last_name, dob, phone FROM patients WHERE {dob_filter} AND strftime('%m-%d', dob) = ?",
+        (today_md,)
     ).fetchall()
 
     birthdays_upcoming = db.execute(
-        "SELECT id, first_name, last_name, dob, phone FROM patients WHERE dob IS NOT NULL AND (strftime('%m-%d', dob) > ? AND strftime('%m-%d', dob) <= ?)",
-        (today.strftime('%m-%d'), (today + timedelta(days=7)).strftime('%m-%d'))
+        f"SELECT id, first_name, last_name, dob, phone FROM patients WHERE {dob_filter} AND (strftime('%m-%d', dob) > ? AND strftime('%m-%d', dob) <= ?)",
+        (today_md, week_md)
     ).fetchall()
-
-    # handle year boundary
-    if len(birthdays_upcoming) == 0 and today.month < 6:
-        birthdays_upcoming = db.execute(
-            "SELECT id, first_name, last_name, dob, phone FROM patients WHERE dob IS NOT NULL AND (strftime('%m-%d', dob) >= ?)",
-            (today.strftime('%m-%d'),)
-        ).fetchall()
 
     apts_tomorrow = db.execute(
         '''SELECT a.id, a.appointment_time, a.reason, a.status,
@@ -49,8 +47,11 @@ def api_reminders():
     def calc_age(dob_str):
         if not dob_str:
             return None
-        dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
-        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        try:
+            dob = datetime.strptime(dob_str[:10], '%Y-%m-%d').date()
+            return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        except (ValueError, TypeError):
+            return None
 
     def patient_json(row):
         d = dict(row)
