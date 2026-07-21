@@ -548,14 +548,34 @@ def sync_row_to_pg(table_name, row_id):
 
 
 def delete_row_from_pg(table_name, row_id):
-    """Delete a single row from Supabase by primary key."""
+    """Delete a single row from Supabase using unique constraint to handle id mismatches."""
     if not row_id:
         return 0
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
+
+        sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
+        sqlite_db.row_factory = sqlite3.Row
         pk_col = _get_primary_key(table_name) or 'id'
-        cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = %s", (row_id,))
+        row = sqlite_db.execute(f"SELECT * FROM {table_name} WHERE {pk_col} = ?", (row_id,)).fetchone()
+        sqlite_db.close()
+
+        if not row:
+            pk_col = _get_primary_key(table_name) or 'id'
+            cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = %s", (row_id,))
+        else:
+            unique_cols = _get_unique_constraints(table_name)
+            non_id_unique = [c for c in unique_cols if c != 'id']
+            if non_id_unique:
+                val = row[non_id_unique[0]]
+                if val is not None:
+                    cur.execute(f"DELETE FROM {table_name} WHERE {non_id_unique[0]} = %s", (val,))
+                else:
+                    cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (row_id,))
+            else:
+                cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = %s", (row_id,))
+
         pg.commit()
         cur.close()
         pg.close()
@@ -605,9 +625,10 @@ def restore_table(table_name, full=False, pg_conn=None):
         conflict_str = ', '.join(conflict_cols)
 
         if full:
+            never_update = set(conflict_cols) | {'id', 'created_at'}
             update_parts = []
             for col in columns:
-                if col not in conflict_cols:
+                if col not in never_update:
                     update_parts.append(f"{col} = excluded.{col}")
             update_clause = ', '.join(update_parts)
 

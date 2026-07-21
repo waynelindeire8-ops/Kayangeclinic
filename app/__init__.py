@@ -205,7 +205,6 @@ def create_app():
                 table = None
                 row_id = None
 
-                # Extract ID from response JSON (POST/PUT/PATCH) or URL (DELETE)
                 if request.method == 'DELETE':
                     parts = path.rstrip('/').split('/')
                     for prefix in _TABLE_ROUTE_KEYS:
@@ -224,7 +223,6 @@ def create_app():
                         if path.startswith(prefix):
                             table = _TABLE_ROUTE_MAP[prefix]
                             break
-                    # Ancillary routes write to different tables based on type
                     if '/api/ancillaries' in path and row_id:
                         try:
                             req_json = request.get_json(silent=True) or {}
@@ -238,7 +236,15 @@ def create_app():
                         from app.backup import sync_row_to_pg, delete_row_from_pg, HAS_PG
                         if HAS_PG:
                             if request.method == 'DELETE':
-                                delete_row_from_pg(table, row_id)
+                                import sqlite3 as _sql
+                                _conn = _sql.connect(Config.DATABASE, timeout=5)
+                                _conn.row_factory = _sql.Row
+                                _exists = _conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (row_id,)).fetchone()
+                                _conn.close()
+                                if _exists:
+                                    sync_row_to_pg(table, row_id)
+                                else:
+                                    delete_row_from_pg(table, row_id)
                             else:
                                 sync_row_to_pg(table, row_id)
                     except Exception as e:

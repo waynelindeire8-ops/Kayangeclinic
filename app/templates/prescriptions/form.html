@@ -5,8 +5,8 @@
     <a href="/prescriptions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
 </div>
 
-<div class="row">
-    <div class="col-lg-10">
+<div class="row g-3">
+    <div class="col-lg-8">
         <div class="card">
             <div class="card-body">
                 <form id="order-form">
@@ -17,24 +17,29 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Notes</label>
-                        <textarea class="form-control" id="notes" rows="2" placeholder="Clinical notes / instructions for the patient"></textarea>
+                        <label class="form-label">Clinical Notes</label>
+                        <textarea class="form-control" id="notes" rows="2" placeholder="Diagnosis, instructions for the patient..."></textarea>
                     </div>
 
                     <hr>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">Prescribed Drugs</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0"><i class="bi bi-capsule me-1"></i>Prescribed Drugs</h6>
                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
                     </div>
                     <div id="items-container"></div>
-                    <div id="no-items" class="text-center text-muted py-3">
-                        <i class="bi bi-capsule" style="font-size:1.25rem;display:block;margin-bottom:0.25rem"></i>
-                        No drugs added yet. Click "Add Drug" above.
+                    <div id="no-items" class="text-center text-muted py-4" style="border:2px dashed #e2e8f0;border-radius:8px">
+                        <i class="bi bi-capsule" style="font-size:2rem;display:block;margin-bottom:0.5rem;color:#94a3b8"></i>
+                        <small>No drugs added yet. Click <strong>Add Drug</strong> above.</small>
                     </div>
 
                     <hr>
-                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>{% if order_id %}Update{% else %}Create{% endif %} Prescription</button>
-                    <a href="/prescriptions" class="btn btn-outline-secondary">Cancel</a>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="text-muted"><small id="total-estimate"></small></div>
+                        <div class="d-flex gap-2">
+                            <a href="/prescriptions" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>{% if order_id %}Update{% else %}Create{% endif %} Prescription</button>
+                        </div>
+                    </div>
                 </form>
                 <div id="order-success" class="alert alert-success mt-3" style="display:none">
                     <i class="bi bi-check-circle me-1"></i> Prescription saved! <a href="/prescriptions/" class="alert-link">Back to list</a>
@@ -42,11 +47,29 @@
             </div>
         </div>
     </div>
+
+    <div class="col-lg-4">
+        <div class="card" id="patient-info-card" style="display:none">
+            <div class="card-header"><h6><i class="bi bi-person me-1"></i>Patient Info</h6></div>
+            <div class="card-body" id="patient-info-body"></div>
+        </div>
+
+        <div class="card mt-3" id="drug-info-card" style="display:none">
+            <div class="card-header"><h6><i class="bi bi-info-circle me-1"></i>Drug Info</h6></div>
+            <div class="card-body" id="drug-info-body"></div>
+        </div>
+
+        <div class="card mt-3" id="recent-rx-card" style="display:none">
+            <div class="card-header"><h6><i class="bi bi-clock-history me-1"></i>Recent Prescriptions</h6></div>
+            <div class="card-body p-0" id="recent-rx-body"></div>
+        </div>
+    </div>
 </div>
 
 <script>
 const orderId = {% if order_id %}{{ order_id }}{% else %}null{% endif %};
 let inventoryCache = [];
+let patientsCache = [];
 let itemIdx = 0;
 
 document.addEventListener('DOMContentLoaded', async function() {
@@ -54,15 +77,24 @@ document.addEventListener('DOMContentLoaded', async function() {
         fetchWithAuth('/patients/api'),
         fetchWithAuth('/pharmacy/api/inventory')
     ]);
-    const patients = await patientsRes.json();
+    patientsCache = await patientsRes.json();
     inventoryCache = await invRes.json();
 
     const pSel = document.getElementById('patient_id');
-    patients.forEach(p => {
+    patientsCache.forEach(p => {
         const o = document.createElement('option');
         o.value = p.id;
         o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name;
         pSel.appendChild(o);
+    });
+
+    pSel.addEventListener('change', function() {
+        const pid = parseInt(this.value);
+        if (pid) loadPatientInfo(pid);
+        else {
+            document.getElementById('patient-info-card').style.display = 'none';
+            document.getElementById('recent-rx-card').style.display = 'none';
+        }
     });
 
     if (orderId) {
@@ -73,8 +105,83 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('notes').value = data.notes || '';
         document.getElementById('patient_id').disabled = true;
         (data.items || []).forEach(item => addItem(item));
+        if (data.patient_id) loadPatientInfo(data.patient_id);
     }
 });
+
+async function loadPatientInfo(pid) {
+    const patient = patientsCache.find(p => p.id === pid);
+    if (!patient) return;
+
+    const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9'];
+    const color = avatarColors[pid % avatarColors.length];
+    const initials = (patient.first_name || 'P').charAt(0) + (patient.last_name || '').charAt(0);
+
+    let html = '<div class="d-flex align-items-center gap-2 mb-3">' +
+        '<div class="patient-avatar" style="background:' + color + ';width:40px;height:40px;font-size:0.9rem">' + initials + '</div>' +
+        '<div><div class="fw-semibold">' + escHtml(patient.first_name) + ' ' + escHtml(patient.last_name) + '</div>' +
+        '<small class="text-muted">' + (patient.patient_id || '') + '</small></div></div>';
+
+    const fields = [];
+    if (patient.dob) fields.push(['DOB', patient.dob]);
+    if (patient.gender) fields.push(['Gender', patient.gender]);
+    if (patient.phone) fields.push(['Phone', patient.phone]);
+    if (patient.blood_group) fields.push(['Blood Group', patient.blood_group]);
+    if (patient.scheme_id) fields.push(['Insurance', 'Yes']);
+
+    if (fields.length) {
+        html += '<table class="table table-sm table-borderless mb-0">';
+        fields.forEach(([k, v]) => html += '<tr><td class="text-muted" style="width:100px;padding:2px 8px 2px 0"><small>' + k + '</small></td><td style="padding:2px 0"><small class="fw-semibold">' + escHtml(v) + '</small></td></tr>');
+        html += '</table>';
+    }
+
+    document.getElementById('patient-info-body').innerHTML = html;
+    document.getElementById('patient-info-card').style.display = '';
+
+    try {
+        const res = await fetchWithAuth('/prescriptions/api/patient/' + pid + '/history');
+        const history = await res.json();
+        const recentEl = document.getElementById('recent-rx-body');
+        if (history.length) {
+            let rhtml = '';
+            history.slice(0, 5).forEach(o => {
+                const d = o.created_at ? new Date(o.created_at).toLocaleDateString() : '';
+                rhtml += '<div class="p-2 border-bottom">' +
+                    '<div class="d-flex justify-content-between"><small class="fw-semibold">' + escHtml(o.drug_names || 'No drugs') + '</small>' +
+                    '<small class="text-muted">' + d + '</small></div>' +
+                    '<small class="text-muted">' + o.item_count + ' item(s) &middot; ' + escHtml(o.status || '') + '</small></div>';
+            });
+            recentEl.innerHTML = rhtml;
+            document.getElementById('recent-rx-card').style.display = '';
+        } else {
+            document.getElementById('recent-rx-card').style.display = 'none';
+        }
+    } catch(e) {
+        document.getElementById('recent-rx-card').style.display = 'none';
+    }
+}
+
+function showDrugInfo(invId) {
+    const inv = inventoryCache.find(i => i.id == invId);
+    const card = document.getElementById('drug-info-card');
+    if (!inv) { card.style.display = 'none'; return; }
+
+    let html = '<table class="table table-sm table-borderless mb-0">';
+    html += '<tr><td class="text-muted" style="width:90px"><small>Drug</small></td><td><small class="fw-semibold">' + escHtml(inv.drug_name) + '</small></td></tr>';
+    if (inv.generic_name) html += '<tr><td class="text-muted"><small>Generic</small></td><td><small>' + escHtml(inv.generic_name) + '</small></td></tr>';
+    if (inv.category) html += '<tr><td class="text-muted"><small>Category</small></td><td><small>' + escHtml(inv.category) + '</small></td></tr>';
+
+    const stockClass = inv.stock_quantity <= 0 ? 'danger' : (inv.stock_quantity <= inv.reorder_level ? 'warning' : 'success');
+    html += '<tr><td class="text-muted"><small>Stock</small></td><td><span class="badge bg-' + stockClass + '">' + inv.stock_quantity + '</span></td></tr>';
+    html += '<tr><td class="text-muted"><small>Price</small></td><td><small>MK ' + (inv.unit_price || 0).toLocaleString() + '</small></td></tr>';
+    if (inv.expiry_date) {
+        const isExpired = new Date(inv.expiry_date) < new Date();
+        html += '<tr><td class="text-muted"><small>Expiry</small></td><td><span class="badge bg-' + (isExpired ? 'danger' : 'secondary') + '">' + inv.expiry_date + '</span></td></tr>';
+    }
+    html += '</table>';
+    document.getElementById('drug-info-body').innerHTML = html;
+    card.style.display = '';
+}
 
 function addItem(data) {
     document.getElementById('no-items').style.display = 'none';
@@ -85,22 +192,22 @@ function addItem(data) {
     div.id = 'item-' + idx;
     const d = data || {};
     const drugOpts = inventoryCache.map(i =>
-        '<option value="' + i.id + '" ' + (d.inventory_id == i.id ? 'selected' : '') + '>' + escHtml(i.drug_name) + ' (stock: ' + i.stock_quantity + ')</option>'
+        '<option value="' + i.id + '" ' + (d.inventory_id == i.id ? 'selected' : '') + ' data-stock="' + i.stock_quantity + '" data-price="' + (i.unit_price || 0) + '">' + escHtml(i.drug_name) + ' (stock: ' + i.stock_quantity + ', MK ' + (i.unit_price || 0).toLocaleString() + ')</option>'
     ).join('');
     div.innerHTML = `<div class="row g-2 align-items-end">
         <div class="col-md-4">
-            <label class="form-label small">Drug</label>
+            <label class="form-label small">Drug <span class="text-danger">*</span></label>
             <select class="form-select form-select-sm inv-select" onchange="onDrugSelect(this)">
                 <option value="">-- Select from inventory --</option>
                 ${drugOpts}
                 <option value="__other__">Free-text entry...</option>
             </select>
-            <input type="text" class="form-control form-control-sm mt-1 drug-text" placeholder="Drug name (free-text)" style="display:${d.inventory_id ? 'none' : 'block'}" value="${escHtml(d.drug_name || '')}">
+            <input type="text" class="form-control form-control-sm mt-1 drug-text" placeholder="Drug name" style="display:${d.inventory_id ? 'none' : 'block'}" value="${escHtml(d.drug_name || '')}">
             <input type="hidden" class="inv-id" value="${d.inventory_id || ''}">
         </div>
         <div class="col-md-2">
             <label class="form-label small">Dosage</label>
-            <input type="text" class="form-control form-control-sm" name="dosage" placeholder="e.g. 500mg" value="${escHtml(d.dosage || '')}">
+            <input type="text" class="form-control form-control-sm" name="dosage" placeholder="500mg" value="${escHtml(d.dosage || '')}">
         </div>
         <div class="col-md-2">
             <label class="form-label small">Frequency</label>
@@ -115,58 +222,85 @@ function addItem(data) {
             <label class="form-label small">Route</label>
             <select class="form-select form-select-sm" name="route">
                 <option value="">Select</option>
-                ${['Oral','IV','IM','SC','Topical','Inhalation','Sublingual','PR','SL','Other'].map(r =>
+                ${['Oral','IV','IM','SC','Topical','Inhalation','Sublingual','PR','Other'].map(r =>
                     '<option ' + (d.route === r ? 'selected' : '') + '>' + r + '</option>'
                 ).join('')}
             </select>
         </div>
         <div class="col-md-2">
             <label class="form-label small">Duration</label>
-            <input type="text" class="form-control form-control-sm" name="duration" placeholder="e.g. 7 days" value="${escHtml(d.duration || '')}">
+            <input type="text" class="form-control form-control-sm" name="duration" placeholder="7 days" value="${escHtml(d.duration || '')}">
         </div>
     </div>
     <div class="row g-2 align-items-end mt-1">
         <div class="col-md-2">
             <label class="form-label small">Qty</label>
-            <input type="number" class="form-control form-control-sm" name="quantity" min="0" value="${d.quantity || ''}">
+            <input type="number" class="form-control form-control-sm item-qty" name="quantity" min="0" value="${d.quantity || ''}" onchange="updateCostEstimate()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Unit Price (MK)</label>
+            <input type="number" class="form-control form-control-sm item-price" name="unit_price" step="0.01" min="0" value="${d.unit_price || ''}" onchange="updateCostEstimate()">
         </div>
         <div class="col-md-2">
             <label class="form-label small">Refills</label>
             <input type="number" class="form-control form-control-sm" name="refill_count" min="0" value="${d.refill_count || 0}">
         </div>
-        <div class="col-md-7">
+        <div class="col-md-5">
             <label class="form-label small">Special Instructions</label>
-            <input type="text" class="form-control form-control-sm" name="instructions" placeholder="Special instructions" value="${escHtml(d.instructions || '')}">
+            <input type="text" class="form-control form-control-sm" name="instructions" placeholder="Take after food, avoid dairy..." value="${escHtml(d.instructions || '')}">
         </div>
         <div class="col-md-1 d-flex align-items-end">
-            <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.item-row').remove(); checkItems()" title="Remove"><i class="bi bi-trash"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest('.item-row').remove(); checkItems(); updateCostEstimate()" title="Remove"><i class="bi bi-trash"></i></button>
         </div>
     </div>`;
     container.appendChild(div);
+    if (d.inventory_id) showDrugInfo(d.inventory_id);
+    updateCostEstimate();
 }
 
 function onDrugSelect(sel) {
     const row = sel.closest('.item-row');
     const textInput = row.querySelector('.drug-text');
     const invHidden = row.querySelector('.inv-id');
+    const priceInput = row.querySelector('.item-price');
     if (sel.value === '__other__') {
         textInput.style.display = 'block';
         textInput.value = '';
         invHidden.value = '';
+        priceInput.value = '';
+        document.getElementById('drug-info-card').style.display = 'none';
     } else if (sel.value) {
         textInput.style.display = 'none';
         textInput.value = '';
         invHidden.value = sel.value;
+        const opt = sel.options[sel.selectedIndex];
+        const price = opt.dataset.price || 0;
+        priceInput.value = price;
+        showDrugInfo(sel.value);
     } else {
         textInput.style.display = 'block';
         invHidden.value = '';
+        priceInput.value = '';
+        document.getElementById('drug-info-card').style.display = 'none';
     }
+    updateCostEstimate();
 }
 
 function checkItems() {
     if (!document.querySelector('.item-row')) {
         document.getElementById('no-items').style.display = 'block';
     }
+}
+
+function updateCostEstimate() {
+    let total = 0;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const qty = parseInt(row.querySelector('.item-qty')?.value) || 0;
+        const price = parseFloat(row.querySelector('.item-price')?.value) || 0;
+        total += qty * price;
+    });
+    const el = document.getElementById('total-estimate');
+    el.textContent = total > 0 ? 'Estimated total: MWK ' + total.toLocaleString() : '';
 }
 
 document.getElementById('order-form').addEventListener('submit', async function(e) {
@@ -177,23 +311,23 @@ document.getElementById('order-form').addEventListener('submit', async function(
         const invId = row.querySelector('.inv-id').value;
         const drugText = row.querySelector('.drug-text').value.trim();
         const invSel = row.querySelector('.inv-select');
-        const item = { inventory_id: invId || null, drug_name: drugText, dosage: '', frequency: '', route: '', duration: '', instructions: '', quantity: null, refill_count: 0 };
+        const item = { inventory_id: invId || null, drug_name: drugText, dosage: '', frequency: '', route: '', duration: '', instructions: '', quantity: null, unit_price: 0, refill_count: 0 };
         inputs.forEach(inp => { item[inp.name] = inp.value; });
         if (!item.drug_name && invSel && invSel.value && invSel.value !== '__other__') {
             const opt = invSel.options[invSel.selectedIndex];
             item.drug_name = opt.text.split(' (')[0];
         }
+        if (item.unit_price) item.unit_price = parseFloat(item.unit_price);
         if (item.drug_name) items.push(item);
     });
     if (!items.length) { alert('Add at least one drug'); return; }
 
-    // Check insurance authorization for drips/IV fluids
     const patientId = parseInt(document.getElementById('patient_id').value);
     for (const item of items) {
         if (item.drug_name) {
             const authCheck = await checkAuthRequired(patientId, item.drug_name);
             if (authCheck) {
-                if (!confirm('⚠ Prior Authorization Required\n\n' + authCheck.provider + ' requires authorization for "' + authCheck.item + '".\n\nContinue anyway?')) {
+                if (!confirm('Prior Authorization Required\n\n' + authCheck.provider + ' requires authorization for "' + authCheck.item + '".\n\nContinue anyway?')) {
                     return;
                 }
                 break;
