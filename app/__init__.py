@@ -223,6 +223,12 @@ def create_app():
                         if path.startswith(prefix):
                             table = _TABLE_ROUTE_MAP[prefix]
                             break
+                    if not row_id:
+                        parts = path.rstrip('/').split('/')
+                        try:
+                            row_id = int(parts[-1])
+                        except (ValueError, IndexError):
+                            pass
                     if '/api/ancillaries' in path and row_id:
                         try:
                             req_json = request.get_json(silent=True) or {}

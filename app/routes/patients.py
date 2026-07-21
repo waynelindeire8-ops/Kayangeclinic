@@ -179,7 +179,7 @@ def api_update(id):
               f'Updated patient {data["first_name"]} {data["last_name"]}', request.remote_addr)
     db.close()
 
-    return jsonify({'message': 'Patient updated successfully'})
+    return jsonify({'id': id, 'message': 'Patient updated successfully'})
 
 
 @patients_bp.route('/api/<int:id>', methods=['DELETE'])
@@ -215,7 +215,7 @@ def api_restore(id):
     log_audit(current_user['id'], current_user['username'], 'restore', 'patient', id,
               f'Restored patient {patient["first_name"]} {patient["last_name"]}', request.remote_addr)
     db.close()
-    return jsonify({'message': 'Patient restored successfully'})
+    return jsonify({'id': id, 'message': 'Patient restored successfully'})
 
 
 @patients_bp.route('/api/sync-supabase', methods=['POST'])
