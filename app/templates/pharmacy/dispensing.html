@@ -2,7 +2,41 @@
 {% block content %}
 <div class="page-header">
     <h4><i class="bi bi-cart-plus"></i> Dispensing</h4>
-    <button class="btn btn-primary" onclick="showDispenseModal()"><i class="bi bi-plus-lg me-1"></i>New Dispense</button>
+    <div class="d-flex gap-2">
+        <a href="/pharmacy" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Inventory</a>
+        <button class="btn btn-primary" onclick="showDispenseModal()"><i class="bi bi-plus-lg me-1"></i>New Dispense</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-4" id="dispense-stats">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-cart-check"></i></div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Dispensed</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-calendar-check"></i></div>
+            <div class="stat-value" id="stat-today">0</div>
+            <div class="stat-label">Today</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="bi bi-currency-dollar"></i></div>
+            <div class="stat-value" id="stat-revenue">0</div>
+            <div class="stat-label">Revenue (MK)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i class="bi bi-people"></i></div>
+            <div class="stat-value" id="stat-patients">0</div>
+            <div class="stat-label">Unique Patients</div>
+        </div>
+    </div>
 </div>
 
 <div class="card">
@@ -21,43 +55,43 @@
 <div class="modal fade" id="dispenseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Dispense Medication</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-cart-plus me-1"></i>Dispense Medication</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Patient *</label>
+                    <label class="form-label">Patient <span class="text-danger">*</span></label>
                     <select class="form-select" id="disp-patient">
                         <option value="">Select patient...</option>
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Drug *</label>
+                    <label class="form-label">Drug <span class="text-danger">*</span></label>
                     <select class="form-select" id="disp-drug">
                         <option value="">Select drug...</option>
                     </select>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Quantity *</label>
-                    <input type="number" class="form-control" id="disp-qty" min="1" value="1">
-                </div>
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
-                        <label class="form-label">Unit Price (MK) *</label>
+                        <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="disp-qty" min="1" value="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Unit Price (MK) <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="disp-price" step="0.01" min="0">
                         <div class="form-text" id="price-hint"></div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Total</label>
-                        <input type="text" class="form-control" id="disp-total" readonly>
-                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Total</label>
+                    <input type="text" class="form-control fw-bold" id="disp-total" readonly style="font-size:1.1rem">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Prescription Notes</label>
-                    <textarea class="form-control" id="disp-notes" rows="2"></textarea>
+                    <textarea class="form-control" id="disp-notes" rows="2" placeholder="Instructions for the patient..."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveDispense()">Dispense</button>
+                <button type="button" class="btn btn-primary" onclick="saveDispense()"><i class="bi bi-check-lg me-1"></i>Dispense</button>
             </div>
         </div>
     </div>
@@ -65,21 +99,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    $('#dispensing-table').DataTable({
-        ajax: function(data, callback, settings) { fetchWithAuth('/pharmacy/api/dispensing?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
-        columns: [
-            { data: 'dispensed_date', render: d => new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString() },
-            { data: null, render: d => `${d.p_first} ${d.p_last}` },
-            { data: 'drug_name' },
-            { data: 'quantity' },
-            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
-            { data: null, render: d => 'MK ' + ((d.unit_price || 0) * (d.quantity || 0)).toLocaleString() },
-            { data: null, render: d => `${d.disp_first || ''} ${d.disp_last || ''}` },
-            { data: 'prescription_notes', render: d => d || '-' }
-        ],
-        order: [[0, 'desc']],
-        pageLength: 20
-    });
+    loadStats();
+    loadTable();
 
     Promise.all([
         fetchWithAuth('/patients/api').then(r => r.json()),
@@ -110,6 +131,42 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('disp-price').addEventListener('input', updateTotal);
 });
 
+async function loadStats() {
+    try {
+        const res = await fetchWithAuth('/pharmacy/api/dispensing');
+        const data = await res.json();
+        const today = new Date().toISOString().split('T')[0];
+        const todayItems = data.filter(d => d.dispensed_date && d.dispensed_date.startsWith(today));
+        const totalRevenue = data.reduce((s, d) => s + ((d.unit_price || 0) * (d.quantity || 0)), 0);
+        const uniquePatients = new Set(data.map(d => d.patient_id)).size;
+
+        document.getElementById('stat-total').textContent = data.length;
+        document.getElementById('stat-today').textContent = todayItems.length;
+        document.getElementById('stat-revenue').textContent = 'MWK ' + totalRevenue.toLocaleString();
+        document.getElementById('stat-patients').textContent = uniquePatients;
+    } catch(e) {}
+}
+
+function loadTable() {
+    if ($.fn.DataTable.isDataTable('#dispensing-table')) { $('#dispensing-table').DataTable().destroy(); }
+    $('#dispensing-table').DataTable({
+        ajax: function(data, callback, settings) { fetchWithAuth('/pharmacy/api/dispensing?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
+        columns: [
+            { data: 'dispensed_date', render: d => new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString() },
+            { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="text-decoration-none fw-semibold">' + escHtml(d.p_first) + ' ' + escHtml(d.p_last) + '</a>' },
+            { data: 'drug_name', render: d => '<span class="fw-semibold">' + escHtml(d) + '</span>' },
+            { data: 'quantity', render: d => '<span class="badge bg-secondary">' + d + '</span>' },
+            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
+            { data: null, render: d => '<strong>MK ' + ((d.unit_price || 0) * (d.quantity || 0)).toLocaleString() + '</strong>' },
+            { data: null, render: d => escHtml((d.disp_first || '') + ' ' + (d.disp_last || '')) || '-' },
+            { data: 'prescription_notes', render: d => d ? '<small class="text-muted">' + escHtml(d) + '</small>' : '-' }
+        ],
+        order: [[0, 'desc']],
+        pageLength: 20,
+        language: { search: '', searchPlaceholder: 'Search dispensing...' }
+    });
+}
+
 async function lookupPrice() {
     const patientId = document.getElementById('disp-patient').value;
     const drugOpt = document.getElementById('disp-drug').selectedOptions[0];
@@ -129,7 +186,7 @@ async function lookupPrice() {
 function updateTotal() {
     const price = parseFloat(document.getElementById('disp-price').value) || 0;
     const qty = parseInt(document.getElementById('disp-qty').value) || 0;
-    document.getElementById('disp-total').value = 'MK ' + (price * qty).toLocaleString();
+    document.getElementById('disp-total').value = 'MWK ' + (price * qty).toLocaleString();
 }
 
 function showDispenseModal() {
@@ -161,11 +218,18 @@ async function saveDispense() {
     if (res.ok) {
         bootstrap.Modal.getInstance(document.getElementById('dispenseModal')).hide();
         $('#dispensing-table').DataTable().ajax.reload();
-        alert('Dispensed successfully!');
+        loadStats();
     } else {
         const err = await res.json();
         alert(err.error || 'Error dispensing');
     }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
 }
 </script>
 {% endblock %}

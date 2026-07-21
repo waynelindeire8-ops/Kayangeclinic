@@ -1,21 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
-    <h4><i class="bi bi-capsule"></i> Pharmacy</h4>
+    <h4><i class="bi bi-capsule"></i> Pharmacy Inventory</h4>
     <div>
         <a href="/pharmacy/dispensing" class="btn btn-outline-primary me-2"><i class="bi bi-cart-plus me-1"></i>Dispensing</a>
         <button class="btn btn-primary" onclick="showAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
     </div>
 </div>
 
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-capsule"></i></div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Drugs</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-box-seam"></i></div>
+            <div class="stat-value" id="stat-stock">0</div>
+            <div class="stat-label">Total Stock</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i class="bi bi-exclamation-triangle"></i></div>
+            <div class="stat-value" id="stat-low">0</div>
+            <div class="stat-label">Low Stock</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon red"><i class="bi bi-x-circle"></i></div>
+            <div class="stat-value" id="stat-oos">0</div>
+            <div class="stat-label">Out of Stock</div>
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <div class="row mb-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="text" class="form-control" id="searchInput" placeholder="Search drugs...">
                 </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" id="categoryFilter">
+                    <option value="">All Categories</option>
+                    <option value="Antibiotics">Antibiotics</option>
+                    <option value="Analgesics">Analgesics</option>
+                    <option value="Diabetes">Diabetes</option>
+                    <option value="Respiratory">Respiratory</option>
+                    <option value="GI">Gastrointestinal</option>
+                    <option value="Antihistamines">Antihistamines</option>
+                    <option value="Topical">Topical</option>
+                    <option value="Supplements">Supplements</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
         </div>
         <div class="table-responsive">
@@ -71,10 +116,27 @@
 let editingId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
     loadTable();
     loadSuppliers();
     document.getElementById('searchInput').addEventListener('keyup', function() { loadTable(this.value); });
+    document.getElementById('categoryFilter').addEventListener('change', function() { loadTable(document.getElementById('searchInput').value); });
 });
+
+async function loadStats() {
+    try {
+        const res = await fetchWithAuth('/pharmacy/api/inventory');
+        const items = await res.json();
+        const totalStock = items.reduce((s, i) => s + (i.stock_quantity || 0), 0);
+        const lowStock = items.filter(i => i.stock_quantity > 0 && i.stock_quantity <= (i.reorder_level || 10)).length;
+        const outOfStock = items.filter(i => i.stock_quantity <= 0).length;
+
+        document.getElementById('stat-total').textContent = items.length;
+        document.getElementById('stat-stock').textContent = totalStock;
+        document.getElementById('stat-low').textContent = lowStock;
+        document.getElementById('stat-oos').textContent = outOfStock;
+    } catch(e) {}
+}
 
 async function loadSuppliers() {
     const res = await fetchWithAuth('/suppliers/api?active=1');
@@ -88,22 +150,31 @@ async function loadSuppliers() {
 }
 
 function loadTable(search) {
-    const url = search ? '/pharmacy/api/inventory?search=' + search : '/pharmacy/api/inventory';
+    let url = '/pharmacy/api/inventory';
+    const params = [];
+    if (search) params.push('search=' + encodeURIComponent(search));
+    if (params.length) url += '?' + params.join('&');
+
     if ($.fn.DataTable.isDataTable('#inventory-table')) { $('#inventory-table').DataTable().destroy(); }
     $('#inventory-table').DataTable({
-        ajax: function(data, callback, settings) { fetchWithAuth(url + '?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
+        ajax: function(data, callback, settings) { fetchWithAuth(url + '&' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
         columns: [
             { data: 'drug_name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
             { data: 'generic_name', render: d => d || '-' },
-            { data: 'category', render: d => d || '-' },
-            { data: null, render: d => d.stock_quantity <= d.reorder_level ? '<span class="badge bg-danger">' + d.stock_quantity + '</span>' : '<span class="badge bg-success">' + d.stock_quantity + '</span>' },
-            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
-            { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); return exp < new Date() ? '<span class="badge bg-danger">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
+            { data: 'category', render: d => d ? '<span class="badge bg-light text-dark">' + d + '</span>' : '-' },
+            { data: null, render: d => {
+                if (d.stock_quantity <= 0) return '<span class="badge bg-danger">Out of Stock (0)</span>';
+                if (d.stock_quantity <= (d.reorder_level || 10)) return '<span class="badge bg-warning text-dark">Low (' + d.stock_quantity + '</span>';
+                return '<span class="badge bg-success">' + d.stock_quantity + '</span>';
+            }},
+            { data: null, render: d => '<span class="fw-semibold">MK ' + (d.unit_price || 0).toLocaleString() + '</span>' },
+            { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); const now = new Date(); const daysLeft = Math.ceil((exp - now) / (1000*60*60*24)); return daysLeft < 0 ? '<span class="badge bg-danger">Expired</span>' : daysLeft < 90 ? '<span class="badge bg-warning text-dark">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
             { data: 'reorder_level' },
             { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action" onclick="showSchemePrices(' + d.id + ', \'' + d.drug_name.replace(/'/g, "\\'") + '\')" title="Scheme Prices"><i class="bi bi-tag"></i></button><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
         ],
         order: [[0, 'asc']],
-        pageLength: 15
+        pageLength: 15,
+        language: { search: '', searchPlaceholder: 'Search drugs...' }
     });
 }
 
@@ -145,7 +216,7 @@ async function saveItem() {
     const url = editingId ? '/pharmacy/api/inventory/' + editingId : '/pharmacy/api/inventory';
     const method = editingId ? 'PUT' : 'POST';
     const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
-    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('inventoryModal')).hide(); loadTable(); }
+    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('inventoryModal')).hide(); loadTable(); loadStats(); }
     else alert('Error saving');
 }
 
@@ -153,6 +224,7 @@ async function deleteItem(id) {
     if (!confirm('Delete this item?')) return;
     await fetchWithAuth('/pharmacy/api/inventory/' + id, { method: 'DELETE' });
     loadTable();
+    loadStats();
 }
 
 let currentSchemeDrugId = null;

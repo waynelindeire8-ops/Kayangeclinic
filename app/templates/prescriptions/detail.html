@@ -3,36 +3,17 @@
 <div class="page-header">
     <h4><i class="bi bi-prescription2"></i> Prescription #<span id="order-id-display">{{ order_id }}</span></h4>
     <div class="d-flex gap-2">
-        <button class="btn btn-outline-primary" onclick="window.open('/prescriptions/{{ order_id }}/print','_blank')"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-outline-info" onclick="window.open('/prescriptions/{{ order_id }}/print','_blank')"><i class="bi bi-printer me-1"></i>Print</button>
         <a href="/prescriptions/{{ order_id }}/edit" class="btn btn-primary"><i class="bi bi-pencil me-1"></i>Edit</a>
         <a href="/prescriptions" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
     </div>
 </div>
 
 <div class="row g-3">
-    <div class="col-md-5">
-        <div class="card">
-            <div class="card-header"><h6>Order Info</h6></div>
-            <div class="card-body" id="order-info">
-                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
-            </div>
-        </div>
-
-        <div class="card mt-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6>Refill History</h6>
-                <button class="btn btn-sm btn-outline-primary" onclick="showRefillModal()"><i class="bi bi-plus-lg me-1"></i>Add Refill</button>
-            </div>
-            <div class="card-body p-0" id="refills-list">
-                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-7">
+    <div class="col-lg-4">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h6>Prescribed Drugs</h6>
+                <h6 class="mb-0">Order Info</h6>
                 <div>
                     <select class="form-select form-select-sm d-inline-block w-auto" id="status-select">
                         <option value="active">Active</option>
@@ -41,6 +22,34 @@
                     </select>
                     <button class="btn btn-sm btn-outline-secondary ms-1" onclick="changeStatus()">Update</button>
                 </div>
+            </div>
+            <div class="card-body" id="order-info">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Refill History</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="showRefillModal()"><i class="bi bi-plus me-1"></i>Add</button>
+            </div>
+            <div class="card-body p-0" id="refills-list">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-calculator me-1"></i>Cost Summary</h6></div>
+            <div class="card-body" id="cost-summary">
+                <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-capsule me-1"></i>Prescribed Drugs <span class="badge bg-secondary ms-1" id="drug-count">0</span></h6>
             </div>
             <div class="card-body p-0" id="items-list">
                 <div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span></div>
@@ -86,53 +95,93 @@ async function loadData() {
         return;
     }
 
-    document.getElementById('order-id-display').textContent = orderId;
+    document.getElementById('order-id-display').textContent = '#' + orderId;
     document.getElementById('status-select').value = data.status;
 
     const statusColors = { active: 'success', completed: 'secondary', cancelled: 'danger' };
-    document.getElementById('order-info').innerHTML =
-        '<table class="table-details">' +
-        '<tr><td>Patient</td><td><strong><a href="/patients/' + data.patient_id + '">' + escHtml(data.p_first) + ' ' + escHtml(data.p_last) + '</a></strong><br><small>' + (data.p_patient_id || '') + '</small></td></tr>' +
-        '<tr><td>Doctor</td><td>Dr. ' + escHtml(data.d_first) + ' ' + escHtml(data.d_last) + '</td></tr>' +
-        '<tr><td>Status</td><td><span class="badge bg-' + (statusColors[data.status] || 'secondary') + '">' + data.status + '</span></td></tr>' +
-        '<tr><td>Created</td><td>' + (data.created_at ? new Date(data.created_at).toLocaleString() : '') + '</td></tr>' +
-        '<tr><td>Updated</td><td>' + (data.updated_at ? new Date(data.updated_at).toLocaleString() : '') + '</td></tr>' +
-        (data.notes ? '<tr><td>Notes</td><td>' + escHtml(data.notes) + '</td></tr>' : '') +
-        '</table>';
+    const statusIcons = { active: 'bi-activity', completed: 'bi-check-circle', cancelled: 'bi-x-circle' };
+
+    let infoHtml = '<div class="mb-3">' +
+        '<div class="d-flex align-items-center gap-2 mb-2">' +
+        '<i class="bi ' + (statusIcons[data.status] || 'bi-circle') + ' text-' + (statusColors[data.status] || 'secondary') + '" style="font-size:1.5rem"></i>' +
+        '<div><div class="fw-semibold text-capitalize">' + data.status + '</div>' +
+        '<small class="text-muted">' + (data.created_at ? new Date(data.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '') + '</small></div></div></div>';
+
+    infoHtml += '<table class="table-details">';
+    infoHtml += '<tr><td>Patient</td><td><strong><a href="/patients/' + data.patient_id + '" class="text-decoration-none">' + escHtml(data.p_first) + ' ' + escHtml(data.p_last) + '</a></strong><br><small class="text-muted">' + (data.p_patient_id || '') + '</small></td></tr>';
+    if (data.p_phone) infoHtml += '<tr><td>Phone</td><td>' + escHtml(data.p_phone) + '</td></tr>';
+    if (data.dob) infoHtml += '<tr><td>DOB</td><td>' + escHtml(data.dob) + '</td></tr>';
+    infoHtml += '<tr><td>Doctor</td><td>Dr. ' + escHtml(data.d_first) + ' ' + escHtml(data.d_last) + '</td></tr>';
+    if (data.notes) infoHtml += '<tr><td>Notes</td><td><small>' + escHtml(data.notes) + '</small></td></tr>';
+    infoHtml += '<tr><td>Last Updated</td><td><small>' + (data.updated_at ? new Date(data.updated_at).toLocaleString() : '-') + '</small></td></tr>';
+    infoHtml += '</table>';
+
+    document.getElementById('order-info').innerHTML = infoHtml;
+
+    const items = data.items || [];
+    document.getElementById('drug-count').textContent = items.length;
 
     const itemList = document.getElementById('items-list');
-    const items = data.items || [];
     if (items.length) {
-        let html = '<div class="table-responsive"><table class="table mb-0"><thead><tr><th>Drug</th><th>Dosage</th><th>Frequency</th><th>Route</th><th>Duration</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+        let html = '';
         const itemStatusColors = { active: 'success', discontinued: 'warning', completed: 'secondary' };
         items.forEach(i => {
-            html += '<tr>' +
-                '<td><strong>' + escHtml(i.drug_name) + '</strong>' + (i.instructions ? '<br><small class="text-muted">' + escHtml(i.instructions) + '</small>' : '') + '</td>' +
-                '<td>' + escHtml(i.dosage || '-') + '</td>' +
-                '<td>' + escHtml(i.frequency || '-') + '</td>' +
-                '<td>' + escHtml(i.route || '-') + '</td>' +
-                '<td>' + escHtml(i.duration || '-') + '</td>' +
-                '<td>' + (i.quantity || '-') + '</td>' +
-                '<td><span class="badge bg-' + (itemStatusColors[i.status] || 'secondary') + '">' + i.status + '</span></td></tr>';
+            const stockBadge = i.stock_quantity !== undefined ?
+                (i.stock_quantity <= 0 ? '<span class="badge bg-danger ms-1">Out of Stock</span>' :
+                 i.stock_quantity <= (i.reorder_level || 10) ? '<span class="badge bg-warning text-dark ms-1">Low Stock</span>' :
+                 '<span class="badge bg-success ms-1">In Stock</span>') : '';
+
+            html += '<div class="p-3 border-bottom">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                '<div class="flex-fill">' +
+                '<div class="d-flex align-items-center gap-2 mb-1">' +
+                '<span class="fw-semibold" style="font-size:0.95rem">' + escHtml(i.drug_name) + '</span>' +
+                '<span class="badge bg-' + (itemStatusColors[i.status] || 'secondary') + '">' + i.status + '</span>' +
+                stockBadge +
+                '</div>' +
+                '<div class="d-flex flex-wrap gap-3 mt-1" style="font-size:0.85rem">' +
+                (i.dosage ? '<span><i class="bi bi-capsule text-muted me-1"></i>' + escHtml(i.dosage) + '</span>' : '') +
+                (i.frequency ? '<span><i class="bi bi-clock text-muted me-1"></i>' + escHtml(i.frequency) + '</span>' : '') +
+                (i.route ? '<span><i class="bi bi-arrow-right-circle text-muted me-1"></i>' + escHtml(i.route) + '</span>' : '') +
+                (i.duration ? '<span><i class="bi bi-calendar text-muted me-1"></i>' + escHtml(i.duration) + '</span>' : '') +
+                (i.quantity ? '<span><i class="bi bi-hash text-muted me-1"></i>' + i.quantity + '</span>' : '') +
+                '</div>' +
+                (i.instructions ? '<div class="mt-1"><small class="text-muted"><i class="bi bi-info-circle me-1"></i>' + escHtml(i.instructions) + '</small></div>' : '') +
+                '</div>' +
+                '<div class="text-end">' +
+                (i.unit_price ? '<div class="fw-semibold" style="font-size:0.85rem">MWK ' + ((i.unit_price || 0) * (i.quantity || 0)).toLocaleString() + '</div>' : '') +
+                (i.generic_name ? '<div class="text-muted" style="font-size:0.75rem">' + escHtml(i.generic_name) + '</div>' : '') +
+                '</div>' +
+                '</div></div>';
         });
-        html += '</tbody></table></div>';
         itemList.innerHTML = html;
     } else {
-        itemList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-capsule" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No drugs in this prescription</div>';
+        itemList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-capsule" style="font-size:2rem;display:block;margin-bottom:0.5rem;color:#94a3b8"></i>No drugs in this prescription</div>';
     }
+
+    const totalCost = data.total_cost || 0;
+    const dispensedItems = items.filter(i => i.status === 'completed').length;
+    let costHtml = '<table class="table table-sm table-borderless mb-0">';
+    costHtml += '<tr><td class="text-muted">Total Items</td><td class="text-end fw-semibold">' + items.length + '</td></tr>';
+    costHtml += '<tr><td class="text-muted">Active</td><td class="text-end">' + items.filter(i => i.status === 'active').length + '</td></tr>';
+    if (dispensedItems) costHtml += '<tr><td class="text-muted">Completed</td><td class="text-end">' + dispensedItems + '</td></tr>';
+    if (totalCost > 0) costHtml += '<tr class="border-top"><td class="text-muted fw-semibold">Estimated Total</td><td class="text-end fw-bold">MWK ' + totalCost.toLocaleString() + '</td></tr>';
+    costHtml += '</table>';
+    document.getElementById('cost-summary').innerHTML = costHtml;
 
     const refillsDiv = document.getElementById('refills-list');
     const refills = data.refills || [];
     if (refills.length) {
         let html = '';
         refills.forEach(r => {
-            html += '<div class="p-3 border-bottom"><div class="d-flex justify-content-between"><strong>' + new Date(r.refill_date).toLocaleDateString() + '</strong><span class="badge bg-secondary">Qty: ' + (r.quantity || '-') + '</span></div>' +
+            html += '<div class="p-3 border-bottom">' +
+                '<div class="d-flex justify-content-between"><strong>' + new Date(r.refill_date).toLocaleDateString() + '</strong><span class="badge bg-info">Qty: ' + (r.quantity || '-') + '</span></div>' +
                 (r.notes ? '<small class="text-muted">' + escHtml(r.notes) + '</small>' : '') +
                 '<br><small class="text-muted">by ' + escHtml(r.r_first || '') + ' ' + escHtml(r.r_last || '') + '</small></div>';
         });
         refillsDiv.innerHTML = html;
     } else {
-        refillsDiv.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-arrow-repeat" style="font-size:1.5rem;display:block;margin-bottom:0.25rem"></i>No refills recorded</div>';
+        refillsDiv.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-arrow-repeat" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;color:#94a3b8"></i><small>No refills recorded</small></div>';
     }
 }
 
@@ -154,10 +203,9 @@ document.getElementById('refill-form').addEventListener('submit', async function
         document.getElementById('refill-qty').value = '';
         document.getElementById('refill-notes').value = '';
         loadData();
-        showToast('Refill recorded', 'success');
     } else {
         const err = await res.json();
-        showToast(err.error || 'Failed', 'danger');
+        alert(err.error || 'Failed');
     }
 });
 
@@ -168,8 +216,8 @@ async function changeStatus() {
         method: 'PUT',
         body: JSON.stringify({ status })
     });
-    if (res.ok) { loadData(); showToast('Status updated', 'success'); }
-    else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+    if (res.ok) { loadData(); }
+    else { const err = await res.json(); alert(err.error || 'Failed'); }
 }
 
 function escHtml(str) {
