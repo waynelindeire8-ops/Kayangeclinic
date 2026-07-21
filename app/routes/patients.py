@@ -326,8 +326,8 @@ def _api_import():
         'emergency_contact_name': ['emergency contact', 'emergency contact name', 'next of kin', 'emergency name'],
         'emergency_contact_phone': ['emergency phone', 'emergency contact phone', 'next of kin phone', 'emergency phone number'],
         'blood_group': ['blood group', 'blood type', 'bloodgroup'],
-        'scheme_provider': ['insurance', 'scheme provider', 'insurance provider', 'provider', 'scheme'],
-        'scheme_type': ['scheme type', 'plan', 'insurance type', 'cover type', 'scheme'],
+        'scheme_provider': ['insurance', 'scheme provider', 'insurance provider', 'provider'],
+        'scheme_type': ['scheme type', 'plan', 'insurance type', 'cover type'],
         'scheme_number': ['scheme number', 'policy number', 'member number', 'insurance number', 'policy no'],
     }
 
@@ -343,26 +343,42 @@ def _api_import():
 
     import sqlite3
 
-    # Use a raw connection with FK disabled for bulk import
     db = sqlite3.connect(Config.DATABASE, timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
 
-    # Build insurance provider lookup (name -> id, case-insensitive)
     providers_raw = db.execute('SELECT id, name FROM insurance_providers').fetchall()
     provider_map = {}
     for p in providers_raw:
         provider_map[p['name'].strip().lower()] = p['id']
 
-    last = db.execute('SELECT patient_id FROM patients ORDER BY id DESC LIMIT 1').fetchone()
-    if last:
-        num = int(last['patient_id'].replace('KMC-', ''))
-    else:
-        num = 1000
+    existing_ids = set()
+    for r in db.execute('SELECT patient_id FROM patients').fetchall():
+        existing_ids.add(r['patient_id'])
+
+    num = 1000
+    for r in existing_ids:
+        try:
+            n = int(r.replace('KMC-', ''))
+            if n >= num:
+                num = n + 1
+        except (ValueError, TypeError):
+            pass
 
     created = 0
     skipped = 0
     errors = []
+    imported_rows = []
+
+    def get_val(row, field):
+        if field in col_mapping:
+            val = row[col_mapping[field]]
+            if val is None:
+                return None
+            if hasattr(val, 'strftime'):
+                return val.strftime('%Y-%m-%d')
+            return str(val).strip()
+        return None
 
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         first_name = str(row[col_mapping['first_name']] or '').strip()
@@ -371,20 +387,13 @@ def _api_import():
             skipped += 1
             continue
 
-        num += 1
-        patient_id = f'KMC-{num}'
+        while True:
+            num += 1
+            patient_id = f'KMC-{num}'
+            if patient_id not in existing_ids:
+                break
 
-        def get_val(field):
-            if field in col_mapping:
-                val = row[col_mapping[field]]
-                if val is None:
-                    return None
-                if hasattr(val, 'strftime'):
-                    return val.strftime('%Y-%m-%d')
-                return str(val).strip()
-            return None
-
-        dob = get_val('dob')
+        dob = get_val(row, 'dob')
         if dob and len(dob) == 10 and dob[4] == '-' and dob[7] == '-':
             pass
         elif dob and '/' in dob:
@@ -394,13 +403,13 @@ def _api_import():
         else:
             dob = None
 
-        gender = get_val('gender')
+        gender = get_val(row, 'gender')
         if gender:
             gender = gender.capitalize()
             if gender not in ('Male', 'Female', 'Other'):
                 gender = None
 
-        scheme_provider_val = get_val('scheme_provider')
+        scheme_provider_val = get_val(row, 'scheme_provider')
         scheme_id_val = None
         if scheme_provider_val:
             key = scheme_provider_val.strip().lower()
@@ -420,17 +429,37 @@ def _api_import():
                    emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number, is_active)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
                 (patient_id, first_name, last_name, dob or None, gender,
-                 get_val('phone') or None, get_val('email'), get_val('address'),
-                 get_val('emergency_contact_name'), get_val('emergency_contact_phone'),
-                 get_val('blood_group'), scheme_provider_val, get_val('scheme_type'),
-                 scheme_id_val, get_val('scheme_number'))
+                 get_val(row, 'phone') or None, get_val(row, 'email'), get_val(row, 'address'),
+                 get_val(row, 'emergency_contact_name'), get_val(row, 'emergency_contact_phone'),
+                 get_val(row, 'blood_group'), scheme_provider_val, get_val(row, 'scheme_type'),
+                 scheme_id_val, get_val(row, 'scheme_number'))
             )
+            existing_ids.add(patient_id)
+            imported_rows.append(cursor.lastrowid)
             created += 1
         except Exception as e:
             errors.append(f'Row {row_idx}: {str(e)}')
             skipped += 1
 
     db.commit()
+
+    if imported_rows:
+        try:
+            from app.backup import sync_row_to_pg, HAS_PG
+            if HAS_PG:
+                synced = 0
+                for rowid in imported_rows:
+                    try:
+                        sync_row_to_pg('patients', rowid)
+                        synced += 1
+                    except Exception:
+                        pass
+                if synced > 0:
+                    logger.info(f"Import: synced {synced}/{len(imported_rows)} patients to Supabase")
+        except Exception as e:
+            logger.error(f"Import Supabase sync failed: {e}")
+            errors.append(f'Warning: Supabase sync failed for some patients: {str(e)}')
+
     log_audit(current_user['id'], current_user['username'], 'import', 'patients', None,
               f'Imported {created} patients from Excel', request.remote_addr)
     db.close()
