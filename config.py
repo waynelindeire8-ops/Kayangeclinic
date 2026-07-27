@@ -24,12 +24,12 @@ class Config:
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads/patient_documents')
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024
 
-    if os.environ.get('VERCEL'):
+    if os.environ.get('VERCEL') or os.environ.get('RENDER'):
         DATABASE = '/tmp/kayange.db'
     else:
         DATABASE = os.path.join(BASE_DIR, 'kayange.db')
 
-    DEBUG = not bool(os.environ.get('VERCEL'))
+    DEBUG = not bool(os.environ.get('VERCEL') or os.environ.get('RENDER'))
 
     SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://xozdmkpkxholhukblfuv.supabase.co')
     SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_publishable_V2HZQ5gjJ0Nb7qmh9Pxziw__cR1DpWB')

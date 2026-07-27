@@ -16,11 +16,12 @@ def create_app():
     from app.database import init_db
     init_db()
 
-    # Vercel: data restore handled by vercel_cold_start_pull in before_request
-    # (restoring in create_app() blocks the process for 24s+ and causes 30s timeout)
+    # Cloud (Vercel / Render): data restore handled by before_request
+    # (restoring in create_app() blocks the process and causes timeouts)
+    _is_cloud = os.environ.get('VERCEL') or os.environ.get('RENDER')
 
     # Local: initial sync to Supabase on startup (backup local data) - run in background
-    if not os.environ.get('VERCEL'):
+    if not _is_cloud:
         try:
             from app.backup import sync_all, HAS_PG
             if HAS_PG:
@@ -37,9 +38,8 @@ def create_app():
         except Exception as e:
             logger.warning(f"Failed to start initial backup sync: {e}")
 
-    # Start background auto-sync (pushes SQLite to Supabase periodically)
-    # Start background auto-sync (pushes SQLite to Supabase periodically) — skip on Vercel
-    if not os.environ.get('VERCEL'):
+    # Start background auto-sync (pushes SQLite to Supabase periodically) — skip on cloud
+    if not _is_cloud:
         try:
             from app.backup import start_auto_sync
             start_auto_sync(app)
@@ -128,13 +128,13 @@ def create_app():
     from app.routes.flow import flow_bp
     app.register_blueprint(flow_bp)
 
-    # Vercel: periodic pull from Supabase so warm containers stay fresh.
+    # Cloud: periodic pull from Supabase so ephemeral SQLite stays fresh.
     #
-    # On Vercel, each warm container has its own ephemeral SQLite at /tmp.
-    # Writes on Container A sync to Supabase, but Container B's SQLite is stale
+    # On cloud (Vercel/Render), each instance has its own ephemeral SQLite.
+    # Writes on instance A sync to Supabase, but instance B's SQLite is stale
     # until it re-pulls. Full restore on cold start, then periodic re-pull of
     # high-velocity tables.
-    if os.environ.get('VERCEL'):
+    if _is_cloud:
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
         _VERCEL_PULL_TABLES = (
             'appointments', 'patients', 'billing', 'prescriptions',
@@ -142,7 +142,7 @@ def create_app():
         )
 
         @app.before_request
-        def vercel_cold_start_pull():
+        def cloud_cold_start_pull():
             now = time.time()
             elapsed = now - _vercel_state['last_pull']
             if _vercel_state['initial_pull_done'] and elapsed < 90:
@@ -153,22 +153,22 @@ def create_app():
                     if HAS_PG:
                         if not _vercel_state['initial_pull_done']:
                             restore_all()
-                            logger.info("Vercel: full restore from Supabase (cold start)")
+                            logger.info("Cloud: full restore from Supabase (cold start)")
                         else:
                             for t in _VERCEL_PULL_TABLES:
                                 restore_table(t, full=True)
-                            logger.info(f"Vercel: periodic re-pull ({int(elapsed)}s)")
+                            logger.info(f"Cloud: periodic re-pull ({int(elapsed)}s)")
                         _vercel_state['last_pull'] = now
                         _vercel_state['initial_pull_done'] = True
                 except Exception as e:
-                    logger.error(f"Vercel pull failed: {e}")
+                    logger.error(f"Cloud pull failed: {e}")
                     _vercel_state['initial_pull_done'] = True
 
-    # Vercel: after a write, sync the affected row to Supabase so other
-    # containers see the change. Uses single-row sync (< 1s) instead of
+    # Cloud: after a write, sync the affected row to Supabase so other
+    # instances see the change. Uses single-row sync (< 1s) instead of
     # full-table sync which was blocking responses.
     # Longer prefixes first to avoid /lab/invoices matching /lab.
-    if os.environ.get('VERCEL'):
+    if _is_cloud:
         _TABLE_ROUTE_MAP = {
             '/lab/invoices': 'lab_invoices',
             '/lab': 'lab_tests',
@@ -199,7 +199,7 @@ def create_app():
         }
 
         @app.after_request
-        def vercel_fast_sync(response):
+        def cloud_fast_sync(response):
             if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 400:
                 path = request.path.rstrip('/')
                 table = None
@@ -254,7 +254,7 @@ def create_app():
                             else:
                                 sync_row_to_pg(table, row_id)
                     except Exception as e:
-                        logger.error(f"Vercel sync failed for {table}:{row_id}: {e}")
+                        logger.error(f"Cloud sync failed for {table}:{row_id}: {e}")
             return response
 
     @app.route('/help')
