@@ -4,18 +4,12 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python",
-      "config": { "maxDuration": 30 }
-    },
-    {
-      "src": "app/static/**",
-      "use": "@vercel/static"
+      "config": {
+        "maxDuration": 30
+      }
     }
   ],
   "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/app/static/$1"
-    },
     {
       "src": "/(.*)",
       "dest": "/api/index.py"
