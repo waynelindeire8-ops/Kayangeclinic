@@ -155,13 +155,19 @@ def create_app():
                             restore_all()
                             logger.info("Cloud: full restore from Supabase (cold start)")
                         else:
-                            for t in _VERCEL_PULL_TABLES:
-                                restore_table(t, full=True)
+                            from app.backup import _get_pg_conn
+                            _pg = _get_pg_conn()
+                            try:
+                                for t in _VERCEL_PULL_TABLES:
+                                    restore_table(t, full=True, pg_conn=_pg)
+                            finally:
+                                _pg.close()
                             logger.info(f"Cloud: periodic re-pull ({int(elapsed)}s)")
                         _vercel_state['last_pull'] = now
                         _vercel_state['initial_pull_done'] = True
                 except Exception as e:
                     logger.error(f"Cloud pull failed: {e}")
+                    _vercel_state['last_pull'] = now   # don't retry on every request
                     _vercel_state['initial_pull_done'] = True
 
     # Cloud: after a write, sync the affected row to Supabase so other

@@ -69,19 +69,44 @@ def _get_pg_type(col_type):
         return 'TEXT'
 
 
+_pg_block_until = 0.0          # epoch seconds; no connection attempts before this
+_PG_AUTH_COOLDOWN = 600        # back off 10 min after an auth failure
+
+
+def _is_auth_error(exc):
+    msg = str(exc).lower()
+    return ('authentication' in msg or 'password' in msg or
+            'circuitbreaker' in msg or 'too many' in msg)
+
+
 def _get_pg_conn():
+    """Open ONE Postgres connection. Never retries on auth errors and backs off
+    after one, so a bad password can't snowball into a Supabase lockout."""
+    global _pg_block_until
     if not HAS_PG:
         raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
+    if not Config.SUPABASE_DB_URL:
+        raise RuntimeError('Supabase DB credentials not configured '
+                           '(set SUPABASE_DB_PASSWORD or SUPABASE_DB_URL)')
+    if time.time() < _pg_block_until:
+        raise RuntimeError('Supabase connection in cooldown after auth failure')
     try:
-        return psycopg2.connect(Config.SUPABASE_DB_URL)
-    except Exception:
+        return psycopg2.connect(Config.SUPABASE_DB_URL, connect_timeout=10)
+    except psycopg2.OperationalError as e:
+        if _is_auth_error(e):
+            _pg_block_until = time.time() + _PG_AUTH_COOLDOWN
+            logger.error(f"Supabase auth failure, pausing connections for "
+                         f"{_PG_AUTH_COOLDOWN}s: {e}")
+            raise
+        # Network/DNS-type error: a single fallback attempt with discrete params
         return psycopg2.connect(
             host=Config.SUPABASE_DB_HOST,
             port=Config.SUPABASE_DB_PORT,
             dbname='postgres',
             user=Config.SUPABASE_DB_USER,
             password=Config.SUPABASE_DB_PASSWORD,
-            sslmode='require'
+            sslmode='require',
+            connect_timeout=10
         )
 
 
@@ -662,18 +687,22 @@ def restore_table(table_name, full=False, pg_conn=None):
 
 
 def restore_all():
-    """Restore all tables from Supabase to SQLite (full UPSERT)."""
-    results = {}
+    """Restore all tables from Supabase to SQLite (full UPSERT) over ONE connection.
+    If the connection fails, give up immediately (no per-table reconnects)."""
     try:
         pg = _get_pg_conn()
-        for table in SUPABASE_TABLES:
-            results[table] = restore_table(table, full=True, pg_conn=pg)
-        pg.close()
     except Exception as e:
         logger.error(f"restore_all connection error: {e}")
+        return {table: -1 for table in SUPABASE_TABLES}
+    results = {}
+    try:
         for table in SUPABASE_TABLES:
-            if table not in results:
-                results[table] = restore_table(table, full=True)
+            results[table] = restore_table(table, full=True, pg_conn=pg)
+    finally:
+        try:
+            pg.close()
+        except Exception:
+            pass
     return results
 
 
