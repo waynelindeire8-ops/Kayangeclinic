@@ -1,5 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
 .vercel
-.env*
 
+# Python
 __pycache__/
 *.pyc
+.mypy_cache/
+
+# Local databases and patient data - never commit these
+*.db
+*.sqlite3
+uploads/patient_documents/*
+!uploads/patient_documents/.gitkeep
+
+# Misc
+*.lnk
+~$*
+neon_backup.sql

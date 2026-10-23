@@ -2,8 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.db
-.env
+.env*
 .mypy_cache/
 .vscode/
 .idea/
 *.pdf
+*.pptx
+*.lnk
+uploads/patient_documents/*
