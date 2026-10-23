@@ -240,7 +240,7 @@ def init_neon_tables():
 <<<<<<< HEAD
 =======
                     _relax_not_null(cur, sqlite_db, table_name)
->>>>>>> 8c3b506 (sync to neon)
+
 >>>>>>> b59e4400d9c9b0f209ac1aaca621fe6a46089440
                     continue
 
