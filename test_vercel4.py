@@ -4,7 +4,7 @@ from app.database import get_db
 from config import Config
 
 # Check the connection string
-print('DB URL:', Config.SUPABASE_DB_URL[:60] + '...')
+print('DB URL:', Config.NEON_DATABASE_URL[:60] + '...')
 
 db = get_db()
 cursor = db.conn.cursor()

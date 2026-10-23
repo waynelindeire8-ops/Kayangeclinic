@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, render_template
 from flask_jwt_extended import get_jwt
 from app.auth import login_required
 from app.backup import (sync_all, restore_all, sync_table, restore_table, 
-    init_supabase_tables, get_sync_status, get_last_sync_info, SUPABASE_TABLES, 
+    init_neon_tables, get_sync_status, get_last_sync_info, SYNC_TABLES, 
     sync_table_fast, backup_to_onedrive, restore_from_onedrive, 
     list_onedrive_backups, get_onedrive_status)
 
@@ -34,7 +34,7 @@ def api_sync_table(table_name):
     current_user = get_jwt()
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
-    if table_name not in SUPABASE_TABLES:
+    if table_name not in SYNC_TABLES:
         return jsonify({'error': 'Invalid table'}), 400
     count = sync_table(table_name)
     return jsonify({'message': f'Synced {count} rows', 'count': count})
@@ -56,7 +56,7 @@ def api_restore_table(table_name):
     current_user = get_jwt()
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
-    if table_name not in SUPABASE_TABLES:
+    if table_name not in SYNC_TABLES:
         return jsonify({'error': 'Invalid table'}), 400
     count = restore_table(table_name, full=True)
     return jsonify({'message': f'Restored {count} rows', 'count': count})
@@ -69,11 +69,11 @@ def api_init_tables():
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
     try:
-        success = init_supabase_tables()
+        success = init_neon_tables()
         if success:
             return jsonify({'message': 'Tables initialized successfully'})
         else:
-            return jsonify({'error': 'Failed to initialize tables. Check Supabase connection settings.'}), 500
+            return jsonify({'error': 'Failed to initialize tables. Check Neon connection settings.'}), 500
     except Exception as e:
         return jsonify({'error': f'Connection failed: {str(e)}'}), 500
 
@@ -97,10 +97,10 @@ def api_auto_status():
     info = get_last_sync_info()
     try:
         from app.backup import HAS_PG, _get_sync_interval
-        info['supabase_configured'] = HAS_PG
+        info['neon_configured'] = HAS_PG
         info['interval_minutes'] = _get_sync_interval()
     except Exception:
-        info['supabase_configured'] = False
+        info['neon_configured'] = False
         info['interval_minutes'] = 5
     return jsonify(info)
 
@@ -111,7 +111,7 @@ def api_tables_list():
     current_user = get_jwt()
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Admin only'}), 403
-    return jsonify(SUPABASE_TABLES)
+    return jsonify(SYNC_TABLES)
 
 
 # ── OneDrive Backup Routes ────────────────────────────────────────────────────

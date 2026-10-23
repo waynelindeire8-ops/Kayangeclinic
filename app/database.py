@@ -13,7 +13,7 @@ except ImportError:
     HAS_PG = False
 
 
-# Connection pool for Supabase (for background sync)
+# Connection pool for Neon (for background sync)
 _pg_pool = None
 
 def _get_pg_pool():
@@ -23,7 +23,7 @@ def _get_pg_pool():
             _pg_pool = psycopg2.pool.ThreadedConnectionPool(
                 minconn=1,
                 maxconn=5,
-                dsn=Config.SUPABASE_DB_URL,
+                dsn=Config.NEON_DATABASE_URL,
                 connect_timeout=10
             )
         except Exception:
@@ -47,27 +47,16 @@ def _get_pg_conn():
             pass
     
     # Fallback
-    try:
-        return psycopg2.connect(Config.SUPABASE_DB_URL, connect_timeout=10)
-    except Exception:
-        return psycopg2.connect(
-            host=Config.SUPABASE_DB_HOST,
-            port=Config.SUPABASE_DB_PORT,
-            dbname='postgres',
-            user=Config.SUPABASE_DB_USER,
-            password=Config.SUPABASE_DB_PASSWORD,
-            sslmode='require',
-            connect_timeout=10
-        )
+    return psycopg2.connect(Config.NEON_DATABASE_URL, connect_timeout=10)
 
 
 def get_db():
     """
     Get database connection. 
     - Local: SQLite (kayange.db) - PRIMARY
-    - Vercel: Restore from Supabase to /tmp/kayange.db on cold start, then use SQLite
+    - Vercel: Restore from Neon to /tmp/kayange.db on cold start, then use SQLite
     """
-    # Vercel: ensure database is restored from Supabase on cold start
+    # Vercel: ensure database is restored from Neon on cold start
     if os.environ.get('VERCEL'):
         _ensure_vercel_db()
     
@@ -82,7 +71,7 @@ def get_db():
 _vercel_db_initialized = False
 
 def _ensure_vercel_db():
-    """On Vercel cold start, restore database from Supabase to /tmp."""
+    """On Vercel cold start, restore database from Neon to /tmp."""
     global _vercel_db_initialized
     if _vercel_db_initialized:
         return
@@ -93,17 +82,17 @@ def _ensure_vercel_db():
     try:
         import logging
         logger = logging.getLogger(__name__)
-        from app.backup import restore_all, init_supabase_tables
+        from app.backup import restore_all, init_neon_tables
         
-        logger.info("Vercel cold start: restoring database from Supabase...")
+        logger.info("Vercel cold start: restoring database from Neon...")
         
-        # Ensure tables exist in Supabase
-        init_supabase_tables()
+        # Ensure tables exist in Neon
+        init_neon_tables()
         
         # Restore all tables to local SQLite
         results = restore_all()
         total = sum(v for v in results.values() if v > 0)
-        logger.info(f"Vercel: Restored {total} rows from Supabase to local SQLite")
+        logger.info(f"Vercel: Restored {total} rows from Neon to local SQLite")
         
         _vercel_db_initialized = True
     except Exception as e:
@@ -1025,10 +1014,10 @@ def _migrate_prescriptions(conn):
         conn.execute("ALTER TABLE prescriptions ADD COLUMN refill_count INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
-    schema = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='prescriptions'"
-    ).fetchone()
-    if schema and 'NOT NULL' in schema['sql'].split('consultation_id')[-1].split(',')[0]:
+    # consultation_id must be nullable (prescriptions can exist without a consultation).
+    _cols = {r[1]: r for r in conn.execute("PRAGMA table_info(prescriptions)")}
+    schema = _cols.get('consultation_id')
+    if schema is not None and schema[3]:   # notnull flag set
         conn.executescript('''
             DROP TABLE IF EXISTS prescriptions_new;
             CREATE TABLE prescriptions_new (
