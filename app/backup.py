@@ -160,8 +160,35 @@ def _get_primary_key(table_name, pg_conn=None):
         return None
 
 
-def _adapt_value(val):
+_PG_TEXT_TYPES = {'text', 'character varying', 'character', 'bytea'}
+_PG_TYPE_CACHE = {}
+
+
+def _get_pg_column_types(cur, table_name):
+    """{column: postgres data_type} for a Neon table (cached per process)."""
+    types = _PG_TYPE_CACHE.get(table_name)
+    if types is None:
+        cur.execute("""
+            SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+        """, (table_name,))
+        types = {r[0].lower(): r[1] for r in cur.fetchall()}
+        _PG_TYPE_CACHE[table_name] = types
+    return types
+
+
+def _pg_values(cur, table_name, row, columns):
+    """Row values adapted for Postgres. SQLite is loosely typed, so a numeric/date
+    column can hold '' - Postgres rejects that, so blanks become NULL there."""
+    types = _get_pg_column_types(cur, table_name)
+    return [_adapt_value(row[c], types.get(c.lower())) for c in columns]
+
+
+def _adapt_value(val, pg_type=None):
     if val is None:
+        return None
+    if (pg_type and pg_type not in _PG_TEXT_TYPES
+            and isinstance(val, str) and val.strip() == ''):
         return None
     if isinstance(val, (date, datetime)):
         return val.isoformat()
@@ -177,6 +204,7 @@ def _adapt_value(val):
 def init_neon_tables():
     """Create all tables in Neon PostgreSQL (non-destructive: only creates missing tables)."""
     try:
+        _PG_TYPE_CACHE.clear()
         pg = _get_pg_conn()
         cur = pg.cursor()
 
@@ -206,6 +234,10 @@ def init_neon_tables():
                 if table_exists:
                     # Table exists - add any missing columns from SQLite schema
                     _ensure_neon_columns(cur, sqlite_db, table_name)
+<<<<<<< HEAD
+=======
+                    _relax_not_null(cur, sqlite_db, table_name)
+>>>>>>> 8c3b506 (sync to neon)
                     continue
 
                 schema = sqlite_db.execute(
@@ -312,6 +344,33 @@ def _ensure_neon_columns(cur, sqlite_db, table_name):
         logger.warning(f"Error checking columns for {table_name}: {e}")
 
 
+def _relax_not_null(cur, sqlite_db, table_name):
+    """Drop NOT NULL in Neon on columns that are nullable in SQLite.
+    Older Neon tables can keep a NOT NULL that a later SQLite migration removed
+    (e.g. prescriptions.consultation_id), which makes the sync fail."""
+    try:
+        sqlite_nullable = {
+            r[1].lower() for r in sqlite_db.execute(f"PRAGMA table_info({table_name})")
+            if not r[3] and not r[5]   # not NOT NULL, not part of the primary key
+        }
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s AND is_nullable = 'NO'
+        """, (table_name,))
+        for (col,) in cur.fetchall():
+            if col.lower() in sqlite_nullable:
+                cur.execute("SAVEPOINT relax_nn")
+                try:
+                    cur.execute(f'ALTER TABLE "{table_name}" ALTER COLUMN "{col}" DROP NOT NULL')
+                    cur.execute("RELEASE SAVEPOINT relax_nn")
+                    logger.info(f"Dropped NOT NULL on {table_name}.{col}")
+                except Exception as e:
+                    cur.execute("ROLLBACK TO SAVEPOINT relax_nn")
+                    logger.warning(f"Could not relax NOT NULL on {table_name}.{col}: {e}")
+    except Exception as e:
+        logger.warning(f"Error relaxing NOT NULL for {table_name}: {e}")
+
+
 def sync_table(table_name):
     """Sync a single table from SQLite to Neon using UPSERT."""
     try:
@@ -331,7 +390,7 @@ def sync_table(table_name):
         all_columns = list(rows[0].keys())
         
         # Use unique constraints as conflict target
-        unique_cols = _get_unique_constraints(table_name)
+        unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
         
         # If there are unique constraints besides 'id', exclude 'id' from insert
         non_id_unique = [c for c in unique_cols if c != 'id']
@@ -347,8 +406,10 @@ def sync_table(table_name):
         if non_id_unique:
             conflict_cols = [c for c in non_id_unique if c in columns]
         else:
-            # Use 'id' as conflict target
-            conflict_cols = ['id']
+            # No other unique constraint: conflict on the real primary key
+            # (e.g. system_config uses 'key', not 'id'), falling back to 'id'
+            _pk = _get_primary_key(table_name, pg_conn=pg)
+            conflict_cols = [_pk] if _pk in columns else ['id']
         
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in conflict_cols])
         conflict_cols_str = ', '.join(conflict_cols)
@@ -362,11 +423,11 @@ def sync_table(table_name):
         batch_size = 100
         batch = []
         for row in rows:
-            values = [_adapt_value(row[col]) for col in columns]
+            values = _pg_values(cur, table_name, row, columns)
             batch.append(values)
             if len(batch) >= batch_size:
                 try:
-                    cur.executemany(upsert_sql, batch)
+                    psycopg2.extras.execute_batch(cur, upsert_sql, batch, page_size=100)
                     count += len(batch)
                     pg.commit()
                 except Exception as e:
@@ -379,7 +440,7 @@ def sync_table(table_name):
         # Process remaining batch
         if batch:
             try:
-                cur.executemany(upsert_sql, batch)
+                psycopg2.extras.execute_batch(cur, upsert_sql, batch, page_size=100)
                 count += len(batch)
                 pg.commit()
             except Exception as e:
@@ -447,13 +508,13 @@ def sync_table_fast(table_name):
         all_columns = list(rows[0].keys())
         
         # Use unique constraints as conflict target
-        unique_cols = _get_unique_constraints(table_name)
+        unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
         non_id_unique = [c for c in unique_cols if c != 'id']
         if non_id_unique:
             columns = [c for c in all_columns if c != 'id']
             pk_cols = non_id_unique
         else:
-            pk_col = _get_primary_key(table_name)
+            pk_col = _get_primary_key(table_name, pg_conn=pg)
             if pk_col and pk_col in all_columns:
                 columns = list(all_columns)
                 pk_cols = [pk_col]
@@ -476,11 +537,11 @@ def sync_table_fast(table_name):
         batch_size = 100
         batch = []
         for row in rows:
-            values = [_adapt_value(row[col]) for col in columns]
+            values = _pg_values(cur, table_name, row, columns)
             batch.append(values)
             if len(batch) >= batch_size:
                 try:
-                    cur.executemany(upsert_sql, batch)
+                    psycopg2.extras.execute_batch(cur, upsert_sql, batch, page_size=100)
                     count += len(batch)
                     pg.commit()
                 except Exception as e:
@@ -492,7 +553,7 @@ def sync_table_fast(table_name):
 
         if batch:
             try:
-                cur.executemany(upsert_sql, batch)
+                psycopg2.extras.execute_batch(cur, upsert_sql, batch, page_size=100)
                 count += len(batch)
                 pg.commit()
             except Exception as e:
@@ -521,7 +582,7 @@ def sync_row_to_pg(table_name, row_id):
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
         sqlite_db.row_factory = sqlite3.Row
 
-        pk_col = _get_primary_key(table_name) or 'id'
+        pk_col = _get_primary_key(table_name, pg_conn=pg) or 'id'
         row = sqlite_db.execute(f"SELECT * FROM {table_name} WHERE {pk_col} = ?", (row_id,)).fetchone()
         if not row:
             sqlite_db.close()
@@ -530,7 +591,7 @@ def sync_row_to_pg(table_name, row_id):
             return 0
 
         all_columns = list(row.keys())
-        unique_cols = _get_unique_constraints(table_name)
+        unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
         non_id_unique = [c for c in unique_cols if c != 'id']
         if non_id_unique:
             columns = [c for c in all_columns if c != 'id']
@@ -541,7 +602,7 @@ def sync_row_to_pg(table_name, row_id):
 
         cols_str = ', '.join(columns)
         placeholders = ', '.join(['%s'] * len(columns))
-        values = [_adapt_value(row[col]) for col in columns]
+        values = _pg_values(cur, table_name, row, columns)
         update_cols = ', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col not in conflict_cols])
         conflict_cols_str = ', '.join(conflict_cols)
 
@@ -571,15 +632,15 @@ def delete_row_from_pg(table_name, row_id):
 
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
         sqlite_db.row_factory = sqlite3.Row
-        pk_col = _get_primary_key(table_name) or 'id'
+        pk_col = _get_primary_key(table_name, pg_conn=pg) or 'id'
         row = sqlite_db.execute(f"SELECT * FROM {table_name} WHERE {pk_col} = ?", (row_id,)).fetchone()
         sqlite_db.close()
 
         if not row:
-            pk_col = _get_primary_key(table_name) or 'id'
+            pk_col = _get_primary_key(table_name, pg_conn=pg) or 'id'
             cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = %s", (row_id,))
         else:
-            unique_cols = _get_unique_constraints(table_name)
+            unique_cols = _get_unique_constraints(table_name, pg_conn=pg)
             non_id_unique = [c for c in unique_cols if c != 'id']
             if non_id_unique:
                 val = row[non_id_unique[0]]
@@ -672,6 +733,13 @@ def restore_table(table_name, full=False, pg_conn=None):
 
     except Exception as e:
         logger.error(f"Failed to restore table {table_name}: {e}")
+        # On a shared connection, one failed query aborts the transaction and
+        # makes every later table fail too - roll back so the next table works.
+        try:
+            if pg_conn:
+                pg_conn.rollback()
+        except Exception:
+            pass
         return -1
 
 

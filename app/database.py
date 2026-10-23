@@ -1014,10 +1014,10 @@ def _migrate_prescriptions(conn):
         conn.execute("ALTER TABLE prescriptions ADD COLUMN refill_count INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
-    schema = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='prescriptions'"
-    ).fetchone()
-    if schema and 'NOT NULL' in schema['sql'].split('consultation_id')[-1].split(',')[0]:
+    # consultation_id must be nullable (prescriptions can exist without a consultation).
+    _cols = {r[1]: r for r in conn.execute("PRAGMA table_info(prescriptions)")}
+    schema = _cols.get('consultation_id')
+    if schema is not None and schema[3]:   # notnull flag set
         conn.executescript('''
             DROP TABLE IF EXISTS prescriptions_new;
             CREATE TABLE prescriptions_new (
