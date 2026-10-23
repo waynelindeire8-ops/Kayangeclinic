@@ -234,7 +234,14 @@ def init_neon_tables():
                 if table_exists:
                     # Table exists - add any missing columns from SQLite schema
                     _ensure_neon_columns(cur, sqlite_db, table_name)
+<<<<<<< HEAD
                     _relax_not_null(cur, sqlite_db, table_name)
+=======
+<<<<<<< HEAD
+=======
+                    _relax_not_null(cur, sqlite_db, table_name)
+>>>>>>> 8c3b506 (sync to neon)
+>>>>>>> b59e4400d9c9b0f209ac1aaca621fe6a46089440
                     continue
 
                 schema = sqlite_db.execute(
