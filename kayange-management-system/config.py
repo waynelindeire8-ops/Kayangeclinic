@@ -31,16 +31,13 @@ class Config:
 
     DEBUG = not bool(os.environ.get('VERCEL') or os.environ.get('RENDER'))
 
-    SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://xozdmkpkxholhukblfuv.supabase.co')
-    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_publishable_V2HZQ5gjJ0Nb7qmh9Pxziw__cR1DpWB')
-
-    SUPABASE_DB_URL = os.environ.get('SUPABASE_DB_URL',
-        'postgresql://postgres.xozdmkpkxholhukblfuv:himjim%401234%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require'
-    )
-    SUPABASE_DB_HOST = os.environ.get('SUPABASE_DB_HOST', 'aws-0-eu-central-1.pooler.supabase.com')
-    SUPABASE_DB_PORT = os.environ.get('SUPABASE_DB_PORT', '6543')
-    SUPABASE_DB_USER = os.environ.get('SUPABASE_DB_USER', 'postgres.xozdmkpkxholhukblfuv')
-    SUPABASE_DB_PASSWORD = os.environ.get('SUPABASE_DB_PASSWORD', 'himjim@1234@')
+    # Neon Postgres connection string; configure NEON_DATABASE_URL in the
+    # deployment environment. DATABASE_URL is retained as a generic fallback.
+    NEON_DATABASE_URL = (os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL') or '').strip()
+    if NEON_DATABASE_URL.startswith('postgres://'):
+        NEON_DATABASE_URL = 'postgresql://' + NEON_DATABASE_URL[len('postgres://'):]
+    if NEON_DATABASE_URL and 'sslmode=' not in NEON_DATABASE_URL:
+        NEON_DATABASE_URL += ('&' if '?' in NEON_DATABASE_URL else '?') + 'sslmode=require'
 
     # OneDrive / Microsoft Graph
     ONEDRIVE_CLIENT_ID = os.environ.get('ONEDRIVE_CLIENT_ID', '')
