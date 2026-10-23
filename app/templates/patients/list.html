@@ -3,7 +3,7 @@
 <div class="page-header">
     <h4><i class="bi bi-people"></i> Patients</h4>
     <div>
-        <button class="btn btn-outline-info me-2" onclick="syncFromSupabase()" id="sync-btn"><i class="bi bi-cloud-download me-1"></i>Sync from Supabase</button>
+        <button class="btn btn-outline-info me-2" onclick="syncFromNeon()" id="sync-btn"><i class="bi bi-cloud-download me-1"></i>Sync from Neon</button>
         <a href="/patients/import" class="btn btn-outline-success me-2"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Import</a>
         <a href="/patients/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Patient</a>
     </div>
@@ -43,7 +43,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-cloud-download me-2"></i>Supabase Sync Result</h5>
+                <h5 class="modal-title"><i class="bi bi-cloud-download me-2"></i>Neon Sync Result</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="sync-result-body"></div>
@@ -141,12 +141,12 @@ async function restorePatient(id) {
     }
 }
 
-async function syncFromSupabase() {
+async function syncFromNeon() {
     const btn = document.getElementById('sync-btn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
     try {
-        const res = await fetchWithAuth('/patients/api/sync-supabase', { method: 'POST' });
+        const res = await fetchWithAuth('/patients/api/sync-neon', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
             document.getElementById('sync-result-body').innerHTML =
@@ -161,7 +161,7 @@ async function syncFromSupabase() {
         document.getElementById('sync-result-body').innerHTML = '<div class="alert alert-danger">Connection error: ' + e.message + '</div>';
     }
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync from Supabase';
+    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync from Neon';
     new bootstrap.Modal(document.getElementById('syncResultModal')).show();
 }
 </script>

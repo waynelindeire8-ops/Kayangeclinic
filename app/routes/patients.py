@@ -218,9 +218,9 @@ def api_restore(id):
     return jsonify({'id': id, 'message': 'Patient restored successfully'})
 
 
-@patients_bp.route('/api/sync-supabase', methods=['POST'])
+@patients_bp.route('/api/sync-neon', methods=['POST'])
 @login_required
-def api_sync_supabase():
+def api_sync_neon():
     try:
         from app.backup import restore_table, _get_pg_conn, HAS_PG
         if not HAS_PG:
@@ -243,7 +243,7 @@ def api_sync_supabase():
         db.close()
 
         log_audit(get_jwt()['id'], get_jwt()['username'], 'sync', 'patients', None,
-                  f'Synced patients from Supabase: {before} → {after} total ({restored} active)',
+                  f'Synced patients from Neon: {before} → {after} total ({restored} active)',
                   request.remote_addr)
 
         return jsonify({
@@ -254,7 +254,7 @@ def api_sync_supabase():
             'tables_synced': tables_synced
         })
     except Exception as e:
-        logger.error(f"Supabase sync error: {e}")
+        logger.error(f"Neon sync error: {e}")
         return jsonify({'error': f'Sync failed: {str(e)}'}), 500
 
 
@@ -455,10 +455,10 @@ def _api_import():
                     except Exception:
                         pass
                 if synced > 0:
-                    logger.info(f"Import: synced {synced}/{len(imported_rows)} patients to Supabase")
+                    logger.info(f"Import: synced {synced}/{len(imported_rows)} patients to Neon")
         except Exception as e:
-            logger.error(f"Import Supabase sync failed: {e}")
-            errors.append(f'Warning: Supabase sync failed for some patients: {str(e)}')
+            logger.error(f"Import Neon sync failed: {e}")
+            errors.append(f'Warning: Neon sync failed for some patients: {str(e)}')
 
     log_audit(current_user['id'], current_user['username'], 'import', 'patients', None,
               f'Imported {created} patients from Excel', request.remote_addr)

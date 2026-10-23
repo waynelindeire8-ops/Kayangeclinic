@@ -20,12 +20,12 @@ def create_app():
     # (restoring in create_app() blocks the process and causes timeouts)
     _is_cloud = os.environ.get('VERCEL') or os.environ.get('RENDER')
 
-    # Local: initial sync to Supabase on startup (backup local data) - run in background
+    # Local: initial sync to Neon on startup (backup local data) - run in background
     if not _is_cloud:
         try:
             from app.backup import sync_all, HAS_PG
             if HAS_PG:
-                logger.info("Starting initial backup sync to Supabase in background...")
+                logger.info("Starting initial backup sync to Neon in background...")
                 import threading
                 def _initial_sync():
                     try:
@@ -38,7 +38,7 @@ def create_app():
         except Exception as e:
             logger.warning(f"Failed to start initial backup sync: {e}")
 
-    # Start background auto-sync (pushes SQLite to Supabase periodically) — skip on cloud
+    # Start background auto-sync (pushes SQLite to Neon periodically) — skip on cloud
     if not _is_cloud:
         try:
             from app.backup import start_auto_sync
@@ -128,10 +128,10 @@ def create_app():
     from app.routes.flow import flow_bp
     app.register_blueprint(flow_bp)
 
-    # Cloud: periodic pull from Supabase so ephemeral SQLite stays fresh.
+    # Cloud: periodic pull from Neon so ephemeral SQLite stays fresh.
     #
     # On cloud (Vercel/Render), each instance has its own ephemeral SQLite.
-    # Writes on instance A sync to Supabase, but instance B's SQLite is stale
+    # Writes on instance A sync to Neon, but instance B's SQLite is stale
     # until it re-pulls. Full restore on cold start, then periodic re-pull of
     # high-velocity tables.
     if _is_cloud:
@@ -153,7 +153,7 @@ def create_app():
                     if HAS_PG:
                         if not _vercel_state['initial_pull_done']:
                             restore_all()
-                            logger.info("Cloud: full restore from Supabase (cold start)")
+                            logger.info("Cloud: full restore from Neon (cold start)")
                         else:
                             from app.backup import _get_pg_conn
                             _pg = _get_pg_conn()
@@ -170,7 +170,7 @@ def create_app():
                     _vercel_state['last_pull'] = now   # don't retry on every request
                     _vercel_state['initial_pull_done'] = True
 
-    # Cloud: after a write, sync the affected row to Supabase so other
+    # Cloud: after a write, sync the affected row to Neon so other
     # instances see the change. Uses single-row sync (< 1s) instead of
     # full-table sync which was blocking responses.
     # Longer prefixes first to avoid /lab/invoices matching /lab.

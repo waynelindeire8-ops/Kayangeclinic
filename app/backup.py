@@ -26,7 +26,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-SUPABASE_TABLES = [
+SYNC_TABLES = [
     'system_config', 'audit_logs',
     'users', 'departments', 'insurance_providers',
     'patients', 'patient_allergies', 'patient_medical_history', 'patient_medications',
@@ -80,34 +80,23 @@ def _is_auth_error(exc):
 
 
 def _get_pg_conn():
-    """Open ONE Postgres connection. Never retries on auth errors and backs off
-    after one, so a bad password can't snowball into a Supabase lockout."""
+    """Open ONE Neon Postgres connection. Never retries on auth errors and backs
+    off after one, so a bad password can't snowball into repeated failed logins."""
     global _pg_block_until
     if not HAS_PG:
         raise RuntimeError('psycopg2 not installed. Run: pip install psycopg2-binary')
-    if not Config.SUPABASE_DB_URL:
-        raise RuntimeError('Supabase DB credentials not configured '
-                           '(set SUPABASE_DB_PASSWORD or SUPABASE_DB_URL)')
+    if not Config.NEON_DATABASE_URL:
+        raise RuntimeError('Neon DB not configured (set NEON_DATABASE_URL)')
     if time.time() < _pg_block_until:
-        raise RuntimeError('Supabase connection in cooldown after auth failure')
+        raise RuntimeError('Neon connection in cooldown after auth failure')
     try:
-        return psycopg2.connect(Config.SUPABASE_DB_URL, connect_timeout=10)
+        return psycopg2.connect(Config.NEON_DATABASE_URL, connect_timeout=10)
     except psycopg2.OperationalError as e:
         if _is_auth_error(e):
             _pg_block_until = time.time() + _PG_AUTH_COOLDOWN
-            logger.error(f"Supabase auth failure, pausing connections for "
+            logger.error(f"Neon auth failure, pausing connections for "
                          f"{_PG_AUTH_COOLDOWN}s: {e}")
-            raise
-        # Network/DNS-type error: a single fallback attempt with discrete params
-        return psycopg2.connect(
-            host=Config.SUPABASE_DB_HOST,
-            port=Config.SUPABASE_DB_PORT,
-            dbname='postgres',
-            user=Config.SUPABASE_DB_USER,
-            password=Config.SUPABASE_DB_PASSWORD,
-            sslmode='require',
-            connect_timeout=10
-        )
+        raise
 
 
 def _get_unique_constraints(table_name, pg_conn=None):
@@ -185,8 +174,8 @@ def _adapt_value(val):
     return val
 
 
-def init_supabase_tables():
-    """Create all tables in Supabase PostgreSQL (non-destructive: only creates missing tables)."""
+def init_neon_tables():
+    """Create all tables in Neon PostgreSQL (non-destructive: only creates missing tables)."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -203,9 +192,9 @@ def init_supabase_tables():
         sqlite_db = sqlite3.connect(Config.DATABASE, timeout=30)
         sqlite_db.row_factory = sqlite3.Row
 
-        for table_name in SUPABASE_TABLES:
+        for table_name in SYNC_TABLES:
             try:
-                # Check if table already exists in Supabase
+                # Check if table already exists in Neon
                 cur.execute("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables 
@@ -216,7 +205,7 @@ def init_supabase_tables():
 
                 if table_exists:
                     # Table exists - add any missing columns from SQLite schema
-                    _ensure_supabase_columns(cur, sqlite_db, table_name)
+                    _ensure_neon_columns(cur, sqlite_db, table_name)
                     continue
 
                 schema = sqlite_db.execute(
@@ -259,16 +248,16 @@ def init_supabase_tables():
         sqlite_db.close()
         cur.close()
         pg.close()
-        logger.info("Supabase tables initialized successfully")
+        logger.info("Neon tables initialized successfully")
         return True
 
     except Exception as e:
-        logger.error(f"Failed to initialize Supabase tables: {e}")
+        logger.error(f"Failed to initialize Neon tables: {e}")
         return False
 
 
-def _ensure_supabase_columns(cur, sqlite_db, table_name):
-    """Add any missing columns from SQLite schema to existing Supabase table."""
+def _ensure_neon_columns(cur, sqlite_db, table_name):
+    """Add any missing columns from SQLite schema to existing Neon table."""
     try:
         # Get SQLite columns
         sqlite_schema = sqlite_db.execute(
@@ -283,7 +272,7 @@ def _ensure_supabase_columns(cur, sqlite_db, table_name):
             if col not in ('primary', 'key', 'constraint', 'check', 'unique', 'references'):
                 sqlite_cols.add(col)
 
-        # Get Supabase columns
+        # Get Neon columns
         cur.execute("""
             SELECT column_name FROM information_schema.columns 
             WHERE table_schema = 'public' AND table_name = %s
@@ -317,14 +306,14 @@ def _ensure_supabase_columns(cur, sqlite_db, table_name):
                 logger.info(f"Added column {col} ({pg_type}) to {table_name}")
             except Exception as e:
                 logger.warning(f"Failed to add column {col} to {table_name}: {e}")
-                pg.rollback()
+                cur.connection.rollback()
 
     except Exception as e:
         logger.warning(f"Error checking columns for {table_name}: {e}")
 
 
 def sync_table(table_name):
-    """Sync a single table from SQLite to Supabase using UPSERT."""
+    """Sync a single table from SQLite to Neon using UPSERT."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor()
@@ -414,13 +403,13 @@ def sync_table(table_name):
 
 
 def sync_all():
-    """Sync all tables from SQLite to Supabase."""
+    """Sync all tables from SQLite to Neon."""
     results = {}
     
     # First, get row counts for all tables in one query
     sqlite_db = sqlite3.connect(Config.DATABASE, timeout=10)
     counts = {}
-    for table in SUPABASE_TABLES:
+    for table in SYNC_TABLES:
         try:
             cnt = sqlite_db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             if cnt > 0:
@@ -430,7 +419,7 @@ def sync_all():
     sqlite_db.close()
     
     # Only sync tables that have data
-    for table in SUPABASE_TABLES:
+    for table in SYNC_TABLES:
         if table in counts:
             results[table] = sync_table(table)
         else:
@@ -439,7 +428,7 @@ def sync_all():
 
 
 def sync_table_fast(table_name):
-    """Fast sync a single table to Supabase (for Vercel after writes).
+    """Fast sync a single table to Neon (for Vercel after writes).
     Uses batch UPSERT to handle both inserts and updates."""
     try:
         pg = _get_pg_conn()
@@ -522,7 +511,7 @@ def sync_table_fast(table_name):
 
 
 def sync_row_to_pg(table_name, row_id):
-    """Sync a single row from SQLite to Supabase by primary key. Fast enough for after_request."""
+    """Sync a single row from SQLite to Neon by primary key. Fast enough for after_request."""
     if not row_id:
         return 0
     try:
@@ -573,7 +562,7 @@ def sync_row_to_pg(table_name, row_id):
 
 
 def delete_row_from_pg(table_name, row_id):
-    """Delete a single row from Supabase using unique constraint to handle id mismatches."""
+    """Delete a single row from Neon using unique constraint to handle id mismatches."""
     if not row_id:
         return 0
     try:
@@ -611,11 +600,11 @@ def delete_row_from_pg(table_name, row_id):
 
 
 def restore_table(table_name, full=False, pg_conn=None):
-    """Restore a single table from Supabase to SQLite.
+    """Restore a single table from Neon to SQLite.
     
     When full=False (default), only inserts rows that don't exist locally,
-    preventing local data from being overwritten by stale Supabase data.
-    When full=True, does a full UPSERT to propagate all updates from Supabase.
+    preventing local data from being overwritten by stale Neon data.
+    When full=True, does a full UPSERT to propagate all updates from Neon.
     """
     own_conn = False
     try:
@@ -687,16 +676,16 @@ def restore_table(table_name, full=False, pg_conn=None):
 
 
 def restore_all():
-    """Restore all tables from Supabase to SQLite (full UPSERT) over ONE connection.
+    """Restore all tables from Neon to SQLite (full UPSERT) over ONE connection.
     If the connection fails, give up immediately (no per-table reconnects)."""
     try:
         pg = _get_pg_conn()
     except Exception as e:
         logger.error(f"restore_all connection error: {e}")
-        return {table: -1 for table in SUPABASE_TABLES}
+        return {table: -1 for table in SYNC_TABLES}
     results = {}
     try:
-        for table in SUPABASE_TABLES:
+        for table in SYNC_TABLES:
             results[table] = restore_table(table, full=True, pg_conn=pg)
     finally:
         try:
@@ -707,7 +696,7 @@ def restore_all():
 
 
 def get_sync_status():
-    """Get sync status from Supabase."""
+    """Get sync status from Neon."""
     try:
         pg = _get_pg_conn()
         cur = pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -769,7 +758,7 @@ def get_last_sync_info():
 
 
 def _auto_sync_worker(app):
-    """Background worker: periodically syncs all tables to Supabase."""
+    """Background worker: periodically syncs all tables to Neon."""
     logger.info("Auto-sync worker started")
     first_run = True
     while not _auto_sync_stop.is_set():
@@ -1200,5 +1189,5 @@ def get_onedrive_status():
 
 def queue_vercel_sync(table_name):
     """Queue a table for background sync (non-blocking)."""
-    if table_name in SUPABASE_TABLES:
+    if table_name in SYNC_TABLES:
         _vercel_sync_queue.put(table_name)

@@ -1,7 +1,7 @@
 import psycopg2
 from config import Config
 
-conn = psycopg2.connect(Config.SUPABASE_DB_URL)
+conn = psycopg2.connect(Config.NEON_DATABASE_URL)
 cur = conn.cursor()
 
 # Get all table names
