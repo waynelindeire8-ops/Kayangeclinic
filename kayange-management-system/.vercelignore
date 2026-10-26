@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-*.pyo
-*.db
-.env
-.mypy_cache/
-.vscode/
-.idea/
-*.pdf
