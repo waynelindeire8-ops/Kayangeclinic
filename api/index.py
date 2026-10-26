@@ -14,7 +14,7 @@ except Exception:
     _startup_error = traceback.format_exc().encode()
 
 
-def app(environ, start_response):
+def _application(environ, start_response):
     if _startup_error is not None:
         start_response('500 Internal Server Error',
                        [('Content-Type', 'text/plain; charset=utf-8')])
@@ -25,3 +25,6 @@ def app(environ, start_response):
         start_response('500 Internal Server Error',
                        [('Content-Type', 'text/plain; charset=utf-8')])
         return [traceback.format_exc().encode()]
+
+
+app = _application
