@@ -706,6 +706,15 @@ def restore_table(table_name, full=False, pg_conn=None):
 
             if update_clause:
                 insert_sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
+                # Never let an older Neon row overwrite a newer local edit.
+                # datetime() normalises 'YYYY-MM-DD HH:MM:SS' (SQLite) and
+                # 'YYYY-MM-DDTHH:MM:SS[.ffffff]' (Neon via isoformat) so they compare correctly.
+                if 'updated_at' in columns:
+                    insert_sql += (
+                        f" WHERE {table_name}.updated_at IS NULL"
+                        f" OR excluded.updated_at IS NULL"
+                        f" OR datetime(excluded.updated_at) >= datetime({table_name}.updated_at)"
+                    )
             else:
                 insert_sql = f"INSERT OR IGNORE INTO {table_name} ({cols_str}) VALUES ({placeholders})"
         else:

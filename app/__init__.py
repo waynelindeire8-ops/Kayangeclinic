@@ -138,7 +138,7 @@ def create_app():
         _vercel_state = {'last_pull': 0.0, 'initial_pull_done': False}
         _VERCEL_PULL_TABLES = (
             'appointments', 'patients', 'billing', 'prescriptions',
-            'lab_tests', 'consultations', 'patient_flow',
+            'lab_tests', 'consultations', 'patient_flow', 'users',
         )
 
         @app.before_request
