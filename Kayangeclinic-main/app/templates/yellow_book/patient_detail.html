@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-journal-medical me-2"></i>Yellow Book</h4>
+    <span class="text-muted" id="patient-name-display">Patient #{{ patient_id }}</span>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-shield-check me-1"></i>Vaccination Records</h6>
+                <button class="btn btn-sm btn-primary" onclick="showAddModal()"><i class="bi bi-plus-lg me-1"></i>Add Vaccination</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0" id="records-table">
+                        <thead><tr><th>Vaccine</th><th>Dose</th><th>Date</th><th>Batch #</th><th>Manufacturer</th><th>Site</th><th>Next Due</th><th>Given By</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="empty-msg" class="text-center text-muted py-5" style="display:none">
+                    <i class="bi bi-shield-check" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No vaccinations recorded
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-person me-1"></i>Patient Info</h6></div>
+            <div class="card-body" id="patient-info"></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-printer me-1"></i>Certificate</h6></div>
+            <div class="card-body">
+                <p class="small text-muted">Generate the WHO International Certificate of Vaccination for this patient.</p>
+                <button class="btn btn-warning w-100" onclick="printCertificate()">
+                    <i class="bi bi-printer me-1"></i>Print Yellow Book
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="recordModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="modal-title">Add Vaccination Record</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <input type="hidden" id="edit-id" value="">
+        <div class="mb-3">
+            <label class="form-label">Vaccine <span class="text-danger">*</span></label>
+            <select class="form-select" id="field-vaccine"></select>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">Dose Number</label>
+                <input type="number" class="form-control" id="field-dose" value="1" min="1">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Batch/Lot #</label>
+                <input type="text" class="form-control" id="field-batch">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Manufacturer</label>
+                <input type="text" class="form-control" id="field-manufacturer">
+            </div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-md-6">
+                <label class="form-label">Date Administered <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="field-date">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Next Dose Due</label>
+                <input type="date" class="form-control" id="field-next">
+            </div>
+        </div>
+        <div class="mb-3 mt-2">
+            <label class="form-label">Injection Site</label>
+            <select class="form-select" id="field-site">
+                <option value="">Select...</option>
+                <option value="Left Deltoid">Left Deltoid</option>
+                <option value="Right Deltoid">Right Deltoid</option>
+                <option value="Left Thigh">Left Thigh</option>
+                <option value="Right Thigh">Right Thigh</option>
+                <option value="Left Gluteal">Left Gluteal</option>
+                <option value="Right Gluteal">Right Gluteal</option>
+                <option value="Oral">Oral</option>
+                <option value="Intranasal">Intranasal</option>
+                <option value="Subcutaneous">Subcutaneous</option>
+                <option value="Intradermal">Intradermal</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" id="field-notes" rows="2"></textarea>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRecord()">Save</button>
+    </div>
+</div></div></div>
+
+<script>
+let vaccines = [];
+let modal = null;
+const PATIENT_ID = {{ patient_id }};
+
+document.addEventListener('DOMContentLoaded', async function() {
+    modal = new bootstrap.Modal(document.getElementById('recordModal'));
+
+    const pRes = await fetchWithAuth('/patients/api/' + PATIENT_ID);
+    const patient = await pRes.json();
+    document.getElementById('patient-name-display').textContent = (patient.first_name || '') + ' ' + (patient.last_name || '') + ' (' + (patient.patient_id || '') + ')';
+    document.getElementById('patient-info').innerHTML =
+        '<table class="table table-sm mb-0"><tr><td><strong>Patient ID</strong></td><td>' + esc(patient.patient_id || '-') + '</td></tr>' +
+        '<tr><td><strong>Name</strong></td><td>' + esc(patient.first_name) + ' ' + esc(patient.last_name) + '</td></tr>' +
+        '<tr><td><strong>DOB</strong></td><td>' + (patient.dob || '-') + '</td></tr>' +
+        '<tr><td><strong>Gender</strong></td><td>' + (patient.gender || '-') + '</td></tr>' +
+        '<tr><td><strong>Passport #</strong></td><td>' + esc(patient.passport_number || '-') + '</td></tr>' +
+        '<tr><td><strong>Nationality</strong></td><td>' + esc(patient.nationality || '-') + '</td></tr>' +
+        '<tr><td><strong>Phone</strong></td><td>' + esc(patient.phone || '-') + '</td></tr></table>';
+
+    const vRes = await fetchWithAuth('/yellow-book/api/vaccines');
+    vaccines = await vRes.json();
+    const sel = document.getElementById('field-vaccine');
+    vaccines.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.id;
+        o.textContent = v.vaccine_name + (v.manufacturer ? ' (' + v.manufacturer + ')' : '');
+        sel.appendChild(o);
+    });
+
+    loadRecords();
+});
+
+async function loadRecords() {
+    const res = await fetchWithAuth('/yellow-book/api/records/' + PATIENT_ID);
+    const records = await res.json();
+    const tbody = document.querySelector('#records-table tbody');
+    tbody.innerHTML = '';
+    if (records.length) {
+        document.getElementById('records-table').style.display = '';
+        document.getElementById('empty-msg').style.display = 'none';
+        const siteLabels = {subcutaneous:'SC', intradermal:'ID', oral:'Oral', intranasal:'IN'};
+        records.forEach(r => {
+            tbody.innerHTML += '<tr>' +
+                '<td><strong>' + esc(r.vaccine_name) + '</strong><br><small class="text-muted">' + esc(r.vaccine_type || '') + '</small></td>' +
+                '<td>Dose ' + (r.dose_number || 1) + '</td>' +
+                '<td>' + (r.date_administered || '-') + '</td>' +
+                '<td><small>' + esc(r.batch_number || '-') + '</small></td>' +
+                '<td><small>' + esc(r.manufacturer || '-') + '</small></td>' +
+                '<td><small>' + esc(r.injection_site || '-') + '</small></td>' +
+                '<td>' + (r.next_dose_due || '-') + '</td>' +
+                '<td><small>' + esc(r.u_first || '') + ' ' + esc(r.u_last || '') + '</small></td>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editRecord(' + r.id + ')"><i class="bi bi-pencil"></i></button>' +
+                '<button class="btn btn-sm btn-outline-danger" onclick="deleteRecord(' + r.id + ')"><i class="bi bi-trash"></i></button></td></tr>';
+        });
+    } else {
+        document.getElementById('records-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+    }
+}
+
+function showAddModal() {
+    document.getElementById('modal-title').textContent = 'Add Vaccination Record';
+    document.getElementById('edit-id').value = '';
+    document.getElementById('field-vaccine').value = '';
+    document.getElementById('field-dose').value = '1';
+    document.getElementById('field-batch').value = '';
+    document.getElementById('field-manufacturer').value = '';
+    document.getElementById('field-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('field-next').value = '';
+    document.getElementById('field-site').value = '';
+    document.getElementById('field-notes').value = '';
+    modal.show();
+}
+
+async function editRecord(id) {
+    const res = await fetchWithAuth('/yellow-book/api/records/' + PATIENT_ID);
+    const records = await res.json();
+    const r = records.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('modal-title').textContent = 'Edit Vaccination Record';
+    document.getElementById('edit-id').value = r.id;
+    document.getElementById('field-vaccine').value = r.vaccine_id;
+    document.getElementById('field-dose').value = r.dose_number || 1;
+    document.getElementById('field-batch').value = r.batch_number || '';
+    document.getElementById('field-manufacturer').value = r.manufacturer || '';
+    document.getElementById('field-date').value = r.date_administered;
+    document.getElementById('field-next').value = r.next_dose_due || '';
+    document.getElementById('field-site').value = r.injection_site || '';
+    document.getElementById('field-notes').value = r.notes || '';
+    modal.show();
+}
+
+async function saveRecord() {
+    const id = document.getElementById('edit-id').value;
+    const data = {
+        patient_id: PATIENT_ID,
+        vaccine_id: parseInt(document.getElementById('field-vaccine').value),
+        dose_number: parseInt(document.getElementById('field-dose').value) || 1,
+        batch_number: document.getElementById('field-batch').value,
+        manufacturer: document.getElementById('field-manufacturer').value,
+        date_administered: document.getElementById('field-date').value,
+        next_dose_due: document.getElementById('field-next').value || null,
+        injection_site: document.getElementById('field-site').value,
+        notes: document.getElementById('field-notes').value
+    };
+    if (!data.vaccine_id || !data.date_administered) {
+        showToast('Vaccine and Date are required', 'danger'); return;
+    }
+    const url = id ? '/yellow-book/api/records/' + id : '/yellow-book/api/records';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetchWithAuth(url, { method: method, body: JSON.stringify(data) });
+    const result = await res.json();
+    if (result.error) { showToast(result.error, 'danger'); return; }
+    modal.hide();
+    loadRecords();
+    showToast(result.message || 'Saved', 'success');
+}
+
+async function deleteRecord(id) {
+    if (!confirm('Delete this vaccination record?')) return;
+    const res = await fetchWithAuth('/yellow-book/api/records/' + id, { method: 'DELETE' });
+    const result = await res.json();
+    if (result.error) { showToast(result.error, 'danger'); return; }
+    loadRecords();
+    showToast('Record deleted', 'success');
+}
+
+async function printCertificate() {
+    const res = await fetchWithAuth('/yellow-book/api/certificate/' + PATIENT_ID);
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'danger'); return; }
+    const p = data.patient;
+    const records = data.records;
+    const win = window.open('', '_blank');
+    let rows = '';
+    if (records.length) {
+        records.forEach(r => {
+            rows += '<tr><td>' + esc(r.vaccine_name) + '</td><td>' + (r.dose_number || 1) + '</td><td>' + (r.date_administered || '') + '</td><td>' + esc(r.batch_number || '-') + '</td><td>' + esc(r.manufacturer || '-') + '</td><td>' + esc(r.injection_site || '-') + '</td><td>' + (r.next_dose_due || '-') + '</td><td><small>' + esc(r.u_first || '') + ' ' + esc(r.u_last || '') + '</small></td></tr>';
+        });
+    } else {
+        rows = '<tr><td colspan="8" class="text-center text-muted">No vaccinations recorded</td></tr>';
+    }
+    win.document.write('<html><head><title>Yellow Book - ' + esc(p.first_name) + ' ' + esc(p.last_name) + '</title>' +
+        '<style>body{font-family:Arial,sans-serif;padding:20px;color:#1e293b}.header{text-align:center;border-bottom:3px solid #f59e0b;padding-bottom:15px;margin-bottom:25px}.header h1{color:#b45309;margin:0 0 5px;font-size:22px}.header h2{color:#334155;margin:0;font-size:16px;font-weight:400}.clinic-info{text-align:center;font-size:13px;color:#64748b;margin-bottom:20px}.patient-info{background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:12px;margin-bottom:20px;font-size:13px}.patient-info table{width:100%}.patient-info td{padding:3px 8px}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f59e0b;color:#fff;padding:8px 10px;text-align:left;font-size:12px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px}tr:nth-child(even){background:#fffbeb}.stamp-section{text-align:center;margin-top:30px;padding-top:20px;border-top:2px dashed #cbd5e1}.stamp{border:2px solid #b45309;padding:12px 30px;display:inline-block;margin:15px 0;font-weight:bold;color:#b45309;font-size:16px}.signature-line{display:flex;justify-content:space-between;margin-top:25px;padding:0 40px;font-size:13px}.signature-line div{border-top:1px solid #334155;padding-top:5px;min-width:200px;text-align:center}.footer{text-align:center;font-size:11px;color:#94a3b8;margin-top:30px;border-top:1px solid #e2e8f0;padding-top:15px}@media print{body{padding:0}.header{border-bottom-color:#f59e0b}.stamp{border-color:#b45309}}</style></head><body>' +
+        '<div class="header"><h1>&#9733; INTERNATIONAL CERTIFICATE OF VACCINATION OR PROPHYLAXIS</h1><h2>Yellow Book (WHO Standard)</h2></div>' +
+        '<div class="clinic-info"><strong>Kayange Clinic</strong> | Issued: ' + new Date().toLocaleDateString() + '</div>' +
+        '<div class="patient-info"><table><tr><td><strong>Name:</strong> ' + esc(p.first_name) + ' ' + esc(p.last_name) + '</td><td><strong>DOB:</strong> ' + (p.dob || '-') + '</td></tr>' +
+        '<tr><td><strong>Passport #:</strong> ' + esc(p.passport_number || '-') + '</td><td><strong>Nationality:</strong> ' + esc(p.nationality || '-') + '</td></tr>' +
+        '<tr><td><strong>Gender:</strong> ' + (p.gender || '-') + '</td><td><strong>Patient ID:</strong> ' + esc(p.patient_id) + '</td></tr></table></div>' +
+        '<table><thead><tr><th>Vaccine</th><th>Dose</th><th>Date Administered</th><th>Batch/Lot #</th><th>Manufacturer</th><th>Site</th><th>Next Due</th><th>Administered By</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div class="stamp-section"><div class="stamp">CERTIFIED</div><div class="signature-line"><div>Signature of Vaccinator</div><div>Clinic Stamp</div></div></div>' +
+        '<div class="footer">This certificate is valid only if the vaccine used is approved by the World Health Organization. ' +
+        'Keep this document with your passport when traveling internationally. &bull; Kayange Clinic Management System</div></body></html>');
+    win.document.close();
+    win.print();
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

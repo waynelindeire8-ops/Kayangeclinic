@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .video-container { background: #1a1a2e; border-radius: 12px; overflow: hidden; position: relative; }
+    .video-main { width: 100%; height: 60vh; background: #16213e; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .video-main video { width: 100%; height: 100%; object-fit: cover; }
+    .video-self { position: absolute; bottom: 20px; right: 20px; width: 200px; height: 150px; background: #0f3460; border-radius: 8px; border: 2px solid #fff; overflow: hidden; }
+    .video-self video { width: 100%; height: 100%; object-fit: cover; }
+    .video-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 10; }
+    .video-controls .btn { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+    .video-controls .btn-end { background: #dc3545; color: #fff; }
+    .video-controls .btn-mute { background: #6c757d; color: #fff; }
+    .video-controls .btn-mute.active { background: #dc3545; }
+    .session-timer { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; z-index: 10; }
+    .session-status { position: absolute; top: 20px; right: 20px; z-index: 10; }
+    .waiting-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; z-index: 20; }
+    .waiting-overlay .spinner-border { width: 3rem; height: 3rem; }
+</style>
+
+<div class="page-header">
+    <h4><i class="bi bi-camera-video"></i> <span id="session-label">Video Room</span></h4>
+    <div class="d-flex gap-2">
+        <a href="/telemedicine/sessions/{{ session_id }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Session</a>
+    </div>
+</div>
+
+<div class="video-container" id="video-container">
+    <div class="video-main" id="local-video">
+        <div class="text-center">
+            <i class="bi bi-camera-video" style="font-size:3rem;opacity:0.3"></i>
+            <p class="mt-2">Click "Start Call" to begin</p>
+        </div>
+    </div>
+    <div class="video-self" id="self-video" style="display:none">
+        <video id="self-stream" autoplay muted playsinline></video>
+    </div>
+    <div class="session-timer" id="session-timer" style="display:none"><i class="bi bi-clock me-1"></i><span id="timer-display">00:00</span></div>
+    <div class="session-status" id="session-status-badge"></div>
+
+    <div class="video-controls" id="video-controls" style="display:none">
+        <button class="btn btn-mute" id="btn-mute" onclick="toggleMute()" title="Toggle Microphone"><i class="bi bi-mic"></i></button>
+        <button class="btn btn-mute" id="btn-video" onclick="toggleVideo()" title="Toggle Camera"><i class="bi bi-camera-video"></i></button>
+        <button class="btn btn-mute" id="btn-share" onclick="toggleScreenShare()" title="Share Screen"><i class="bi bi-display"></i></button>
+        <button class="btn btn-end" id="btn-end" onclick="endCall()" title="End Call"><i class="bi bi-telephone-x"></i></button>
+    </div>
+
+    <div class="waiting-overlay" id="waiting-overlay">
+        <div class="spinner-border text-primary mb-3"></div>
+        <h5 id="waiting-text">Waiting for doctor to join...</h5>
+        <p class="text-muted">You will be connected automatically</p>
+    </div>
+</div>
+
+<div class="row g-3 mt-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6>Session Notes</h6></div>
+            <div class="card-body">
+                <textarea class="form-control" id="room-notes" rows="3" placeholder="Quick notes during call..."></textarea>
+                <button class="btn btn-sm btn-primary mt-2" onclick="saveRoomNotes()"><i class="bi bi-check-lg me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6>Quick Actions</h6></div>
+            <div class="card-body">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary btn-sm" onclick="switchTab('tab-prescriptions')"><i class="bi bi-prescription me-1"></i>E-Prescribe</button>
+                    <button class="btn btn-outline-success btn-sm" onclick="switchTab('tab-payments')"><i class="bi bi-cash me-1"></i>Collect Payment</button>
+                    <a href="/telemedicine/sessions/{{ session_id }}" class="btn btn-outline-info btn-sm"><i class="bi bi-info-circle me-1"></i>Full Details</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const sessionId = {{ session_id }};
+const currentUserId = {{ current_user.id }};
+const currentRole = '{{ current_user.role }}';
+let sessionData = null;
+let localStream = null;
+let isMuted = false;
+let isVideoOff = false;
+let timerInterval = null;
+let startTime = null;
+
+document.addEventListener('DOMContentLoaded', loadSession);
+
+async function loadSession() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId);
+    sessionData = await res.json();
+    if (sessionData.error) { showToast(sessionData.error, 'danger'); return; }
+
+    document.getElementById('session-label').textContent = sessionData.session_id + ' - ' + sessionData.p_first + ' ' + sessionData.p_last;
+    document.getElementById('room-notes').value = sessionData.notes || '';
+
+    const isDoctor = currentUserId === sessionData.doctor_id;
+    document.getElementById('waiting-text').textContent = isDoctor ? 'Waiting for patient to join...' : 'Waiting for doctor to join...';
+
+    // Auto-join
+    await joinSession();
+}
+
+async function joinSession() {
+    const res = await fetchWithAuth('/telemedicine/api/sessions/' + sessionId + '/join', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.is_doctor && sessionData.status === 'scheduled') {
+        document.getElementById('waiting-overlay').style.display = 'none';
+        document.getElementById('video-controls').style.display = '';
+    } else if (sessionData.status === 'in_progress') {
+        document.getElementById('waiting-overlay').style.display = 'none';
+        document.getElementById('video-controls').style.display = '';
+        startTimer();
+    }
+}
+
+async function startCall() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('self-stream').srcObject = localStream;
+        document.getElementById('self-video').style.display = '';
+        document.getElementById('video-controls').style.display = '';
+        document.getElementById('waiting-overlay').style.display = 'none';
+
+        // Update status to in_progress
+        await fetchWithAuth('/telemedicine/api/sessions/' + sessionId, {
+            method: 'PUT', body: JSON.stringify({ status: 'in_progress' })
+        });
+        startTimer();
+        showToast('Call started', 'success');
+    } catch (err) {
+        showToast('Could not access camera/microphone: ' + err.message, 'danger');
+    }
+}
+
+function startTimer() {
+    startTime = Date.now();
+    document.getElementById('session-timer').style.display = '';
+    timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const secs = String(elapsed % 60).padStart(2, '0');
+        document.getElementById('timer-display').textContent = mins + ':' + secs;
+    }, 1000);
+}
+
+function toggleMute() {
+    if (!localStream) return;
+    isMuted = !isMuted;
+    localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+    document.getElementById('btn-mute').classList.toggle('active', isMuted);
+    document.getElementById('btn-mute').innerHTML = isMuted ? '<i class="bi bi-mic-mute"></i>' : '<i class="bi bi-mic"></i>';
+}
+
+function toggleVideo() {
+    if (!localStream) return;
+    isVideoOff = !isVideoOff;
+    localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
+    document.getElementById('btn-video').classList.toggle('active', isVideoOff);
+    document.getElementById('btn-video').innerHTML = isVideoOff ? '<i class="bi bi-camera-video-off"></i>' : '<i class="bi bi-camera-video"></i>';
+}
+
+async function toggleScreenShare() {
+    try {
+        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const videoTrack = screen.getVideoTracks()[0];
+        videoTrack.onended = () => { showToast('Screen sharing stopped', 'info'); };
+        showToast('Screen sharing started', 'success');
+    } catch (err) { showToast('Screen share cancelled', 'info'); }
+}
+
+async function endCall() {
+    if (!confirm('End this call?')) return;
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+    if (timerInterval) { clearInterval(timerInterval); }
+    await fetchWithAuth('/telemedicine/api/sessions/' + sessionId, {
+        method: 'PUT', body: JSON.stringify({ status: 'completed' })
+    });
+    showToast('Call ended', 'success');
+    setTimeout(() => { window.location.href = '/telemedicine/sessions/' + sessionId; }, 1000);
+}
+
+async function saveRoomNotes() {
+    const notes = document.getElementById('room-notes').value.trim();
+    await fetchWithAuth('/telemedicine/api/sessions/' + sessionId, {
+        method: 'PUT', body: JSON.stringify({ notes })
+    });
+    showToast('Notes saved', 'success');
+}
+
+function switchTab(tabId) {
+    const tab = document.querySelector('[data-bs-target="#' + tabId + '"]');
+    if (tab) { new bootstrap.Tab(tab).show(); }
+}
+</script>
+{% endblock %}

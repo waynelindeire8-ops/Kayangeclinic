@@ -1,0 +1,760 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Sync Status -->
+<div id="sync-banner" class="alert alert-light border d-none mb-3" role="alert">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-cloud-arrow-up text-primary"></i>
+            <span>Cloud Sync: <strong id="sync-status-text">Checking...</strong></span>
+        </div>
+        <small class="text-muted" id="sync-last-time"></small>
+    </div>
+</div>
+
+<!-- Greeting -->
+<div class="greeting-card mb-4">
+    <h4 id="greeting-text">Good Morning</h4>
+    <p>Let's make today efficient and patient-friendly.</p>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon green"><i class="bi bi-people-fill"></i></div>
+                <span class="stat-trend up" id="stat-patients-trend">Loading...</span>
+            </div>
+            <div class="stat-value" id="stat-patients"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Total Patients</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon blue"><i class="bi bi-calendar-check-fill"></i></div>
+                <span class="stat-trend up" id="stat-apts-trend">Today</span>
+            </div>
+            <div class="stat-value" id="stat-appointments"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Today's Appointments</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon purple"><i class="bi bi-cash-stack"></i></div>
+                <span class="stat-trend up" id="stat-revenue-trend">Today</span>
+            </div>
+            <div class="stat-value" id="stat-revenue"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Today's Revenue</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <span class="stat-trend down" id="stock-trend">Alert</span>
+            </div>
+            <div class="stat-value" id="stat-low-stock"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Low Stock Items</div>
+        </div>
+    </div>
+</div>
+
+<!-- Reminders -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon orange"><i class="bi bi-gift"></i></div>
+                <span class="stat-trend up" id="bday-today-tag">Today</span>
+            </div>
+            <div class="stat-value" id="stat-birthdays-today"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Birthdays Today</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon orange"><i class="bi bi-calendar-heart"></i></div>
+                <span class="stat-trend up" id="bday-week-tag">This Week</span>
+            </div>
+            <div class="stat-value" id="stat-birthdays-week"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Upcoming Birthdays</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon blue"><i class="bi bi-calendar-day"></i></div>
+                <span class="stat-trend up" id="apt-tomorrow-tag">Tomorrow</span>
+            </div>
+            <div class="stat-value" id="stat-apts-tomorrow"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            <div class="stat-label">Appointments Tomorrow</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card" style="cursor:pointer" onclick="window.location.href='/reminders'">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-icon purple"><i class="bi bi-bell"></i></div>
+                <span class="stat-trend up">View All</span>
+            </div>
+            <div class="stat-value" style="font-size:1rem"><i class="bi bi-arrow-right-circle"></i></div>
+            <div class="stat-label">All Reminders</div>
+        </div>
+    </div>
+</div>
+
+<!-- Department Flow -->
+<div class="row g-3 mb-4" id="dept-flow-cards"></div>
+
+<!-- Patient Queue -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h6><i class="bi bi-people"></i> Patient Queue</h6>
+            <small class="text-muted">Today's walk-in and scheduled patients</small>
+        </div>
+        <div class="d-flex gap-3">
+            <span><span class="badge bg-warning" id="queue-waiting-badge">Loading...</span> Waiting</span>
+            <span><span class="badge bg-primary" id="queue-inprog-badge">Loading...</span> In Consultation</span>
+            <span><span class="badge bg-success" id="queue-done-badge">Loading...</span> Completed</span>
+            <button class="btn btn-sm btn-primary ms-2" onclick="showWalkinModal()"><i class="bi bi-plus-lg me-1"></i>Walk-in</button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="queue-table">
+                <thead>
+                    <tr>
+                        <th style="width:50px">#</th>
+                        <th>Patient</th>
+                        <th>Doctor</th>
+                        <th>Time</th>
+                        <th>Waiting</th>
+                        <th>Status</th>
+                        <th style="width:140px">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="queue-loading"><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading queue...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="queue-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-emoji-smile" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No patients in queue
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6><i class="bi bi-graph-up"></i> Revenue Overview</h6>
+                <div class="d-flex gap-2 align-items-center">
+                    <input type="date" class="form-control form-control-sm" id="rev-start" style="width:auto">
+                    <span class="text-muted">to</span>
+                    <input type="date" class="form-control form-control-sm" id="rev-end" style="width:auto">
+                    <button class="btn btn-sm btn-primary" onclick="loadRevenueChart()">Filter</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="revenueChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-pie-chart"></i> Consultations</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="consultationChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats + Appointments Row -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-activity"></i> Appointment Status</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="aptStatusChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h6>Today's Appointments</h6>
+                    <small class="text-muted">Last update: <span id="last-update">just now</span></small>
+                </div>
+                <a href="/appointments/new" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>New</a>
+            </div>
+<div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table" id="today-appointments-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Patient</th>
+                    <th>Doctor</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="apts-loading"><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading appointments...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.getElementById('greeting-text').textContent = greeting + ', ' + (user.first_name || 'User');
+
+    const today = new Date();
+    const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+    document.getElementById('rev-end').value = today.toISOString().split('T')[0];
+    document.getElementById('rev-start').value = weekAgo.toISOString().split('T')[0];
+
+    try {
+        const [dashRes, consultRes, aptRes, queueRes] = await Promise.all([
+            fetchWithAuth('/reports/api/dashboard'),
+            fetchWithAuth('/reports/api/consultations'),
+            fetchWithAuth('/reports/api/appointments'),
+            fetchWithAuth('/reports/api/queue')
+        ]);
+
+        if (!dashRes.ok) throw new Error('Dashboard API failed: ' + dashRes.status);
+        if (!consultRes.ok) throw new Error('Consultations API failed: ' + consultRes.status);
+        if (!aptRes.ok) throw new Error('Appointments API failed: ' + aptRes.status);
+        if (!queueRes.ok) throw new Error('Queue API failed: ' + queueRes.status);
+
+        // Load sync status for admins
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.role === 'admin') {
+                const syncRes = await fetchWithAuth('/backup/auto-status');
+                if (syncRes.ok) {
+                    const syncData = await syncRes.json();
+                    document.getElementById('sync-banner').classList.remove('d-none');
+                    document.getElementById('sync-status-text').textContent =
+                        syncData.status === 'ok' ? 'Active' :
+                        syncData.status === 'partial' ? 'Partial' :
+                        syncData.status === 'error' ? 'Error' : 'Idle';
+                    document.getElementById('sync-last-time').textContent =
+                        syncData.time ? 'Last sync: ' + new Date(syncData.time).toLocaleString() : 'No sync yet';
+                }
+            }
+        } catch(e) {}
+        const dash = await dashRes.json();
+        const consultData = await consultRes.json();
+        const aptData = await aptRes.json();
+        const queueData = await queueRes.json();
+
+        document.getElementById('stat-patients').textContent = (dash.total_patients || 0).toLocaleString();
+        document.getElementById('stat-appointments').textContent = dash.today_appointments || 0;
+        document.getElementById('stat-revenue').textContent = 'MK ' + (dash.today_revenue || 0).toLocaleString();
+        document.getElementById('stat-low-stock').textContent = dash.low_stock || 0;
+
+        const remRes = await fetchWithAuth('/reminders/api');
+        const rem = await remRes.json();
+        document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
+        document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
+        document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
+
+        // Department Flow
+        try {
+            const flowRes = await fetchWithAuth('/flow/api/overview');
+            const flowData = await flowRes.json();
+            const deptContainer = document.getElementById('dept-flow-cards');
+            if (flowData.departments && flowData.departments.length) {
+                const active = flowData.departments.filter(d => d.patient_count > 0);
+                if (active.length) {
+                    deptContainer.innerHTML = active.map(d =>
+                        '<div class="col-sm-6 col-lg-4 col-xl-3">' +
+                        '<a href="/flow" class="text-decoration-none">' +
+                        '<div class="stat-card">' +
+                        '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                        '<div class="stat-icon blue"><i class="bi bi-building"></i></div>' +
+                        '<span class="badge bg-primary">' + d.patient_count + '</span>' +
+                        '</div>' +
+                        '<div class="stat-value" style="font-size:0.95rem">' + d.name + '</div>' +
+                        '<div class="stat-label">' + d.patient_count + ' patient' + (d.patient_count !== 1 ? 's' : '') + ' in department</div>' +
+                        '</div></a></div>'
+                    ).join('');
+                } else {
+                    deptContainer.innerHTML = '';
+                }
+            }
+        } catch(e) { console.warn('Dept flow load failed:', e); }
+
+        // Patient Queue
+        document.getElementById('queue-waiting-badge').textContent = queueData.waiting_count || 0;
+        document.getElementById('queue-inprog-badge').textContent = queueData.in_progress_count || 0;
+        document.getElementById('queue-done-badge').textContent = queueData.completed_today || 0;
+
+        const qTbody = document.querySelector('#queue-table tbody');
+        const queue = queueData.queue || [];
+        if (queue.length) {
+            document.getElementById('queue-empty').style.display = 'none';
+            const colors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899'];
+            queue.forEach((apt, i) => {
+                const name = (apt.p_first || '') + ' ' + (apt.p_last || '');
+                const initials = (apt.p_first || 'P').charAt(0) + (apt.p_last || '').charAt(0);
+                const color = colors[i % colors.length];
+                const statusBadge = apt.status === 'scheduled'
+                    ? '<span class="badge bg-secondary">Not Checked In</span>'
+                    : apt.status === 'confirmed'
+                    ? '<span class="badge bg-warning">Waiting</span>'
+                    : '<span class="badge bg-primary">In Consultation</span>';
+                const waitDisplay = apt.wait_minutes < 60
+                    ? apt.wait_minutes + ' min'
+                    : Math.floor(apt.wait_minutes / 60) + 'h ' + (apt.wait_minutes % 60) + 'm';
+                let nextAction = '';
+                if (apt.status === 'scheduled') {
+                    nextAction = '<button class="btn-action view" title="Check In" onclick="updateAptStatus(' + apt.id + ',\'confirmed\')"><i class="bi bi-door-open"></i></button>';
+                } else if (apt.status === 'confirmed') {
+                    nextAction = '<button class="btn-action edit" title="Start Consultation" onclick="updateAptStatus(' + apt.id + ',\'in_progress\')"><i class="bi bi-play-fill"></i></button>';
+                } else {
+                    nextAction = '<a href="/consultations/new?patient_id=' + apt.patient_id + '&appointment_id=' + apt.id + '" class="btn-action view" title="Consult"><i class="bi bi-clipboard2-pulse"></i></a>';
+                }
+                qTbody.innerHTML += '<tr>' +
+                    '<td><span class="fw-bold" style="font-size:1.1rem">' + apt.position + '</span></td>' +
+                    '<td><div class="patient-cell"><div class="patient-avatar" style="background:' + color + '">' + initials + '</div><div><div class="fw-semibold" style="color:#0f172a"><a href="/patients/' + apt.patient_id + '" class="text-decoration-none" style="color:inherit">' + name + '</a></div><small class="text-muted">' + (apt.p_phone || '') + '</small></div></div></td>' +
+                    '<td>' + (apt.d_first ? 'Dr. ' + apt.d_first + ' ' + apt.d_last : '<span class="text-muted">Unassigned</span>') + '</td>' +
+                    '<td><span class="fw-semibold">' + apt.appointment_time + '</span></td>' +
+                    '<td><span class="' + (apt.wait_minutes > 30 ? 'text-danger fw-semibold' : 'text-muted') + '">' + waitDisplay + '</span></td>' +
+                    '<td>' + statusBadge + '</td>' +
+                    '<td><div class="d-flex gap-1">' + nextAction + '</div></td>' +
+                    '</tr>';
+            });
+        } else {
+            document.getElementById('queue-table').style.display = 'none';
+            document.getElementById('queue-empty').style.display = 'block';
+        }
+
+        const tbody = document.querySelector('#today-appointments-table tbody');
+        tbody.innerHTML = ''; // Clear loading row
+        const avatarColors = ['#16a34a','#2563eb','#f59e0b','#dc2626','#9333ea','#0ea5e9','#ec4899','#14b8a6'];
+        if (dash.appointments_today && dash.appointments_today.length) {
+            dash.appointments_today.forEach((apt, i) => {
+                const name = (apt.p_first || '') + ' ' + (apt.p_last || '');
+                const initials = (apt.p_first || 'P').charAt(0) + (apt.p_last || '').charAt(0);
+                const color = avatarColors[i % avatarColors.length];
+                const statusMap = {scheduled:'warning',confirmed:'info',in_progress:'primary',completed:'success',cancelled:'secondary',no_show:'danger'};
+                tbody.innerHTML += `<tr>
+                    <td><span class="fw-semibold">${apt.appointment_time}</span></td>
+                    <td>
+                        <div class="patient-cell">
+                            <div class="patient-avatar" style="background:${color}">${initials}</div>
+                            <div>
+                                <div class="fw-semibold" style="color:#0f172a">${name}</div>
+                                <small class="text-muted">${apt.p_phone || ''}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Dr. ${apt.d_first || 'TBD'} ${apt.d_last || ''}</td>
+                    <td>${apt.reason || '-'}</td>
+                    <td><span class="badge bg-${statusMap[apt.status] || 'secondary'}">${apt.status}</span></td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <button class="btn-action edit" title="Edit"><i class="bi bi-pencil"></i></button>
+                            <button class="btn-action view" title="View"><i class="bi bi-eye"></i></button>
+                            <button class="btn-action delete" title="Delete"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5"><i class="bi bi-calendar-x" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No appointments today</td></tr>';
+        }
+
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+        // Revenue Chart
+        loadRevenueChart();
+
+        // Consultation Chart
+        if (consultData && consultData.length) {
+            new Chart(document.getElementById('consultationChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: consultData.map(c => c.consultation_type || 'General'),
+                    datasets: [{
+                        data: consultData.map(c => c.c),
+                        backgroundColor: ['#16a34a', '#22c55e', '#86efac', '#bbf7d0'],
+                        borderWidth: 0,
+                        spacing: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '68%',
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 14, font: { size: 11 }, usePointStyle: true, pointStyle: 'circle' } }
+                    }
+                }
+            });
+        }
+
+        // Appointment Status Chart
+        if (aptData.by_status && aptData.by_status.length) {
+            const statusColors = { scheduled: '#f59e0b', confirmed: '#0ea5e9', in_progress: '#16a34a', completed: '#22c55e', cancelled: '#94a3b8', no_show: '#dc2626' };
+            new Chart(document.getElementById('aptStatusChart'), {
+                type: 'bar',
+                data: {
+                    labels: aptData.by_status.map(s => s.status.replace('_', ' ')),
+                    datasets: [{
+                        data: aptData.by_status.map(s => s.c),
+                        backgroundColor: aptData.by_status.map(s => statusColors[s.status] || '#94a3b8'),
+                        borderRadius: 6,
+                        borderSkipped: false,
+                        barThickness: 28
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+    } catch(e) {
+        console.error('Dashboard load error:', e);
+    }
+});
+
+async function loadRevenueChart() {
+    const start = document.getElementById('rev-start').value;
+    const end = document.getElementById('rev-end').value;
+    try {
+        const res = await fetchWithAuth(`/reports/api/revenue?start=${start}&end=${end}`);
+        const data = await res.json();
+        const existing = Chart.getChart('revenueChart');
+        if (existing) existing.destroy();
+
+        if (data.length) {
+            new Chart(document.getElementById('revenueChart'), {
+                type: 'line',
+                data: {
+                    labels: data.map(d => new Date(d.d).toLocaleDateString('en', {day:'numeric', month:'short'})),
+                    datasets: [
+                        {
+                            label: 'Revenue',
+                            data: data.map(d => d.total_paid),
+                            borderColor: '#16a34a',
+                            backgroundColor: 'rgba(22,163,74,0.08)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#16a34a',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+    } catch(e) {}
+}
+
+async function updateAptStatus(id, status) {
+    await fetchWithAuth('/appointments/api/' + id + '/status', {
+        method: 'PATCH',
+        body: JSON.stringify({status})
+    });
+    location.reload();
+}
+
+// Auto-refresh queue every 30 seconds
+setInterval(async function() {
+    try {
+        const res = await fetchWithAuth('/reports/api/queue');
+        if (!res.ok) throw new Error('Queue API failed: ' + res.status);
+        const data = await res.json();
+        document.getElementById('queue-waiting-badge').textContent = data.waiting_count || 0;
+        document.getElementById('queue-inprog-badge').textContent = data.in_progress_count || 0;
+        document.getElementById('queue-done-badge').textContent = data.completed_today || 0;
+    } catch(e) {
+        console.warn('Queue auto-refresh failed:', e);
+    }
+}, 30000);
+
+// Refresh dashboard stats every 60 seconds
+async function refreshDashboardStats() {
+    try {
+        const res = await fetchWithAuth('/reports/api/dashboard');
+        if (!res.ok) throw new Error('Dashboard API failed: ' + res.status);
+        const dash = await res.json();
+        document.getElementById('stat-patients').textContent = (dash.total_patients || 0).toLocaleString();
+        document.getElementById('stat-appointments').textContent = dash.today_appointments || 0;
+        document.getElementById('stat-revenue').textContent = 'MK ' + (dash.today_revenue || 0).toLocaleString();
+        document.getElementById('stat-low-stock').textContent = dash.low_stock || 0;
+        
+        // Reminders
+        const remRes = await fetchWithAuth('/reminders/api');
+        if (remRes.ok) {
+            const rem = await remRes.json();
+            document.getElementById('stat-birthdays-today').textContent = rem.birthdays_today.length || 0;
+            document.getElementById('stat-birthdays-week').textContent = rem.birthdays_upcoming.length || 0;
+            document.getElementById('stat-apts-tomorrow').textContent = rem.appointments_tomorrow.length || 0;
+        }
+
+        // Department Flow
+        try {
+            const flowRes = await fetchWithAuth('/flow/api/overview');
+            if (flowRes.ok) {
+                const flowData = await flowRes.json();
+                const deptContainer = document.getElementById('dept-flow-cards');
+                if (flowData.departments && flowData.departments.length) {
+                    const active = flowData.departments.filter(d => d.patient_count > 0);
+                    if (active.length) {
+                        deptContainer.innerHTML = active.map(d =>
+                            '<div class="col-sm-6 col-lg-4 col-xl-3">' +
+                            '<a href="/flow" class="text-decoration-none">' +
+                            '<div class="stat-card">' +
+                            '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                            '<div class="stat-icon blue"><i class="bi bi-building"></i></div>' +
+                            '<span class="badge bg-primary">' + d.patient_count + '</span>' +
+                            '</div>' +
+                            '<div class="stat-value" style="font-size:0.95rem">' + d.name + '</div>' +
+                            '<div class="stat-label">' + d.patient_count + ' patient' + (d.patient_count !== 1 ? 's' : '') + '</div>' +
+                            '</div></a></div>'
+                        ).join('');
+                    } else {
+                        deptContainer.innerHTML = '';
+                    }
+                }
+            }
+        } catch(e) {}
+        
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    } catch(e) {
+        console.warn('Dashboard stats refresh failed:', e);
+    }
+}
+
+setInterval(refreshDashboardStats, 60000);
+
+// Expose for other pages to trigger refresh
+window.refreshDashboardStats = refreshDashboardStats;
+</script>
+<!-- Walk-in Modal -->
+<div class="modal fade" id="walkinModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-add text-primary me-1"></i>Add Walk-in Patient</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Patient <span class="text-danger">*</span></label>
+                    <select class="form-select" id="wi-patient_id" style="width:100%"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Assign Doctor <small class="text-muted">(optional)</small></label>
+                    <select class="form-select" id="wi-doctor_id">
+                        <option value="">-- Not assigned --</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason</label>
+                    <input type="text" class="form-control" id="wi-reason" placeholder="e.g. Walk-in consultation" value="Walk-in">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" id="wi-add-btn" onclick="submitWalkin()"><i class="bi bi-person-add me-1"></i>Add to Queue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let walkinPatients = [];
+let walkinDoctors = [];
+let walkinModalInstance = null;
+
+async function showWalkinModal() {
+    const pSel = document.getElementById('wi-patient_id');
+    const dSel = document.getElementById('wi-doctor_id');
+    const addBtn = document.getElementById('wi-add-btn');
+
+    // Destroy previous Select2 if exists
+    try {
+        if (window.$ && $(pSel).hasClass('select2-hidden-accessible')) {
+            $(pSel).select2('destroy');
+        }
+    } catch(e) { /* ignore destroy errors */ }
+
+    pSel.innerHTML = '<option value="">Loading patients...</option>';
+    dSel.innerHTML = '<option value="">Loading...</option>';
+    addBtn.disabled = true;
+
+    if (!walkinModalInstance) {
+        walkinModalInstance = new bootstrap.Modal(document.getElementById('walkinModal'));
+    }
+    walkinModalInstance.show();
+
+    // Step 1: Fetch data from APIs
+    let patients = [];
+    let doctors = [];
+    try {
+        const [pRes, dRes] = await Promise.all([
+            fetchWithAuth('/patients/api?search='),
+            fetchWithAuth('/staff/api/doctors')
+        ]);
+
+        if (!pRes.ok) {
+            const err = await pRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Patients API returned ' + pRes.status);
+        }
+        if (!dRes.ok) {
+            const err = await dRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Doctors API returned ' + dRes.status);
+        }
+
+        patients = await pRes.json();
+        doctors = await dRes.json();
+    } catch(e) {
+        console.error('Failed to load walk-in data:', e);
+        pSel.innerHTML = '<option value="">' + (e.message || 'Failed to load patients') + '</option>';
+        dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+        addBtn.disabled = false;
+        return;
+    }
+
+    // Step 2: Populate dropdowns (works even without Select2)
+    pSel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = patients.length ? 'Select a patient...' : 'No patients found';
+    pSel.appendChild(placeholder);
+    walkinPatients = patients;
+    patients.forEach(function(p) {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = (p.patient_id || '') + ' - ' + (p.first_name || '') + ' ' + (p.last_name || '') + ' (' + (p.phone || 'no phone') + ')';
+        pSel.appendChild(o);
+    });
+
+    dSel.innerHTML = '<option value="">-- Not assigned --</option>';
+    walkinDoctors = doctors;
+    doctors.forEach(function(d) {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = 'Dr. ' + d.first_name + ' ' + d.last_name + ' (' + (d.role || '').replace(/_/g,' ') + ')';
+        dSel.appendChild(o);
+    });
+
+    // Step 3: Init Select2 (non-fatal if it fails)
+    try {
+        if (window.$ && $.fn && $.fn.select2) {
+            $(pSel).select2({
+                placeholder: 'Search patient by name, ID or phone...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#walkinModal')
+            });
+        }
+    } catch(e) {
+        console.warn('Select2 init failed, using plain select:', e);
+    }
+
+    addBtn.disabled = false;
+}
+
+async function submitWalkin() {
+    const pSel = document.getElementById('wi-patient_id');
+    const patientId = (window.$ && $.fn && $.fn.select2 && $(pSel).hasClass('select2-hidden-accessible'))
+        ? $(pSel).val()
+        : pSel.value;
+    if (!patientId) {
+        alert('Please select a patient first');
+        return;
+    }
+    const doctorId = document.getElementById('wi-doctor_id').value || null;
+    const reason = document.getElementById('wi-reason').value.trim() || 'Walk-in';
+
+    const addBtn = document.getElementById('wi-add-btn');
+    addBtn.disabled = true;
+    addBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding...';
+
+    try {
+        const res = await fetchWithAuth('/appointments/api/quick-add', {
+            method: 'POST',
+            body: JSON.stringify({
+                patient_id: parseInt(patientId),
+                doctor_id: doctorId ? parseInt(doctorId) : null,
+                reason
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || 'Failed to add walk-in. Please try again.');
+            addBtn.disabled = false;
+            addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
+            return;
+        }
+
+        walkinModalInstance.hide();
+        // Reset walk-in cache so next open re-fetches fresh data
+        walkinPatients = [];
+        walkinDoctors = [];
+        location.reload();
+
+    } catch(e) {
+        console.error('Walk-in submit error:', e);
+        alert('Network error. Please check your connection and try again.');
+        addBtn.disabled = false;
+        addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
+    }
+}
+
+// Reset modal state when it is hidden
+document.getElementById('walkinModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('wi-reason').value = 'Walk-in';
+    const addBtn = document.getElementById('wi-add-btn');
+    addBtn.disabled = false;
+    addBtn.innerHTML = '<i class="bi bi-person-add me-1"></i>Add to Queue';
+});
+</script>
+
+{% endblock %}

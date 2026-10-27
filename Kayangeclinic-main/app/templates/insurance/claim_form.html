@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-file-earmark-medical"></i> {% if claim_id %}Edit{% else %}New{% endif %} Insurance Claim</h4>
+    <a href="/insurance/claims" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <form id="claim-form">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Patient <span class="text-danger">*</span></label>
+                            <select class="form-select" id="patient_id" required><option value="">Select...</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Provider <span class="text-danger">*</span></label>
+                            <select class="form-select" id="provider_id" required><option value="">Select...</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Policy</label>
+                            <select class="form-select" id="policy_id"><option value="">None</option></select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Service Date</label>
+                            <input type="date" class="form-control" id="service_date" value="{{ today or '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Billing (optional)</label>
+                            <select class="form-select" id="billing_id"><option value="">None</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Consultation (optional)</label>
+                            <select class="form-select" id="consultation_id"><option value="">None</option></select>
+                        </div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Notes</label><textarea class="form-control" id="notes" rows="2"></textarea></div>
+
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Claim Items</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()"><i class="bi bi-plus-lg me-1"></i>Add Item</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table" id="items-table">
+                            <thead><tr><th>Description *</th><th>Code</th><th>Qty</th><th>Unit Price *</th><th>Total</th><th style="width:40px"></th></tr></thead>
+                            <tbody id="items-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="text-end mb-3"><strong>Grand Total: <span id="grand-total">MWK 0.00</span></strong></div>
+
+                    <button type="submit" class="btn btn-primary px-4" id="btn-submit"><i class="bi bi-check-lg me-1"></i>{% if claim_id %}Update{% else %}Create{% endif %} Claim</button>
+                    <a href="/insurance/claims" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="claim-success" class="alert alert-success mt-3" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const claimId = {% if claim_id %}{{ claim_id }}{% else %}null{% endif %};
+let itemIdx = 0;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    document.getElementById('service_date').value = new Date().toISOString().split('T')[0];
+    const [patientsRes, providersRes] = await Promise.all([
+        fetchWithAuth('/patients/api'),
+        fetchWithAuth('/insurance/api/providers')
+    ]);
+    const patients = await patientsRes.json();
+    const providers = await providersRes.json();
+    const pSel = document.getElementById('patient_id');
+    patients.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name; pSel.appendChild(o); });
+    const prSel = document.getElementById('provider_id');
+    providers.filter(p => p.is_active).forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; prSel.appendChild(o); });
+
+    document.getElementById('provider_id').addEventListener('change', loadPolicies);
+    document.getElementById('patient_id').addEventListener('change', loadPolicies);
+
+    if (claimId) {
+        const res = await fetchWithAuth('/insurance/api/claims/' + claimId);
+        const data = await res.json();
+        document.getElementById('patient_id').value = data.patient_id;
+        document.getElementById('provider_id').value = data.provider_id;
+        document.getElementById('notes').value = data.notes || '';
+        await loadPolicies();
+        document.getElementById('policy_id').value = data.policy_id || '';
+        document.getElementById('service_date').value = data.service_date || '';
+        document.getElementById('patient_id').disabled = true;
+        (data.items || []).forEach(item => addItem(item));
+    }
+    addItem();
+});
+
+async function loadPolicies() {
+    const pid = document.getElementById('patient_id').value;
+    const prid = document.getElementById('provider_id').value;
+    if (!pid) return;
+    const res = await fetchWithAuth('/insurance/api/policies?patient_id=' + pid);
+    const policies = await res.json();
+    const sel = document.getElementById('policy_id');
+    sel.innerHTML = '<option value="">None</option>';
+    policies.filter(p => p.is_active && (!prid || p.provider_id == prid)).forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.provider_name + ' - ' + p.policy_number;
+        sel.appendChild(o);
+    });
+}
+
+function addItem(data) {
+    const tbody = document.getElementById('items-tbody');
+    const idx = itemIdx++;
+    const d = data || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><input type="text" class="form-control form-control-sm" name="description" value="' + esc(d.description || '') + '" required></td>' +
+        '<td><input type="text" class="form-control form-control-sm" name="procedure_code" value="' + esc(d.procedure_code || '') + '" placeholder="Code"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="quantity" min="1" value="' + (d.quantity || 1) + '" onchange="calcTotal(this)"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="unit_price" min="0" step="0.01" value="' + (d.unit_price || '') + '" onchange="calcTotal(this)" required></td>' +
+        '<td class="item-total">MWK 0.00</td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="this.closest(\'tr\').remove(); calcGrand()"><i class="bi bi-x"></i></button></td>';
+    tbody.appendChild(tr);
+    if (d.unit_price && d.quantity) { tr.querySelector('[name="unit_price"]').value = d.unit_price; tr.querySelector('[name="quantity"]').value = d.quantity; calcTotal(tr.querySelector('[name="unit_price"]')); }
+}
+
+function calcTotal(el) {
+    const tr = el.closest('tr');
+    const qty = parseFloat(tr.querySelector('[name="quantity"]').value) || 0;
+    const price = parseFloat(tr.querySelector('[name="unit_price"]').value) || 0;
+    tr.querySelector('.item-total').textContent = 'MWK ' + (qty * price).toLocaleString('en-MW', {minimumFractionDigits: 2});
+    calcGrand();
+}
+
+function calcGrand() {
+    let total = 0;
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+        const qty = parseFloat(tr.querySelector('[name="quantity"]')?.value) || 0;
+        const price = parseFloat(tr.querySelector('[name="unit_price"]')?.value) || 0;
+        total += qty * price;
+    });
+    document.getElementById('grand-total').textContent = 'MWK ' + total.toLocaleString('en-MW', {minimumFractionDigits: 2});
+}
+
+document.getElementById('claim-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const items = [];
+    let total = 0;
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+        const desc = tr.querySelector('[name="description"]').value.trim();
+        const code = tr.querySelector('[name="procedure_code"]').value.trim();
+        const qty = parseInt(tr.querySelector('[name="quantity"]').value) || 1;
+        const price = parseFloat(tr.querySelector('[name="unit_price"]').value) || 0;
+        if (desc && price) { items.push({ description: desc, procedure_code: code || null, quantity: qty, unit_price: price, total_price: qty * price }); total += qty * price; }
+    });
+    if (!items.length) { showToast('Add at least one item', 'danger'); return; }
+
+    const body = {
+        patient_id: parseInt(document.getElementById('patient_id').value),
+        provider_id: parseInt(document.getElementById('provider_id').value),
+        policy_id: document.getElementById('policy_id').value || null,
+        billing_id: document.getElementById('billing_id').value || null,
+        consultation_id: document.getElementById('consultation_id').value || null,
+        service_date: document.getElementById('service_date').value,
+        total_amount: total,
+        notes: document.getElementById('notes').value.trim(),
+        items
+    };
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    const method = claimId ? 'PUT' : 'POST';
+    const url = claimId ? '/insurance/api/claims/' + claimId : '/insurance/api/claims';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>' + (claimId ? 'Update' : 'Create') + ' Claim';
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('claim-form').style.display = 'none';
+        document.getElementById('claim-success').style.display = 'block';
+        document.getElementById('claim-success').innerHTML = '<i class="bi bi-check-circle me-1"></i> Claim <strong>' + (data.claim_number || 'saved') + '</strong> created! <a href="/insurance/claims" class="alert-link">Back to claims</a>';
+    } else { const err = await res.json(); showToast(err.error || 'Failed', 'danger'); }
+});
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

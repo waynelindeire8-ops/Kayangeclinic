@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-journal-medical me-2"></i>Yellow Book</h4>
+    <span class="text-muted">International Certificate of Vaccination</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-primary" id="stat-records">0</h3><small class="text-muted">Total Vaccinations</small>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-success" id="stat-patients">0</h3><small class="text-muted">Patients Vaccinated</small>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-info" id="stat-vaccines">0</h3><small class="text-muted">Available Vaccines</small>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body text-center">
+            <h3 class="text-warning" id="stat-month">0</h3><small class="text-muted">This Month</small>
+        </div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label">Search Patient</label>
+                <select class="form-select" id="patient-select">
+                    <option value="">Select a patient...</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" id="btn-open" disabled onclick="openPatient()">
+                    <i class="bi bi-journal-medical me-1"></i>Open Yellow Book
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h6 class="mb-0">Recent Vaccinations</h6></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0" id="records-table">
+                <thead><tr><th>Patient</th><th>Vaccine</th><th>Dose</th><th>Date</th><th>Batch #</th><th>Next Due</th><th>Administered By</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="empty-msg" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-journal-medical" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>No vaccinations recorded yet
+        </div>
+    </div>
+</div>
+
+<script>
+let allRecords = [];
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/patients/api');
+    const patients = await res.json();
+    const sel = document.getElementById('patient-select');
+    patients.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.patient_id + ' - ' + p.first_name + ' ' + p.last_name + (p.passport_number ? ' (Passport: ' + p.passport_number + ')' : '');
+        sel.appendChild(o);
+    });
+    sel.addEventListener('change', function() {
+        document.getElementById('btn-open').disabled = !this.value;
+    });
+    loadStats();
+    loadRecent();
+});
+
+async function loadStats() {
+    const res = await fetchWithAuth('/yellow-book/api/stats');
+    const d = await res.json();
+    document.getElementById('stat-records').textContent = d.total_records;
+    document.getElementById('stat-patients').textContent = d.total_patients;
+    document.getElementById('stat-vaccines').textContent = d.total_vaccines;
+    document.getElementById('stat-month').textContent = d.this_month;
+}
+
+async function loadRecent() {
+    const res = await fetchWithAuth('/certificates/api?type=yellow_book&limit=20');
+    const certs = await res.json();
+    const tbody = document.querySelector('#records-table tbody');
+    tbody.innerHTML = '';
+    if (certs.length) {
+        document.getElementById('records-table').style.display = '';
+        document.getElementById('empty-msg').style.display = 'none';
+        certs.forEach(c => {
+            tbody.innerHTML += '<tr><td><a href="/yellow-book/patient/' + c.patient_id + '" class="fw-semibold text-decoration-none">' + esc(c.p_first) + ' ' + esc(c.p_last) + '</a><br><small class="text-muted">' + esc(c.p_patient_id || '') + '</small></td>' +
+                '<td>Yellow Book</td><td>-</td><td>' + (c.issue_date || '-') + '</td><td>-</td><td>' + (c.valid_until || '-') + '</td><td>Dr. ' + esc(c.d_first || '') + ' ' + esc(c.d_last || '') + '</td></tr>';
+        });
+    } else {
+        document.getElementById('records-table').style.display = 'none';
+        document.getElementById('empty-msg').style.display = '';
+    }
+}
+
+function openPatient() {
+    const pid = document.getElementById('patient-select').value;
+    if (pid) window.location.href = '/yellow-book/patient/' + pid;
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}
