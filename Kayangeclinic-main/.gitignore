@@ -19,6 +19,9 @@ uploads/patient_documents/*
 *.lnk
 ~$*
 neon_backup.sql
+<<<<<<< HEAD
 
 .vercel
 .env*
+=======
+>>>>>>> 32669eeeb87fc477b99791f15294a86eb9e9dd12
