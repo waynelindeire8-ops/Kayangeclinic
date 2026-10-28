@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-capsule"></i> Pharmacy Inventory</h4>
+    <div>
+        <a href="/pharmacy/dispensing" class="btn btn-outline-primary me-2"><i class="bi bi-cart-plus me-1"></i>Dispensing</a>
+        <button class="btn btn-primary" onclick="showAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Drug</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-capsule"></i></div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Drugs</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-box-seam"></i></div>
+            <div class="stat-value" id="stat-stock">0</div>
+            <div class="stat-label">Total Stock</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i class="bi bi-exclamation-triangle"></i></div>
+            <div class="stat-value" id="stat-low">0</div>
+            <div class="stat-label">Low Stock</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon red"><i class="bi bi-x-circle"></i></div>
+            <div class="stat-value" id="stat-oos">0</div>
+            <div class="stat-label">Out of Stock</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search drugs...">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" id="categoryFilter">
+                    <option value="">All Categories</option>
+                    <option value="Antibiotics">Antibiotics</option>
+                    <option value="Analgesics">Analgesics</option>
+                    <option value="Diabetes">Diabetes</option>
+                    <option value="Respiratory">Respiratory</option>
+                    <option value="GI">Gastrointestinal</option>
+                    <option value="Antihistamines">Antihistamines</option>
+                    <option value="Topical">Topical</option>
+                    <option value="Supplements">Supplements</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table" id="inventory-table">
+                <thead>
+                    <tr>
+                        <th>Drug Name</th>
+                        <th>Generic</th>
+                        <th>Category</th>
+                        <th>Stock</th>
+                        <th>Price</th>
+                        <th>Expiry</th>
+                        <th>Reorder</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="invModalTitle">Add Drug</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <form id="inventory-form">
+                    <div class="mb-3"><label class="form-label">Drug Name *</label><input type="text" class="form-control" id="drug_name" required></div>
+                    <div class="mb-3"><label class="form-label">Generic Name</label><input type="text" class="form-control" id="generic_name"></div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">Category</label><select class="form-select" id="category"><option value="">Select...</option><option value="Antibiotics">Antibiotics</option><option value="Analgesics">Analgesics</option><option value="Diabetes">Diabetes</option><option value="Respiratory">Respiratory</option><option value="GI">Gastrointestinal</option><option value="Antihistamines">Antihistamines</option><option value="Topical">Topical</option><option value="Supplements">Supplements</option><option value="Other">Other</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Supplier</label>
+                            <select class="form-select" id="supplier"><option value="">Select supplier...</option></select></div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4"><label class="form-label">Stock Qty</label><input type="number" class="form-control" id="stock_quantity" value="0" min="0"></div>
+                        <div class="col-md-4"><label class="form-label">Unit Price (MK)</label><input type="number" class="form-control" id="unit_price" step="0.01" value="0"></div>
+                        <div class="col-md-4"><label class="form-label">Expiry Date</label><input type="date" class="form-control" id="expiry_date"></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Reorder Level</label><input type="number" class="form-control" id="reorder_level" value="10" min="0"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadTable();
+    loadSuppliers();
+    document.getElementById('searchInput').addEventListener('keyup', function() { loadTable(this.value); });
+    document.getElementById('categoryFilter').addEventListener('change', function() { loadTable(document.getElementById('searchInput').value); });
+});
+
+async function loadStats() {
+    try {
+        const res = await fetchWithAuth('/pharmacy/api/inventory');
+        const items = await res.json();
+        const totalStock = items.reduce((s, i) => s + (i.stock_quantity || 0), 0);
+        const lowStock = items.filter(i => i.stock_quantity > 0 && i.stock_quantity <= (i.reorder_level || 10)).length;
+        const outOfStock = items.filter(i => i.stock_quantity <= 0).length;
+
+        document.getElementById('stat-total').textContent = items.length;
+        document.getElementById('stat-stock').textContent = totalStock;
+        document.getElementById('stat-low').textContent = lowStock;
+        document.getElementById('stat-oos').textContent = outOfStock;
+    } catch(e) {}
+}
+
+async function loadSuppliers() {
+    const res = await fetchWithAuth('/suppliers/api?active=1');
+    const suppliers = await res.json();
+    const sel = document.getElementById('supplier');
+    sel.innerHTML = '<option value="">Select supplier...</option>';
+    suppliers.forEach(s => {
+        const o = document.createElement('option'); o.value = s.name; o.textContent = s.name;
+        sel.appendChild(o);
+    });
+}
+
+function loadTable(search) {
+    let url = '/pharmacy/api/inventory';
+    const params = [];
+    if (search) params.push('search=' + encodeURIComponent(search));
+    if (params.length) url += '?' + params.join('&');
+
+    if ($.fn.DataTable.isDataTable('#inventory-table')) { $('#inventory-table').DataTable().destroy(); }
+    $('#inventory-table').DataTable({
+        ajax: function(data, callback, settings) { fetchWithAuth(url + '&' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
+        columns: [
+            { data: 'drug_name', render: d => '<span class="fw-semibold" style="color:#0f172a">' + d + '</span>' },
+            { data: 'generic_name', render: d => d || '-' },
+            { data: 'category', render: d => d ? '<span class="badge bg-light text-dark">' + d + '</span>' : '-' },
+            { data: null, render: d => {
+                if (d.stock_quantity <= 0) return '<span class="badge bg-danger">Out of Stock (0)</span>';
+                if (d.stock_quantity <= (d.reorder_level || 10)) return '<span class="badge bg-warning text-dark">Low (' + d.stock_quantity + '</span>';
+                return '<span class="badge bg-success">' + d.stock_quantity + '</span>';
+            }},
+            { data: null, render: d => '<span class="fw-semibold">MK ' + (d.unit_price || 0).toLocaleString() + '</span>' },
+            { data: 'expiry_date', render: d => { if (!d) return '-'; const exp = new Date(d); const now = new Date(); const daysLeft = Math.ceil((exp - now) / (1000*60*60*24)); return daysLeft < 0 ? '<span class="badge bg-danger">Expired</span>' : daysLeft < 90 ? '<span class="badge bg-warning text-dark">' + d + '</span>' : '<span class="badge bg-secondary">' + d + '</span>'; }},
+            { data: 'reorder_level' },
+            { data: null, render: d => '<div class="d-flex gap-1"><button class="btn-action" onclick="showSchemePrices(' + d.id + ', \'' + d.drug_name.replace(/'/g, "\\'") + '\')" title="Scheme Prices"><i class="bi bi-tag"></i></button><button class="btn-action edit" onclick="editItem(' + d.id + ')" title="Edit"><i class="bi bi-pencil"></i></button><button class="btn-action delete" onclick="deleteItem(' + d.id + ')" title="Delete"><i class="bi bi-trash"></i></button></div>' }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 15,
+        language: { search: '', searchPlaceholder: 'Search drugs...' }
+    });
+}
+
+function showAddItem() {
+    editingId = null;
+    document.getElementById('invModalTitle').textContent = 'Add Drug';
+    document.getElementById('inventory-form').reset();
+    new bootstrap.Modal(document.getElementById('inventoryModal')).show();
+}
+
+async function editItem(id) {
+    editingId = id;
+    document.getElementById('invModalTitle').textContent = 'Edit Drug';
+    const res = await fetchWithAuth('/pharmacy/api/inventory/' + id);
+    const d = await res.json();
+    document.getElementById('drug_name').value = d.drug_name;
+    document.getElementById('generic_name').value = d.generic_name || '';
+    document.getElementById('category').value = d.category || '';
+    document.getElementById('stock_quantity').value = d.stock_quantity;
+    document.getElementById('unit_price').value = d.unit_price;
+    document.getElementById('expiry_date').value = d.expiry_date || '';
+    document.getElementById('supplier').value = d.supplier || '';
+    document.getElementById('reorder_level').value = d.reorder_level;
+    new bootstrap.Modal(document.getElementById('inventoryModal')).show();
+}
+
+async function saveItem() {
+    const data = {
+        drug_name: document.getElementById('drug_name').value,
+        generic_name: document.getElementById('generic_name').value,
+        category: document.getElementById('category').value,
+        stock_quantity: parseInt(document.getElementById('stock_quantity').value) || 0,
+        unit_price: parseFloat(document.getElementById('unit_price').value) || 0,
+        expiry_date: document.getElementById('expiry_date').value || null,
+        supplier: document.getElementById('supplier').value,
+        reorder_level: parseInt(document.getElementById('reorder_level').value) || 10
+    };
+    if (!data.drug_name) { alert('Drug name required'); return; }
+    const url = editingId ? '/pharmacy/api/inventory/' + editingId : '/pharmacy/api/inventory';
+    const method = editingId ? 'PUT' : 'POST';
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
+    if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('inventoryModal')).hide(); loadTable(); loadStats(); }
+    else alert('Error saving');
+}
+
+async function deleteItem(id) {
+    if (!confirm('Delete this item?')) return;
+    await fetchWithAuth('/pharmacy/api/inventory/' + id, { method: 'DELETE' });
+    loadTable();
+    loadStats();
+}
+
+let currentSchemeDrugId = null;
+
+async function showSchemePrices(drugId, drugName) {
+    currentSchemeDrugId = drugId;
+    document.getElementById('scheme-drug-name').textContent = drugName;
+    const res = await fetchWithAuth('/pharmacy/api/inventory/' + drugId + '/scheme-prices');
+    const prices = await res.json();
+    const body = document.getElementById('scheme-prices-body');
+    if (prices.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No scheme prices set</td></tr>';
+    } else {
+        body.innerHTML = prices.map(p =>
+            '<tr><td>' + p.provider_name + '</td><td>MK ' + p.scheme_price.toLocaleString() + '</td><td>' + (p.provider_code || '') + '</td><td><button class="btn-action delete" onclick="deleteSchemePrice(' + p.id + ')" title="Remove"><i class="bi bi-trash"></i></button></td></tr>'
+        ).join('');
+    }
+    await loadProvidersForSelect();
+    new bootstrap.Modal(document.getElementById('schemePricesModal')).show();
+}
+
+async function loadProvidersForSelect() {
+    const res = await fetchWithAuth('/insurance/api/providers');
+    const providers = await res.json();
+    const sel = document.getElementById('sp-provider');
+    sel.innerHTML = '<option value="">Select scheme...</option>';
+    providers.forEach(p => {
+        const o = document.createElement('option'); o.value = p.id; o.textContent = p.name;
+        sel.appendChild(o);
+    });
+}
+
+async function saveSchemePrice() {
+    const providerId = document.getElementById('sp-provider').value;
+    const price = document.getElementById('sp-price').value;
+    if (!providerId || !price) { alert('Select a scheme and enter a price'); return; }
+    await fetchWithAuth('/pharmacy/api/inventory/' + currentSchemeDrugId + '/scheme-prices', {
+        method: 'POST',
+        body: JSON.stringify({ provider_id: parseInt(providerId), scheme_price: parseFloat(price) })
+    });
+    showSchemePrices(currentSchemeDrugId, document.getElementById('scheme-drug-name').textContent);
+}
+
+async function deleteSchemePrice(priceId) {
+    if (!confirm('Remove this scheme price?')) return;
+    await fetchWithAuth('/pharmacy/api/inventory/' + currentSchemeDrugId + '/scheme-prices/' + priceId, { method: 'DELETE' });
+    showSchemePrices(currentSchemeDrugId, document.getElementById('scheme-drug-name').textContent);
+}
+</script>
+
+<div class="modal fade" id="schemePricesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tag me-1"></i>Scheme Prices - <span id="scheme-drug-name"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm">
+                        <thead><tr><th>Scheme</th><th>Price (MK)</th><th>Code</th><th></th></tr></thead>
+                        <tbody id="scheme-prices-body"></tbody>
+                    </table>
+                </div>
+                <div class="card bg-light">
+                    <div class="card-body py-2">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"><select class="form-select form-select-sm" id="sp-provider"></select></div>
+                            <div class="col-md-4"><input type="number" class="form-control form-control-sm" id="sp-price" placeholder="Price (MK)" step="0.01"></div>
+                            <div class="col-md-3"><button class="btn btn-primary btn-sm w-100" onclick="saveSchemePrice()"><i class="bi bi-plus me-1"></i>Add</button></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

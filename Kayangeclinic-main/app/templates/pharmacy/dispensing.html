@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-cart-plus"></i> Dispensing</h4>
+    <div class="d-flex gap-2">
+        <a href="/pharmacy" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Inventory</a>
+        <button class="btn btn-primary" onclick="showDispenseModal()"><i class="bi bi-plus-lg me-1"></i>New Dispense</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-4" id="dispense-stats">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-cart-check"></i></div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Dispensed</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-calendar-check"></i></div>
+            <div class="stat-value" id="stat-today">0</div>
+            <div class="stat-label">Today</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="bi bi-currency-dollar"></i></div>
+            <div class="stat-value" id="stat-revenue">0</div>
+            <div class="stat-label">Revenue (MK)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i class="bi bi-people"></i></div>
+            <div class="stat-value" id="stat-patients">0</div>
+            <div class="stat-label">Unique Patients</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table" id="dispensing-table">
+                <thead>
+                    <tr><th>Date</th><th>Patient</th><th>Drug</th><th>Qty</th><th>Price</th><th>Total</th><th>Dispensed By</th><th>Notes</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dispenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-cart-plus me-1"></i>Dispense Medication</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Patient <span class="text-danger">*</span></label>
+                    <select class="form-select" id="disp-patient">
+                        <option value="">Select patient...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Drug <span class="text-danger">*</span></label>
+                    <select class="form-select" id="disp-drug">
+                        <option value="">Select drug...</option>
+                    </select>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="disp-qty" min="1" value="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Unit Price (MK) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="disp-price" step="0.01" min="0">
+                        <div class="form-text" id="price-hint"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Total</label>
+                    <input type="text" class="form-control fw-bold" id="disp-total" readonly style="font-size:1.1rem">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Prescription Notes</label>
+                    <textarea class="form-control" id="disp-notes" rows="2" placeholder="Instructions for the patient..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveDispense()"><i class="bi bi-check-lg me-1"></i>Dispense</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadTable();
+
+    Promise.all([
+        fetchWithAuth('/patients/api').then(r => r.json()),
+        fetchWithAuth('/pharmacy/api/inventory').then(r => r.json())
+    ]).then(([patients, drugs]) => {
+        const pSel = document.getElementById('disp-patient');
+        patients.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id; opt.textContent = `${p.patient_id} - ${p.first_name} ${p.last_name}`;
+            pSel.appendChild(opt);
+        });
+        const dSel = document.getElementById('disp-drug');
+        drugs.forEach(d => {
+            if (d.stock_quantity > 0) {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = `${d.drug_name} (Stock: ${d.stock_quantity})`;
+                opt.dataset.stock = d.stock_quantity;
+                opt.dataset.price = d.unit_price;
+                dSel.appendChild(opt);
+            }
+        });
+    });
+
+    document.getElementById('disp-patient').addEventListener('change', lookupPrice);
+    document.getElementById('disp-drug').addEventListener('change', lookupPrice);
+    document.getElementById('disp-qty').addEventListener('input', updateTotal);
+    document.getElementById('disp-price').addEventListener('input', updateTotal);
+});
+
+async function loadStats() {
+    try {
+        const res = await fetchWithAuth('/pharmacy/api/dispensing');
+        const data = await res.json();
+        const today = new Date().toISOString().split('T')[0];
+        const todayItems = data.filter(d => d.dispensed_date && d.dispensed_date.startsWith(today));
+        const totalRevenue = data.reduce((s, d) => s + ((d.unit_price || 0) * (d.quantity || 0)), 0);
+        const uniquePatients = new Set(data.map(d => d.patient_id)).size;
+
+        document.getElementById('stat-total').textContent = data.length;
+        document.getElementById('stat-today').textContent = todayItems.length;
+        document.getElementById('stat-revenue').textContent = 'MWK ' + totalRevenue.toLocaleString();
+        document.getElementById('stat-patients').textContent = uniquePatients;
+    } catch(e) {}
+}
+
+function loadTable() {
+    if ($.fn.DataTable.isDataTable('#dispensing-table')) { $('#dispensing-table').DataTable().destroy(); }
+    $('#dispensing-table').DataTable({
+        ajax: function(data, callback, settings) { fetchWithAuth('/pharmacy/api/dispensing?' + $.param(data)).then(r => { if (r.status === 401) throw new Error('Unauthorized'); return r.json(); }).then(d => callback({data:d})).catch(() => callback({data:[]})); },
+        columns: [
+            { data: 'dispensed_date', render: d => new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString() },
+            { data: null, render: d => '<a href="/patients/' + d.patient_id + '" class="text-decoration-none fw-semibold">' + escHtml(d.p_first) + ' ' + escHtml(d.p_last) + '</a>' },
+            { data: 'drug_name', render: d => '<span class="fw-semibold">' + escHtml(d) + '</span>' },
+            { data: 'quantity', render: d => '<span class="badge bg-secondary">' + d + '</span>' },
+            { data: null, render: d => 'MK ' + (d.unit_price || 0).toLocaleString() },
+            { data: null, render: d => '<strong>MK ' + ((d.unit_price || 0) * (d.quantity || 0)).toLocaleString() + '</strong>' },
+            { data: null, render: d => escHtml((d.disp_first || '') + ' ' + (d.disp_last || '')) || '-' },
+            { data: 'prescription_notes', render: d => d ? '<small class="text-muted">' + escHtml(d) + '</small>' : '-' }
+        ],
+        order: [[0, 'desc']],
+        pageLength: 20,
+        language: { search: '', searchPlaceholder: 'Search dispensing...' }
+    });
+}
+
+async function lookupPrice() {
+    const patientId = document.getElementById('disp-patient').value;
+    const drugOpt = document.getElementById('disp-drug').selectedOptions[0];
+    if (!patientId || !drugOpt || !drugOpt.value) return;
+
+    const res = await fetchWithAuth('/pharmacy/api/price-for-patient?inventory_id=' + drugOpt.value + '&patient_id=' + patientId);
+    const data = await res.json();
+    document.getElementById('disp-price').value = data.price;
+    if (data.is_scheme_price) {
+        document.getElementById('price-hint').innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Scheme price applied (Default: MK ' + data.default_price.toLocaleString() + ')</span>';
+    } else {
+        document.getElementById('price-hint').innerHTML = '<span class="text-muted">Default/cash price</span>';
+    }
+    updateTotal();
+}
+
+function updateTotal() {
+    const price = parseFloat(document.getElementById('disp-price').value) || 0;
+    const qty = parseInt(document.getElementById('disp-qty').value) || 0;
+    document.getElementById('disp-total').value = 'MWK ' + (price * qty).toLocaleString();
+}
+
+function showDispenseModal() {
+    document.getElementById('disp-price').value = '';
+    document.getElementById('disp-total').value = '';
+    document.getElementById('price-hint').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('dispenseModal')).show();
+}
+
+async function saveDispense() {
+    const patient_id = document.getElementById('disp-patient').value;
+    const inventory_id = document.getElementById('disp-drug').value;
+    const qty = parseInt(document.getElementById('disp-qty').value);
+    const price = parseFloat(document.getElementById('disp-price').value);
+    const notes = document.getElementById('disp-notes').value;
+
+    if (!patient_id || !inventory_id || !qty) { alert('Fill all required fields'); return; }
+
+    const selectedDrug = document.querySelector(`#disp-drug option[value="${inventory_id}"]`);
+    if (selectedDrug && parseInt(selectedDrug.dataset.stock) < qty) {
+        alert('Insufficient stock!');
+        return;
+    }
+
+    const res = await fetchWithAuth('/pharmacy/api/dispensing', {
+        method: 'POST',
+        body: JSON.stringify({ patient_id: parseInt(patient_id), inventory_id: parseInt(inventory_id), quantity: qty, unit_price: price, prescription_notes: notes })
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('dispenseModal')).hide();
+        $('#dispensing-table').DataTable().ajax.reload();
+        loadStats();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error dispensing');
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

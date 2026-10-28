@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <a href="/patients" class="btn btn-sm btn-outline-secondary mb-2"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h4 class="mb-1" id="patient-name"></h4>
+            <span class="badge bg-secondary me-2" id="patient-id-display"></span>
+            <span class="text-muted" id="patient-dob-age"></span>
+        </div>
+        <div>
+            <a href="#" id="edit-patient-btn" class="btn btn-outline-warning btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="patientTabs">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#info">Info</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#history">Visit History</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#medical">Medical</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#billing-tab">Billing</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#documents-tab"><i class="bi bi-file-earmark me-1"></i>Documents</button></li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="info">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h6>Contact Details</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Phone</td><td id="p-phone"></td></tr>
+                            <tr><td class="text-muted">Email</td><td id="p-email"></td></tr>
+                            <tr><td class="text-muted">Address</td><td id="p-address"></td></tr>
+                        </table>
+                        <h6 class="mt-3">Emergency Contact</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Name</td><td id="p-emergency-name"></td></tr>
+                            <tr><td class="text-muted">Phone</td><td id="p-emergency-phone"></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card" id="info-tab-card">
+                    <div class="card-body">
+                        <h6>Medical & Insurance</h6>
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">Blood Group</td><td id="p-blood"></td></tr>
+                            <tr><td class="text-muted">Insurance Scheme</td><td id="p-scheme-id"></td></tr>
+                            <tr><td class="text-muted">Scheme Number</td><td id="p-scheme-number"></td></tr>
+                            <tr><td class="text-muted">Scheme Type</td><td id="p-scheme-type"></td></tr>
+                        </table>
+                        <h6 class="mt-3">Allergies</h6>
+                        <div id="p-allergies"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="history">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Date</th><th>Type</th><th>Doctor</th><th>Details</th></tr>
+                        </thead>
+                        <tbody id="history-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="medical">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><h6>Medical Conditions</h6></div>
+                    <div class="card-body" id="p-medical-conditions"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><h6>Medications</h6></div>
+                    <div class="card-body" id="p-medications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="billing-tab">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Invoice</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr>
+                        </thead>
+                        <tbody id="billing-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="documents-tab">
+        <div class="row g-3">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-upload me-1"></i>Upload Document</h6></div>
+                    <div class="card-body">
+                        <form id="doc-upload-form">
+                            <div class="mb-3">
+                                <label class="form-label">File (PDF, JPEG, PNG, GIF, WEBP)</label>
+                                <input type="file" class="form-control" id="doc-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Notes (optional)</label>
+                                <textarea class="form-control" id="doc-notes" rows="2" placeholder="e.g. Old physical file scan, page 1-5"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="doc-upload-btn">
+                                <i class="bi bi-upload me-1"></i>Upload
+                            </button>
+                        </form>
+                        <div id="doc-upload-result" class="mt-2" style="display:none"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark me-1"></i>Scanned Documents</h6></div>
+                    <div class="card-body" id="documents-list">
+                        <p class="text-muted mb-0">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const patientId = {{ patient_id }};
+const INSURANCE_PROVIDERS = {{ providers_json | safe }};
+
+fetchWithAuth(`/patients/api/${patientId}`).then(r => r.json()).then(data => {
+    document.getElementById('patient-name').textContent = `${data.first_name} ${data.last_name}`;
+    document.getElementById('patient-id-display').textContent = data.patient_id;
+    document.getElementById('patient-dob-age').textContent = data.dob ? `${data.dob} (${new Date().getFullYear() - new Date(data.dob).getFullYear()} yrs)` : '';
+    document.getElementById('edit-patient-btn').href = `/patients/${patientId}/edit`;
+
+    document.getElementById('p-phone').textContent = data.phone || '-';
+    document.getElementById('p-email').textContent = data.email || '-';
+    document.getElementById('p-address').textContent = data.address || '-';
+    document.getElementById('p-emergency-name').textContent = data.emergency_contact_name || '-';
+    document.getElementById('p-emergency-phone').textContent = data.emergency_contact_phone || '-';
+    document.getElementById('p-blood').textContent = data.blood_group || '-';
+    document.getElementById('p-scheme-id').textContent = (data.scheme_id && INSURANCE_PROVIDERS[data.scheme_id]) ? INSURANCE_PROVIDERS[data.scheme_id] : 'None';
+    document.getElementById('p-scheme-number').textContent = data.scheme_number || '-';
+    document.getElementById('p-scheme-type').textContent = data.scheme_type || '-';
+
+    // Check authorization requirements
+    if (data.scheme_id && INSURANCE_PROVIDERS[data.scheme_id] && INSURANCE_PROVIDERS[data.scheme_id].toLowerCase().includes('medhealth')) {
+        fetchWithAuth('/insurance/api/authorization-rules?provider_id=' + data.scheme_id).then(r => r.json()).then(rules => {
+            if (rules.length) {
+                const itemsList = rules.map(r => '<strong>' + r.item_name + '</strong>').join(', ');
+                const banner = document.createElement('div');
+                banner.className = 'alert alert-warning d-flex align-items-center mt-3';
+                banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i><div><strong>Prior Authorization Required</strong> — This patient needs pre-authorization for: ' + itemsList + ' under ' + INSURANCE_PROVIDERS[data.scheme_id] + '.</div>';
+                document.getElementById('info-tab-card').prepend(banner);
+            }
+        });
+    }
+
+    const allergiesDiv = document.getElementById('p-allergies');
+    if (data.allergies && data.allergies.length) {
+        data.allergies.forEach(a => {
+            const span = document.createElement('span');
+            span.className = 'badge bg-warning me-1';
+            span.textContent = a.allergy;
+            allergiesDiv.appendChild(span);
+        });
+    } else {
+        allergiesDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+
+    const conditionsDiv = document.getElementById('p-medical-conditions');
+    if (data.medical_history && data.medical_history.length) {
+        data.medical_history.forEach(c => {
+            conditionsDiv.innerHTML += `<div class="mb-2"><strong>${c.condition_name}</strong><br><small class="text-muted">${c.diagnosis_date || ''} ${c.notes ? '- ' + c.notes : ''}</small></div>`;
+        });
+    } else {
+        conditionsDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+
+    const medsDiv = document.getElementById('p-medications');
+    if (data.medications && data.medications.length) {
+        data.medications.forEach(m => {
+            medsDiv.innerHTML += `<div class="mb-2"><strong>${m.medication_name}</strong> ${m.dosage ? '- ' + m.dosage : ''}<br><small class="text-muted">${m.frequency || ''} ${m.start_date ? 'from ' + m.start_date : ''}</small></div>`;
+        });
+    } else {
+        medsDiv.innerHTML = '<span class="text-muted">None recorded</span>';
+    }
+});
+
+fetchWithAuth(`/patients/api/${patientId}/history`).then(r => r.json()).then(data => {
+    const historyBody = document.getElementById('history-table-body');
+    const items = [];
+    (data.consultations || []).forEach(c => items.push({date: c.created_at, type: 'Consultation: ' + c.consultation_type, doctor: (c.doctor_first || '') + ' ' + (c.doctor_last || ''), details: c.diagnosis || ''}));
+    (data.lab_tests || []).forEach(l => items.push({date: l.created_at, type: 'Lab: ' + l.test_name, doctor: '', details: l.status}));
+    (data.procedures || []).forEach(p => items.push({date: p.created_at, type: 'Procedure: ' + p.procedure_type, doctor: '', details: p.notes || ''}));
+
+    if (items.length) {
+        items.sort((a,b) => new Date(b.date) - new Date(a.date));
+        items.forEach(i => {
+            historyBody.innerHTML += `<tr><td>${new Date(i.date).toLocaleDateString()}</td><td>${i.type}</td><td>${i.doctor}</td><td>${i.details}</td></tr>`;
+        });
+    } else {
+        historyBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No visit history</td></tr>';
+    }
+
+    const billingBody = document.getElementById('billing-table-body');
+    if (data.billing && data.billing.length) {
+        data.billing.forEach(b => {
+            billingBody.innerHTML += `<tr>
+                <td>${b.invoice_number}</td>
+                <td>${new Date(b.created_at).toLocaleDateString()}</td>
+                <td>MK ${(b.total_amount || 0).toLocaleString()}</td>
+                <td>MK ${(b.amount_paid || 0).toLocaleString()}</td>
+                <td>MK ${(b.balance || 0).toLocaleString()}</td>
+                <td><span class="badge bg-${b.payment_status === 'paid' ? 'success' : b.payment_status === 'partial' ? 'warning' : 'danger'}">${b.payment_status}</span></td>
+            </tr>`;
+        });
+    } else {
+        billingBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No billing records</td></tr>';
+    }
+});
+
+// ===== Documents =====
+function loadDocuments() {
+    fetchWithAuth(`/patients/api/${patientId}/documents`).then(r => r.json()).then(docs => {
+        const div = document.getElementById('documents-list');
+        if (!docs.length) {
+            div.innerHTML = '<p class="text-muted mb-0">No documents uploaded yet.</p>';
+            return;
+        }
+        div.innerHTML = docs.map(d => `
+            <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-2">
+                <div>
+                    <a href="/patients/api/documents/${d.id}/download" class="fw-semibold text-decoration-none" target="_blank">
+                        <i class="bi bi-file-earmark-${d.mime_type && d.mime_type.includes('pdf') ? 'pdf' : 'image'} me-1"></i>${d.original_filename}
+                    </a>
+                    ${d.notes ? '<br><small class="text-muted">' + d.notes + '</small>' : ''}
+                    <br><small class="text-muted">${(d.file_size / 1024).toFixed(1)} KB · ${new Date(d.created_at).toLocaleDateString()}${d.uploaded_by_name ? ' by ' + d.uploaded_by_name : ''}</small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteDocument(${d.id})" title="Delete"><i class="bi bi-trash"></i></button>
+            </div>
+        `).join('');
+    }).catch(() => {
+        document.getElementById('documents-list').innerHTML = '<p class="text-danger mb-0">Failed to load documents.</p>';
+    });
+}
+
+window.deleteDocument = function(id) {
+    if (!confirm('Delete this document?')) return;
+    fetchWithAuth(`/patients/api/documents/${id}`, { method: 'DELETE' }).then(r => {
+        if (r.ok) loadDocuments();
+        else r.json().then(e => alert(e.error || 'Delete failed'));
+    });
+};
+
+document.getElementById('doc-upload-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('doc-file');
+    if (!fileInput.files.length) { alert('Select a file'); return; }
+
+    const btn = document.getElementById('doc-upload-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('notes', document.getElementById('doc-notes').value);
+
+    try {
+        const res = await fetchWithAuth(`/patients/api/${patientId}/documents`, { method: 'POST', body: formData });
+        const result = await res.json();
+        const div = document.getElementById('doc-upload-result');
+        div.style.display = 'block';
+        if (res.ok) {
+            div.className = 'alert alert-success py-2';
+            div.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + (result.message || 'Uploaded');
+            document.getElementById('doc-file').value = '';
+            document.getElementById('doc-notes').value = '';
+            loadDocuments();
+        } else {
+            div.className = 'alert alert-danger py-2';
+            div.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>' + (result.error || 'Upload failed');
+        }
+    } catch (err) {
+        document.getElementById('doc-upload-result').style.display = 'block';
+        document.getElementById('doc-upload-result').className = 'alert alert-danger py-2';
+        document.getElementById('doc-upload-result').innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Network error';
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload';
+});
+
+loadDocuments();
+</script>
+{% endblock %}

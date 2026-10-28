@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-pencil-square"></i> Compose Message</h4>
+    <a href="/messages/" class="btn btn-outline-secondary"><i class="bi bi-inbox me-1"></i>Inbox</a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="compose-form">
+                    <div class="mb-3">
+                        <label class="form-label">To <span class="text-danger">*</span></label>
+                        <select class="form-select" id="receiver_id" required>
+                            <option value="">Select recipient...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="subject" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="body" rows="8" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4" id="btn-send"><i class="bi bi-send me-1"></i>Send</button>
+                    <a href="/messages/" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+                <div id="send-success" class="alert alert-success mt-3" style="display:none">
+                    <i class="bi bi-check-circle me-1"></i> Message sent successfully!
+                    <a href="/messages/" class="alert-link">Back to inbox</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/staff/api');
+    const staff = await res.json();
+    const sel = document.getElementById('receiver_id');
+    staff.forEach(u => {
+        const o = document.createElement('option');
+        o.value = u.id;
+        o.textContent = u.first_name + ' ' + u.last_name + ' (' + u.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ')';
+        sel.appendChild(o);
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reply_to')) sel.value = params.get('reply_to');
+    if (params.get('subject')) document.getElementById('subject').value = params.get('subject');
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.querySelectorAll('#receiver_id option').forEach(o => {
+        if (o.value == user.id) o.disabled = true;
+    });
+
+    document.getElementById('compose-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const receiverId = document.getElementById('receiver_id').value;
+        const subject = document.getElementById('subject').value.trim();
+        const body = document.getElementById('body').value.trim();
+        if (!receiverId || !subject || !body) { alert('All fields are required'); return; }
+
+        const btn = document.getElementById('btn-send');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+
+        const res = await fetchWithAuth('/messages/api', {
+            method: 'POST',
+            body: JSON.stringify({ receiver_id: parseInt(receiverId), subject, body })
+        });
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send me-1"></i>Send';
+
+        if (res.ok) {
+            document.getElementById('compose-form').style.display = 'none';
+            document.getElementById('send-success').style.display = 'block';
+        } else {
+            const err = await res.json();
+            alert(err.error || 'Failed to send message');
+        }
+    });
+});
+</script>
+{% endblock %}

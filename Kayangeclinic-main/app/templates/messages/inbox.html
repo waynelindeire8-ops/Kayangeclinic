@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h4><i class="bi bi-inbox"></i> Inbox</h4>
+    <a href="/messages/compose" class="btn btn-primary"><i class="bi bi-pencil-square me-1"></i>Compose</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table" id="inbox-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px"></th>
+                        <th>From</th>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th style="width:80px">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="inbox-empty" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-envelope-open" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>
+            No messages in your inbox
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="msgModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="msg-subject"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <small class="text-muted">From:</small>
+                        <strong id="msg-from"></strong>
+                        <span id="msg-role" class="badge bg-secondary ms-1"></span>
+                    </div>
+                    <small class="text-muted" id="msg-date"></small>
+                </div>
+                <hr>
+                <div id="msg-body" class="py-2" style="white-space:pre-wrap"></div>
+            </div>
+            <div class="modal-footer">
+                <a href="/messages/compose" class="btn btn-outline-primary btn-sm" id="msg-reply-btn"><i class="bi bi-reply me-1"></i>Reply</a>
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteMsg()"><i class="bi bi-trash me-1"></i>Delete</button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentMsgId = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    const res = await fetchWithAuth('/messages/api/inbox');
+    const msgs = await res.json();
+    const tbody = document.querySelector('#inbox-table tbody');
+    const empty = document.getElementById('inbox-empty');
+    if (msgs.length) {
+        empty.style.display = 'none';
+        msgs.forEach(m => {
+            const unread = m.is_read ? '' : 'fw-bold';
+            const dot = m.is_read ? '' : '<span class="badge bg-primary" style="width:8px;height:8px;border-radius:50%;display:inline-block;padding:0"></span>';
+            tbody.innerHTML += '<tr class="' + unread + '" style="cursor:pointer" onclick="openMsg(' + m.id + ')">' +
+                '<td>' + dot + '</td>' +
+                '<td>' + (m.s_first || '') + ' ' + (m.s_last || '') + '</td>' +
+                '<td>' + escHtml(m.subject) + '</td>' +
+                '<td>' + new Date(m.sent_at).toLocaleString() + '</td>' +
+                '<td><button class="btn-action delete" onclick="event.stopPropagation();deleteMsg(' + m.id + ')"><i class="bi bi-trash"></i></button></td></tr>';
+        });
+    } else {
+        document.getElementById('inbox-table').style.display = 'none';
+        empty.style.display = 'block';
+    }
+    updateUnreadBadge();
+});
+
+async function openMsg(id) {
+    const res = await fetchWithAuth('/messages/api/' + id);
+    const m = await res.json();
+    currentMsgId = m.id;
+    document.getElementById('msg-subject').textContent = m.subject;
+    document.getElementById('msg-from').textContent = (m.s_first || '') + ' ' + (m.s_last || '');
+    document.getElementById('msg-role').textContent = (m.s_role || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    document.getElementById('msg-date').textContent = new Date(m.sent_at).toLocaleString();
+    document.getElementById('msg-body').textContent = m.body;
+    document.getElementById('msg-reply-btn').href = '/messages/compose?reply_to=' + m.sender_id + '&subject=Re: ' + encodeURIComponent(m.subject);
+    new bootstrap.Modal(document.getElementById('msgModal')).show();
+    refreshInbox();
+}
+
+async function deleteMsg(id) {
+    const msgId = id || currentMsgId;
+    if (!msgId) return;
+    if (!confirm('Delete this message?')) return;
+    await fetchWithAuth('/messages/api/' + msgId + '/delete', { method: 'PUT' });
+    if (document.getElementById('msgModal').classList.contains('show')) {
+        bootstrap.Modal.getInstance(document.getElementById('msgModal')).hide();
+    }
+    refreshInbox();
+}
+
+async function refreshInbox() {
+    const res = await fetchWithAuth('/messages/api/inbox');
+    const msgs = await res.json();
+    const tbody = document.querySelector('#inbox-table tbody');
+    const empty = document.getElementById('inbox-empty');
+    tbody.innerHTML = '';
+    if (msgs.length) {
+        document.getElementById('inbox-table').style.display = '';
+        empty.style.display = 'none';
+        msgs.forEach(m => {
+            const unread = m.is_read ? '' : 'fw-bold';
+            const dot = m.is_read ? '' : '<span class="badge bg-primary" style="width:8px;height:8px;border-radius:50%;display:inline-block;padding:0"></span>';
+            tbody.innerHTML += '<tr class="' + unread + '" style="cursor:pointer" onclick="openMsg(' + m.id + ')">' +
+                '<td>' + dot + '</td>' +
+                '<td>' + (m.s_first || '') + ' ' + (m.s_last || '') + '</td>' +
+                '<td>' + escHtml(m.subject) + '</td>' +
+                '<td>' + new Date(m.sent_at).toLocaleString() + '</td>' +
+                '<td><button class="btn-action delete" onclick="event.stopPropagation();deleteMsg(' + m.id + ')"><i class="bi bi-trash"></i></button></td></tr>';
+        });
+    } else {
+        document.getElementById('inbox-table').style.display = 'none';
+        empty.style.display = 'block';
+    }
+    updateUnreadBadge();
+}
+
+async function updateUnreadBadge() {
+    const res = await fetchWithAuth('/messages/api/unread-count');
+    const data = await res.json();
+    const badge = document.getElementById('msg-unread-badge');
+    if (badge) {
+        badge.textContent = data.count;
+        badge.style.display = data.count > 0 ? 'inline' : 'none';
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}
