@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request
+from flask import Flask, render_template, redirect, request, jsonify
 from flask_jwt_extended import JWTManager
 from config import Config
 import os, logging, queue, threading, time
@@ -45,6 +45,20 @@ def create_app():
             start_auto_sync(app)
         except Exception as e:
             logger.warning(f"Auto-sync failed to start: {e}")
+
+    # Return JSON (not an HTML page) for failed API calls so the UI can show the real error
+    @app.errorhandler(Exception)
+    def _handle_exception(e):
+        from werkzeug.exceptions import HTTPException
+        is_api = '/api' in request.path
+        if isinstance(e, HTTPException):
+            if is_api:
+                return jsonify({'error': e.description}), e.code
+            return e
+        logger.exception('Unhandled exception')
+        if is_api:
+            return jsonify({'error': f'Server error: {e}'}), 500
+        raise e
 
     # Register blueprints
     from app.auth import auth_bp

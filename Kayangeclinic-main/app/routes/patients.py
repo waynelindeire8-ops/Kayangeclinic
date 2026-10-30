@@ -1,4 +1,4 @@
-import json, os, uuid, logging
+import json, os, re, uuid, logging
 from sqlite3 import IntegrityError
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
 from flask_jwt_extended import get_jwt
@@ -97,47 +97,78 @@ def api_get(id):
     return jsonify(result)
 
 
+def _next_patient_number(db):
+    """Highest numeric KMC-<n> in the table + 1 (ignores malformed IDs)."""
+    nums = []
+    for r in db.execute('SELECT patient_id FROM patients').fetchall():
+        m = re.fullmatch(r'KMC-(\d+)', (r['patient_id'] or '').strip())
+        if m:
+            nums.append(int(m.group(1)))
+    return (max(nums) + 1) if nums else 1001
+
+
 @patients_bp.route('/api', methods=['POST'])
 @login_required
 def api_create():
     current_user = get_jwt()
-    data = request.json
+    data = request.get_json(silent=True) or {}
+
+    for field in ('first_name', 'last_name', 'phone'):
+        if not str(data.get(field) or '').strip():
+            return jsonify({'error': f'{field.replace("_", " ").title()} is required'}), 400
 
     db = get_db()
-    last = db.execute('SELECT patient_id FROM patients ORDER BY id DESC LIMIT 1').fetchone()
-    if last:
-        num = int(last['patient_id'].replace('KMC-', '')) + 1
-    else:
-        num = 1001
-    patient_id = f'KMC-{num}'
+    try:
+        num = _next_patient_number(db)
+        cursor = None
+        for _ in range(10):
+            patient_id = f'KMC-{num}'
+            try:
+                cursor = db.execute(
+                    '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
+                       emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (patient_id, data['first_name'], data['last_name'], data.get('dob') or None, data.get('gender') or None,
+                     data['phone'], data.get('email'), data.get('address'), data.get('emergency_contact_name'),
+                     data.get('emergency_contact_phone'), data.get('blood_group'), data.get('scheme_provider'),
+                     data.get('scheme_type'), data.get('scheme_id'), data.get('scheme_number'))
+                )
+                break
+            except IntegrityError as e:
+                if 'patient_id' in str(e):
+                    num += 1  # ID already taken, try the next one
+                    continue
+                raise
+        if cursor is None:
+            db.rollback()
+            return jsonify({'error': 'Could not generate a unique patient ID, please try again'}), 500
+        new_id = cursor.lastrowid
 
-    cursor = db.execute(
-        '''INSERT INTO patients (patient_id, first_name, last_name, dob, gender, phone, email, address,
-           emergency_contact_name, emergency_contact_phone, blood_group, scheme_provider, scheme_type, scheme_id, scheme_number)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-        (patient_id, data['first_name'], data['last_name'], data['dob'], data.get('gender'),
-         data['phone'], data.get('email'), data.get('address'), data.get('emergency_contact_name'),
-         data.get('emergency_contact_phone'), data.get('blood_group'), data.get('scheme_provider'),
-         data.get('scheme_type'), data.get('scheme_id'), data.get('scheme_number'))
-    )
-    new_id = cursor.lastrowid
+        for allergy in data.get('allergies', []):
+            db.execute('INSERT INTO patient_allergies (patient_id, allergy) VALUES (?, ?)', (new_id, allergy))
 
-    for allergy in data.get('allergies', []):
-        db.execute('INSERT INTO patient_allergies (patient_id, allergy) VALUES (?, ?)', (new_id, allergy))
+        for condition in data.get('medical_history', []):
+            db.execute('INSERT INTO patient_medical_history (patient_id, condition_name, diagnosis_date, notes) VALUES (?, ?, ?, ?)',
+                       (new_id, condition.get('condition_name'), condition.get('diagnosis_date'), condition.get('notes')))
 
-    for condition in data.get('medical_history', []):
-        db.execute('INSERT INTO patient_medical_history (patient_id, condition_name, diagnosis_date, notes) VALUES (?, ?, ?, ?)',
-                   (new_id, condition.get('condition_name'), condition.get('diagnosis_date'), condition.get('notes')))
+        for med in data.get('medications', []):
+            db.execute('INSERT INTO patient_medications (patient_id, medication_name, dosage, frequency, prescribed_by, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                       (new_id, med.get('medication_name'), med.get('dosage'), med.get('frequency'),
+                        med.get('prescribed_by'), med.get('start_date'), med.get('end_date')))
 
-    for med in data.get('medications', []):
-        db.execute('INSERT INTO patient_medications (patient_id, medication_name, dosage, frequency, prescribed_by, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                   (new_id, med.get('medication_name'), med.get('dosage'), med.get('frequency'),
-                    med.get('prescribed_by'), med.get('start_date'), med.get('end_date')))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception('Patient create failed')
+        return jsonify({'error': f'Could not save patient: {e}'}), 500
+    finally:
+        db.close()
 
-    db.commit()
-    log_audit(current_user['id'], current_user['username'], 'create', 'patient', new_id,
-              f'Created patient {data["first_name"]} {data["last_name"]}', request.remote_addr)
-    db.close()
+    try:
+        log_audit(current_user['id'], current_user['username'], 'create', 'patient', new_id,
+                  f'Created patient {data["first_name"]} {data["last_name"]}', request.remote_addr)
+    except Exception:
+        logger.exception('Audit log failed for patient create')
 
     return jsonify({'id': new_id, 'patient_id': patient_id}), 201
 

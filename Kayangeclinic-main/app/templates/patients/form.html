@@ -280,14 +280,16 @@ document.getElementById('patient-form').addEventListener('submit', async functio
 
     try {
         const res = await fetchWithAuth(url, { method, body: JSON.stringify(data) });
-        const result = await res.json();
+        const text = await res.text();
+        let result = {};
+        try { result = JSON.parse(text); } catch (_) {}
         if (res.ok) {
             window.location.href = '/patients';
         } else {
-            alert(result.error || 'Error saving patient');
+            alert(result.error || ('Save failed (HTTP ' + res.status + ')'));
         }
     } catch(e) {
-        alert('Error saving patient');
+        alert('Network error: ' + e.message);
     }
 });
 
